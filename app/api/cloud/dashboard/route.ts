@@ -9,6 +9,7 @@ type ProfileRow = {
 };
 
 type MatchPlayerRow = {
+  match_id?: string;
   sets_won: number;
   legs_won: number;
   average: number | null;
@@ -96,7 +97,7 @@ export async function GET(request: Request) {
     { data: profile, error: profileError },
     { data: matchPlayers, error: matchPlayersError },
     { data: trainings, error: trainingsError },
-    { data: recentMatches, error: recentMatchesError },
+    { data: allMatches, error: allMatchesError },
     { data: dartEvents, error: dartEventsError },
   ] = await Promise.all([
     adminClient
@@ -106,20 +107,20 @@ export async function GET(request: Request) {
       .single(),
     adminClient
       .from("match_players")
-      .select("sets_won, legs_won, average, best_visit, is_winner")
+      .select("match_id, sets_won, legs_won, average, best_visit, is_winner")
       .eq("profile_id", user.id),
     adminClient
       .from("training_sessions")
-      .select("score, darts_thrown, hits, played_at")
+      .select("mode, score, darts_thrown, hits, played_at")
       .eq("owner_id", user.id)
       .order("played_at", { ascending: false })
-      .limit(12),
+      ,
     adminClient
       .from("matches")
       .select("id, played_at, mode, double_out")
       .eq("owner_id", user.id)
       .order("played_at", { ascending: false })
-      .limit(8),
+      ,
     adminClient
       .from("dart_events")
       .select("segment_label, base_value, multiplier, ring, score, is_hit, is_checkout_dart, target_label, source_type")
@@ -138,16 +139,17 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: trainingsError.message }, { status: 400 });
   }
 
-  if (recentMatchesError) {
-    return NextResponse.json({ error: recentMatchesError.message }, { status: 400 });
+  if (allMatchesError) {
+    return NextResponse.json({ error: allMatchesError.message }, { status: 400 });
   }
 
   const profileRow = profile as ProfileRow;
   const playerRows = (matchPlayers ?? []) as MatchPlayerRow[];
-  const trainingRows = (trainings ?? []) as TrainingRow[];
-  const matchRows = (recentMatches ?? []) as MatchRow[];
+  const trainingRows = (trainings ?? []) as (TrainingRow & { mode?: string })[];
+  const matchRows = (allMatches ?? []) as MatchRow[];
   const dartRows = dartEventsError ? [] : ((dartEvents ?? []) as DartEventRow[]);
-  const recentMatchIds = matchRows.map((match) => match.id);
+  const recentMatchRows = matchRows.slice(0, 8);
+  const recentMatchIds = recentMatchRows.map((match) => match.id);
   const { data: recentMatchPlayers, error: recentMatchPlayersError } = recentMatchIds.length
     ? await adminClient
         .from("match_players")
@@ -182,7 +184,31 @@ export async function GET(request: Request) {
       totalTrainingDarts > 0 ? Number(((totalTrainingHits / totalTrainingDarts) * 100).toFixed(1)) : 0,
   };
 
-  const recentMatchesWithDetails = matchRows.map((match) => {
+  const allMatchesWithDetails = matchRows.map((match) => {
+    const players = matchDetailRows.filter((row) => row.match_id === match.id);
+    const winner = players.find((row) => row.is_winner)?.guest_name ?? "Unbekannt";
+    const opponents = players
+      .filter((row) => row.profile_id !== user.id)
+      .map((row) => row.guest_name ?? "Gast")
+      .join(", ");
+    const mySeat = players.find((row) => row.profile_id === user.id) ?? null;
+
+    return {
+      id: match.id,
+      played_at: match.played_at,
+      mode: match.mode,
+      double_out: match.double_out,
+      winner,
+      opponents,
+      sets: players.map((row) => `${row.guest_name ?? "Gast"} ${row.sets_won}`).join(" - "),
+      did_win: mySeat?.is_winner ?? false,
+      player_average: Number(mySeat?.average ?? 0),
+      player_best_visit: mySeat?.best_visit ?? 0,
+      player_legs: mySeat?.legs_won ?? 0,
+    };
+  });
+
+  const recentMatchesWithDetails = recentMatchRows.map((match) => {
     const players = matchDetailRows.filter((row) => row.match_id === match.id);
     const winner = players.find((row) => row.is_winner)?.guest_name ?? "Unbekannt";
     const opponents = players
@@ -208,7 +234,7 @@ export async function GET(request: Request) {
 
   let rollingStreak = 0;
   let bestWinStreak = 0;
-  for (const match of recentMatchesWithDetails) {
+  for (const match of allMatchesWithDetails) {
     if (match.did_win) {
       rollingStreak += 1;
       bestWinStreak = Math.max(bestWinStreak, rollingStreak);
@@ -218,7 +244,7 @@ export async function GET(request: Request) {
   }
 
   let currentWinStreak = 0;
-  for (const match of recentMatchesWithDetails) {
+  for (const match of allMatchesWithDetails) {
     if (!match.did_win) {
       break;
     }
@@ -228,9 +254,9 @@ export async function GET(request: Request) {
 
   const now = Date.now();
   const thirtyDaysAgo = now - 30 * 24 * 60 * 60 * 1000;
-  const matchesLast30Days = matchRows.filter((match) => new Date(match.played_at).getTime() >= thirtyDaysAgo).length;
+  const matchesLast30Days = allMatchesWithDetails.filter((match) => new Date(match.played_at).getTime() >= thirtyDaysAgo).length;
   const trainingLast30Days = trainingRows.filter((training) => new Date(training.played_at).getTime() >= thirtyDaysAgo).length;
-  const favoriteModeCounts = matchRows.reduce<Record<string, number>>((acc, match) => {
+  const favoriteModeCounts = allMatchesWithDetails.reduce<Record<string, number>>((acc, match) => {
     acc[match.mode] = (acc[match.mode] ?? 0) + 1;
     return acc;
   }, {});
@@ -297,7 +323,85 @@ export async function GET(request: Request) {
         (Math.min(stats.bestAverage, 90) / 90) * 45,
     ),
   );
-  const recentForm = recentMatchesWithDetails.slice(0, 5).map((match) => (match.did_win ? "W" : "L"));
+  const recentForm = allMatchesWithDetails.slice(0, 5).map((match) => (match.did_win ? "W" : "L"));
+  const monthlyMatches = Object.values(
+    allMatchesWithDetails.reduce<Record<string, { period: string; matches: number; wins: number; average: number; averageCount: number }>>(
+      (acc, match) => {
+        const period = new Date(match.played_at).toLocaleDateString("de-DE", { month: "short", year: "2-digit" });
+        if (!acc[period]) {
+          acc[period] = { period, matches: 0, wins: 0, average: 0, averageCount: 0 };
+        }
+
+        acc[period].matches += 1;
+        acc[period].wins += match.did_win ? 1 : 0;
+        if (match.player_average > 0) {
+          acc[period].average += match.player_average;
+          acc[period].averageCount += 1;
+        }
+        return acc;
+      },
+      {},
+    ),
+  ).map((entry) => ({
+    period: entry.period,
+    matches: entry.matches,
+    wins: entry.wins,
+    average: entry.averageCount > 0 ? Number((entry.average / entry.averageCount).toFixed(1)) : 0,
+  }));
+  const monthlyTraining = Object.values(
+    trainingRows.reduce<Record<string, { period: string; sessions: number; averageScore: number; totalScore: number }>>(
+      (acc, training) => {
+        const period = new Date(training.played_at).toLocaleDateString("de-DE", { month: "short", year: "2-digit" });
+        if (!acc[period]) {
+          acc[period] = { period, sessions: 0, averageScore: 0, totalScore: 0 };
+        }
+
+        acc[period].sessions += 1;
+        acc[period].totalScore += training.score;
+        return acc;
+      },
+      {},
+    ),
+  ).map((entry) => ({
+    period: entry.period,
+    sessions: entry.sessions,
+    averageScore: entry.sessions > 0 ? Number((entry.totalScore / entry.sessions).toFixed(1)) : 0,
+  }));
+  const modeBreakdown = Object.values(
+    allMatchesWithDetails.reduce<Record<string, { mode: string; matches: number; wins: number }>>((acc, match) => {
+      if (!acc[match.mode]) {
+        acc[match.mode] = { mode: match.mode, matches: 0, wins: 0 };
+      }
+
+      acc[match.mode].matches += 1;
+      acc[match.mode].wins += match.did_win ? 1 : 0;
+      return acc;
+    }, {}),
+  );
+  const opponentBreakdown = Object.entries(
+    allMatchesWithDetails.reduce<Record<string, { matches: number; wins: number }>>((acc, match) => {
+      const names = match.opponents
+        .split(",")
+        .map((entry) => entry.trim())
+        .filter(Boolean);
+      for (const name of names) {
+        if (!acc[name]) {
+          acc[name] = { matches: 0, wins: 0 };
+        }
+        acc[name].matches += 1;
+        acc[name].wins += match.did_win ? 1 : 0;
+      }
+      return acc;
+    }, {}),
+  )
+    .map(([name, values]) => ({
+      name,
+      matches: values.matches,
+      wins: values.wins,
+      winRate: values.matches > 0 ? Number(((values.wins / values.matches) * 100).toFixed(1)) : 0,
+    }))
+    .sort((left, right) => right.matches - left.matches)
+    .slice(0, 8);
   const highlightTitle =
     stats.winRate >= 65
       ? "Match Closer"
@@ -318,7 +422,9 @@ export async function GET(request: Request) {
   return NextResponse.json({
     profile: profileRow,
     stats,
-    recentTraining: trainingRows,
+    recentTraining: trainingRows.slice(0, 12),
+    trainingHistory: trainingRows,
+    matchHistory: allMatchesWithDetails,
     recentMatches: recentMatchesWithDetails,
     insights: {
       favoriteMode,
@@ -339,6 +445,10 @@ export async function GET(request: Request) {
         numbers: heatmapNumbers,
         max: heatmapMax,
       },
+      monthlyMatches,
+      monthlyTraining,
+      modeBreakdown,
+      opponentBreakdown,
     },
   });
 }

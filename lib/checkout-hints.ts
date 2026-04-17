@@ -59,7 +59,49 @@ function getCheckoutThreshold(finishMode: FinishMode) {
 function routeWeight(route: ThrowOption[]) {
   return route.reduce((sum, entry, index) => {
     const finishingBonus = index === route.length - 1 ? entry.multiplier * 100 : 0;
-    return sum + entry.score + entry.multiplier * 10 + finishingBonus;
+    const setupPreference =
+      index < route.length - 1
+        ? entry.label === "T20"
+          ? 90
+          : entry.label === "T19"
+            ? 75
+            : entry.label === "T18"
+              ? 60
+              : entry.label === "20"
+                ? 24
+                : entry.label === "19"
+                  ? 18
+                  : entry.label === "18"
+                    ? 14
+                    : entry.label === "25"
+                      ? -10
+                      : 0
+        : 0;
+    const finishPreference =
+      index === route.length - 1
+        ? entry.label === "Bull"
+          ? 120
+          : entry.label === "D20"
+            ? 95
+            : entry.label === "D16"
+              ? 90
+              : entry.label === "D18"
+                ? 82
+                : entry.label === "D12"
+                  ? 68
+                  : entry.label === "D10"
+                    ? 60
+                    : entry.label === "D8"
+                      ? 58
+                      : entry.label === "D6"
+                        ? 42
+                        : entry.label === "D4"
+                          ? 35
+                          : entry.multiplier === 3
+                            ? 50
+                            : 0
+        : 0;
+    return sum + entry.score + entry.multiplier * 10 + finishingBonus + setupPreference + finishPreference;
   }, 0);
 }
 

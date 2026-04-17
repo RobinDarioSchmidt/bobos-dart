@@ -24,6 +24,7 @@ type ProfileStats = {
 };
 
 type RecentTrainingEntry = {
+  mode?: string;
   score: number;
   darts_thrown: number;
   hits: number;
@@ -52,7 +53,9 @@ type ProfileResponse = {
   };
   stats: ProfileStats;
   recentTraining: RecentTrainingEntry[];
+  trainingHistory: RecentTrainingEntry[];
   recentMatches: RecentMatchEntry[];
+  matchHistory: RecentMatchEntry[];
   insights: {
     favoriteMode: string;
     matchesLast30Days: number;
@@ -88,8 +91,32 @@ type ProfileResponse = {
       numbers: Record<string, number>;
       max: number;
     };
+    monthlyMatches: Array<{
+      period: string;
+      matches: number;
+      wins: number;
+      average: number;
+    }>;
+    monthlyTraining: Array<{
+      period: string;
+      sessions: number;
+      averageScore: number;
+    }>;
+    modeBreakdown: Array<{
+      mode: string;
+      matches: number;
+      wins: number;
+    }>;
+    opponentBreakdown: Array<{
+      name: string;
+      matches: number;
+      wins: number;
+      winRate: number;
+    }>;
   };
 };
+
+type AnalyticsWindow = "30" | "90" | "all";
 
 function polarToCartesian(radius: number, angleDeg: number) {
   const angle = ((angleDeg - 90) * Math.PI) / 180;
@@ -246,11 +273,44 @@ function HeatmapBoard({ numbers, max }: { numbers: Record<string, number>; max: 
   );
 }
 
+function SimpleBarChart({
+  data,
+  valueKey,
+  colorClass,
+}: {
+  data: Array<Record<string, string | number>>;
+  valueKey: string;
+  colorClass: string;
+}) {
+  const max = Math.max(1, ...data.map((entry) => Number(entry[valueKey] ?? 0)));
+
+  return (
+    <div className="flex items-end gap-2 overflow-x-auto pb-1">
+      {data.map((entry) => {
+        const value = Number(entry[valueKey] ?? 0);
+        const height = Math.max(14, Math.round((value / max) * 120));
+        return (
+          <div key={String(entry.period ?? entry.label ?? value)} className="flex min-w-[3.5rem] flex-col items-center gap-2">
+            <div className="flex h-32 items-end">
+              <div className={`w-9 rounded-t-xl ${colorClass}`} style={{ height }} />
+            </div>
+            <p className="text-center text-[11px] text-stone-400">{String(entry.period ?? entry.label ?? "")}</p>
+            <p className="text-xs font-semibold text-white">{value}</p>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function ProfilePage() {
   const [session, setSession] = useState<Session | null>(null);
   const [data, setData] = useState<ProfileResponse | null>(null);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
+  const [analyticsNow] = useState(() => Date.now());
+  const [analyticsWindow, setAnalyticsWindow] = useState<AnalyticsWindow>("90");
+  const [modeFilter, setModeFilter] = useState<"all" | "301" | "501">("all");
 
   useEffect(() => {
     if (!supabase) {
@@ -327,6 +387,124 @@ export default function ProfilePage() {
       trendText,
     };
   }, [data]);
+
+  const analytics = useMemo(() => {
+    if (!data) {
+      return {
+        filteredMatches: [] as RecentMatchEntry[],
+        filteredTraining: [] as RecentTrainingEntry[],
+        monthlyMatches: [] as Array<{ period: string; matches: number; wins: number; average: number }>,
+        monthlyTraining: [] as Array<{ period: string; sessions: number; averageScore: number }>,
+        modeBreakdown: [] as Array<{ mode: string; matches: number; wins: number }>,
+        opponentBreakdown: [] as Array<{ name: string; matches: number; wins: number; winRate: number }>,
+        badges: [] as string[],
+      };
+    }
+
+    const days = analyticsWindow === "30" ? 30 : analyticsWindow === "90" ? 90 : null;
+    const cutoff = days ? analyticsNow - days * 24 * 60 * 60 * 1000 : null;
+    const filteredMatches = data.matchHistory.filter((match) => {
+      const timeOk = cutoff ? new Date(match.played_at).getTime() >= cutoff : true;
+      const modeOk = modeFilter === "all" ? true : match.mode === modeFilter;
+      return timeOk && modeOk;
+    });
+    const filteredTraining = data.trainingHistory.filter((entry) => (cutoff ? new Date(entry.played_at).getTime() >= cutoff : true));
+
+    const monthlyMatches = Object.values(
+      filteredMatches.reduce<Record<string, { period: string; matches: number; wins: number; average: number; count: number }>>(
+        (acc, match) => {
+          const period = new Date(match.played_at).toLocaleDateString("de-DE", { month: "short", year: "2-digit" });
+          if (!acc[period]) {
+            acc[period] = { period, matches: 0, wins: 0, average: 0, count: 0 };
+          }
+          acc[period].matches += 1;
+          acc[period].wins += match.did_win ? 1 : 0;
+          if (match.player_average > 0) {
+            acc[period].average += match.player_average;
+            acc[period].count += 1;
+          }
+          return acc;
+        },
+        {},
+      ),
+    ).map((entry) => ({
+      period: entry.period,
+      matches: entry.matches,
+      wins: entry.wins,
+      average: entry.count > 0 ? Number((entry.average / entry.count).toFixed(1)) : 0,
+    }));
+
+    const monthlyTraining = Object.values(
+      filteredTraining.reduce<Record<string, { period: string; sessions: number; totalScore: number }>>((acc, training) => {
+        const period = new Date(training.played_at).toLocaleDateString("de-DE", { month: "short", year: "2-digit" });
+        if (!acc[period]) {
+          acc[period] = { period, sessions: 0, totalScore: 0 };
+        }
+        acc[period].sessions += 1;
+        acc[period].totalScore += training.score;
+        return acc;
+      }, {}),
+    ).map((entry) => ({
+      period: entry.period,
+      sessions: entry.sessions,
+      averageScore: entry.sessions > 0 ? Number((entry.totalScore / entry.sessions).toFixed(1)) : 0,
+    }));
+
+    const modeBreakdown = Object.values(
+      filteredMatches.reduce<Record<string, { mode: string; matches: number; wins: number }>>((acc, match) => {
+        if (!acc[match.mode]) {
+          acc[match.mode] = { mode: match.mode, matches: 0, wins: 0 };
+        }
+        acc[match.mode].matches += 1;
+        acc[match.mode].wins += match.did_win ? 1 : 0;
+        return acc;
+      }, {}),
+    );
+
+    const opponentBreakdown = Object.entries(
+      filteredMatches.reduce<Record<string, { matches: number; wins: number }>>((acc, match) => {
+        const names = match.opponents
+          .split(",")
+          .map((entry) => entry.trim())
+          .filter(Boolean);
+        for (const name of names) {
+          if (!acc[name]) {
+            acc[name] = { matches: 0, wins: 0 };
+          }
+          acc[name].matches += 1;
+          acc[name].wins += match.did_win ? 1 : 0;
+        }
+        return acc;
+      }, {}),
+    )
+      .map(([name, values]) => ({
+        name,
+        matches: values.matches,
+        wins: values.wins,
+        winRate: values.matches > 0 ? Number(((values.wins / values.matches) * 100).toFixed(1)) : 0,
+      }))
+      .sort((left, right) => right.matches - left.matches)
+      .slice(0, 8);
+
+    const badges = [
+      data.stats.bestVisit >= 180 ? "180 Club" : "",
+      data.insights.throwStats.checkoutsHit >= 10 ? "Checkout Killer" : "",
+      data.stats.winRate >= 65 ? "Match Closer" : "",
+      data.insights.throwStats.bullsHit >= 25 ? "Bull Hunter" : "",
+      data.stats.trainingSessions >= 20 ? "Trainingsmaschine" : "",
+      data.insights.bestWinStreak >= 5 ? "Hot Streak" : "",
+    ].filter(Boolean);
+
+    return {
+      filteredMatches,
+      filteredTraining,
+      monthlyMatches,
+      monthlyTraining,
+      modeBreakdown,
+      opponentBreakdown,
+      badges,
+    };
+  }, [analyticsNow, analyticsWindow, data, modeFilter]);
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top,_#1f2937,_#09090b_55%)] px-3 py-4 pb-28 text-stone-100 sm:px-4 sm:py-6 sm:pb-8">
@@ -615,6 +793,145 @@ export default function ProfilePage() {
                 </div>
               </div>
             </section>
+
+            <details className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4" open>
+              <summary className="cursor-pointer list-none text-lg font-semibold text-white">
+                Analyse-Dropdown
+              </summary>
+              <div className="mt-4 space-y-4">
+                <div className="flex flex-wrap gap-2">
+                  {([
+                    ["30", "30 Tage"],
+                    ["90", "90 Tage"],
+                    ["all", "Alle Daten"],
+                  ] as const).map(([value, label]) => (
+                    <button
+                      key={value}
+                      onClick={() => setAnalyticsWindow(value)}
+                      className={`rounded-full px-3 py-2 text-sm font-semibold ${
+                        analyticsWindow === value
+                          ? "bg-emerald-400 text-black"
+                          : "border border-white/10 bg-black/20 text-white"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                  {([
+                    ["all", "Alle Modi"],
+                    ["301", "301"],
+                    ["501", "501"],
+                  ] as const).map(([value, label]) => (
+                    <button
+                      key={value}
+                      onClick={() => setModeFilter(value)}
+                      className={`rounded-full px-3 py-2 text-sm font-semibold ${
+                        modeFilter === value
+                          ? "bg-amber-300 text-black"
+                          : "border border-white/10 bg-black/20 text-white"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="grid gap-4 lg:grid-cols-2">
+                  <div className="rounded-[1.25rem] border border-white/10 bg-black/20 p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <h3 className="text-sm font-semibold text-white">Match-Verlauf</h3>
+                      <p className="text-xs text-stone-400">{analytics.filteredMatches.length} Matches</p>
+                    </div>
+                    {analytics.monthlyMatches.length > 0 ? (
+                      <div className="mt-4">
+                        <SimpleBarChart data={analytics.monthlyMatches} valueKey="matches" colorClass="bg-emerald-400" />
+                      </div>
+                    ) : (
+                      <p className="mt-3 text-sm text-stone-400">Keine Match-Daten im Filter.</p>
+                    )}
+                  </div>
+
+                  <div className="rounded-[1.25rem] border border-white/10 bg-black/20 p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <h3 className="text-sm font-semibold text-white">Training-Verlauf</h3>
+                      <p className="text-xs text-stone-400">{analytics.filteredTraining.length} Sessions</p>
+                    </div>
+                    {analytics.monthlyTraining.length > 0 ? (
+                      <div className="mt-4">
+                        <SimpleBarChart data={analytics.monthlyTraining} valueKey="sessions" colorClass="bg-amber-300" />
+                      </div>
+                    ) : (
+                      <p className="mt-3 text-sm text-stone-400">Keine Trainingsdaten im Filter.</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+                  <div className="rounded-[1.25rem] border border-white/10 bg-black/20 p-4">
+                    <h3 className="text-sm font-semibold text-white">Modi im Vergleich</h3>
+                    <div className="mt-3 space-y-2">
+                      {analytics.modeBreakdown.length > 0 ? (
+                        analytics.modeBreakdown.map((entry) => (
+                          <div key={entry.mode} className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                            <div className="flex items-center justify-between gap-3">
+                              <p className="font-semibold text-white">{entry.mode}</p>
+                              <p className="text-sm text-stone-300">{entry.matches} Matches</p>
+                            </div>
+                            <p className="mt-1 text-xs text-stone-400">{entry.wins} Siege</p>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-sm text-stone-400">Keine Modus-Daten im Filter.</p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="rounded-[1.25rem] border border-white/10 bg-black/20 p-4">
+                    <h3 className="text-sm font-semibold text-white">Gegnerbilanz</h3>
+                    <div className="mt-3 space-y-2">
+                      {analytics.opponentBreakdown.length > 0 ? (
+                        analytics.opponentBreakdown.map((entry) => (
+                          <div key={entry.name} className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                            <div className="flex items-center justify-between gap-3">
+                              <p className="font-semibold text-white">{entry.name}</p>
+                              <p className="text-sm text-stone-300">{entry.winRate.toFixed(1)}%</p>
+                            </div>
+                            <p className="mt-1 text-xs text-stone-400">
+                              {entry.wins} Siege aus {entry.matches} Matches
+                            </p>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-sm text-stone-400">Keine Gegnerdaten im Filter.</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </details>
+
+            <details className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4">
+              <summary className="cursor-pointer list-none text-lg font-semibold text-white">
+                Badges & Meilensteine
+              </summary>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {analytics.badges.length > 0 ? (
+                  analytics.badges.map((badge) => (
+                    <div
+                      key={badge}
+                      className="rounded-[1.25rem] border border-amber-300/25 bg-amber-300/10 p-4"
+                    >
+                      <p className="text-[10px] uppercase tracking-[0.18em] text-amber-100">Freigeschaltet</p>
+                      <p className="mt-2 text-lg font-semibold text-white">{badge}</p>
+                    </div>
+                  ))
+                ) : (
+                  <div className="rounded-[1.25rem] border border-white/10 bg-black/20 p-4 text-sm text-stone-400">
+                    Noch keine Badges freigeschaltet.
+                  </div>
+                )}
+              </div>
+            </details>
           </>
         )}
       </div>
