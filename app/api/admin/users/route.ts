@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdminClients, supabaseAdminEnabled } from "@/lib/supabase-admin";
-import { TEST_USERS } from "@/lib/test-users";
+import { LEGACY_TEST_EMAILS, TEST_USERS } from "@/lib/test-users";
 
 type CreateUserPayload = {
   email: string;
@@ -70,6 +70,32 @@ async function createOneUser(payload: CreateUserPayload) {
   };
 }
 
+async function deleteUsersByEmails(emails: string[]) {
+  const { adminClient } = getSupabaseAdminClients();
+  const { data, error } = await adminClient.auth.admin.listUsers({
+    page: 1,
+    perPage: 200,
+  });
+
+  if (error) {
+    return [{ ok: false as const, email: "list-users", error: error.message }];
+  }
+
+  const existingUsers = data.users.filter((user) => user.email && emails.includes(user.email));
+  const results = [];
+
+  for (const user of existingUsers) {
+    const { error: deleteError } = await adminClient.auth.admin.deleteUser(user.id);
+    results.push({
+      ok: !deleteError,
+      email: user.email ?? user.id,
+      error: deleteError?.message,
+    });
+  }
+
+  return results;
+}
+
 export async function POST(request: Request) {
   const authResult = await authorizeRequest(request);
   if (!authResult.ok) {
@@ -78,7 +104,19 @@ export async function POST(request: Request) {
 
   const body = (await request.json()) as
     | { action: "seed" }
+    | { action: "reset-seed" }
     | { action: "create"; email: string; password: string; displayName: string };
+
+  if (body.action === "reset-seed") {
+    const emailsToDelete = [...LEGACY_TEST_EMAILS, ...TEST_USERS.map((user) => user.email)];
+    const deleteResults = await deleteUsersByEmails(emailsToDelete);
+    const createResults = [];
+    for (const user of TEST_USERS) {
+      createResults.push(await createOneUser(user));
+    }
+
+    return NextResponse.json({ deleteResults, results: createResults });
+  }
 
   if (body.action === "seed") {
     const results = [];

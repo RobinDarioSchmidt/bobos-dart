@@ -797,40 +797,44 @@ export default function Page() {
     setCloudLoading(true);
     setCloudMessage("");
 
-    const { data, error } = await supabase
-      .from("matches")
-      .select("id, played_at, mode, double_out")
-      .eq("owner_id", nextSession.user.id)
-      .order("played_at", { ascending: false })
-      .limit(8);
+    const {
+      data: { session: freshSession },
+    } = await supabase.auth.getSession();
 
-    setCloudLoading(false);
-
-    if (error) {
-      setCloudMessage(`Cloud-Historie konnte nicht geladen werden: ${error.message}`);
+    const accessToken = freshSession?.access_token ?? nextSession.access_token;
+    if (!accessToken) {
+      setCloudLoading(false);
+      setCloudMessage("Kein gueltiger Cloud-Token gefunden.");
       return;
     }
 
-    const rows = (data ?? []) as CloudMatchRow[];
+    const response = await fetch("/api/cloud/matches", {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    const result = (await response.json()) as {
+      error?: string;
+      matches?: CloudMatchRow[];
+      players?: CloudMatchPlayerRow[];
+    };
+
+    setCloudLoading(false);
+
+    if (!response.ok || result.error) {
+      setCloudMessage(`Cloud-Historie konnte nicht geladen werden: ${result.error ?? "Unbekannter Fehler"}`);
+      return;
+    }
+
+    const rows = result.matches ?? [];
     if (rows.length === 0) {
       setCloudMatchHistory([]);
       setCloudMessage("Noch keine Cloud-Matches gespeichert.");
       return;
     }
 
-    const matchIds = rows.map((row) => row.id);
-    const { data: playersData, error: playersError } = await supabase
-      .from("match_players")
-      .select("match_id, guest_name, seat_index, is_winner, sets_won")
-      .in("match_id", matchIds)
-      .order("seat_index", { ascending: true });
-
-    if (playersError) {
-      setCloudMessage(`Cloud-Spieler konnten nicht geladen werden: ${playersError.message}`);
-      return;
-    }
-
-    const playerRows = (playersData ?? []) as CloudMatchPlayerRow[];
+    const playerRows = result.players ?? [];
     const history = rows.map((row) =>
       toHistoryEntry(
         row,

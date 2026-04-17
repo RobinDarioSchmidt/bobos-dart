@@ -73,6 +73,7 @@ export default function AdminPage() {
       email?: string;
       error?: string;
       results?: Array<{ ok: boolean; email: string; error?: string }>;
+      deleteResults?: Array<{ ok: boolean; email: string; error?: string }>;
     };
 
     setLoading(false);
@@ -80,12 +81,13 @@ export default function AdminPage() {
     if (result.results) {
       const successCount = result.results.filter((entry) => entry.ok).length;
       const failed = result.results.filter((entry) => !entry.ok);
+      const deletedCount = result.deleteResults?.filter((entry) => entry.ok).length ?? 0;
       setMessage(
         failed.length > 0
-          ? `${successCount} Test-Accounts erstellt, ${failed.length} fehlgeschlagen: ${failed
+          ? `${deletedCount} alte Accounts entfernt, ${successCount} Test-Accounts erstellt, ${failed.length} fehlgeschlagen: ${failed
               .map((entry) => `${entry.email} (${entry.error})`)
               .join(", ")}`
-          : `Alle ${successCount} Test-Accounts erstellt.`,
+          : `${deletedCount} alte Accounts entfernt, alle ${successCount} Test-Accounts erstellt.`,
       );
       return;
     }
@@ -116,7 +118,7 @@ export default function AdminPage() {
   }
 
   async function handleSeedUsers() {
-    await callAdminApi({ action: "seed" });
+    await callAdminApi({ action: "reset-seed" });
   }
 
   return (
@@ -193,7 +195,7 @@ export default function AdminPage() {
                   disabled={loading}
                   className="w-full rounded-2xl bg-amber-300 px-4 py-3 text-sm font-semibold text-black disabled:opacity-50"
                 >
-                  Test-Accounts jetzt anlegen
+                  Alte Test-Accounts ersetzen und neu anlegen
                 </button>
               </div>
             </div>

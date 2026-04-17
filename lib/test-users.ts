@@ -6,28 +6,46 @@ export type TestUser = {
 
 export const TEST_USERS: TestUser[] = [
   {
-    email: "bobo.test1@dartfriends.app",
-    password: "Darts2026!Alpha",
-    displayName: "Bobo Test 1",
+    email: "boombe@dartfriends.app",
+    password: "Darts2026!Boombe",
+    displayName: "Boombe",
   },
   {
-    email: "bobo.test2@dartfriends.app",
-    password: "Darts2026!Bravo",
-    displayName: "Bobo Test 2",
+    email: "gilette@dartfriends.app",
+    password: "Darts2026!Gilette",
+    displayName: "Gilette",
   },
   {
-    email: "bobo.test3@dartfriends.app",
-    password: "Darts2026!Charlie",
-    displayName: "Bobo Test 3",
+    email: "bullsmaster@dartfriends.app",
+    password: "Darts2026!Bullsmaster",
+    displayName: "Bullsmaster",
   },
   {
-    email: "bobo.test4@dartfriends.app",
-    password: "Darts2026!Delta",
-    displayName: "Bobo Test 4",
+    email: "anni@dartfriends.app",
+    password: "Darts2026!Anni",
+    displayName: "Anni",
   },
   {
-    email: "bobo.test5@dartfriends.app",
-    password: "Darts2026!Echo",
-    displayName: "Bobo Test 5",
+    email: "anni2@dartfriends.app",
+    password: "Darts2026!Anni2",
+    displayName: "Anni2",
   },
+  {
+    email: "cem@dartfriends.app",
+    password: "Darts2026!Cem",
+    displayName: "Cem",
+  },
+  {
+    email: "timbo@dartfriends.app",
+    password: "Darts2026!Timbo",
+    displayName: "Timbo",
+  },
+];
+
+export const LEGACY_TEST_EMAILS = [
+  "bobo.test1@dartfriends.app",
+  "bobo.test2@dartfriends.app",
+  "bobo.test3@dartfriends.app",
+  "bobo.test4@dartfriends.app",
+  "bobo.test5@dartfriends.app",
 ];
