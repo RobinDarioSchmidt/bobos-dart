@@ -95,10 +95,10 @@ function handleBoardKeyDown(
 
 function markerColorForRing(ring: LiveSegmentRing) {
   if (ring === "miss") {
-    return "#f87171";
+    return "#6b7280";
   }
 
-  return "#f8fafc";
+  return "#6b7280";
 }
 
 function resultStyles(result: LiveMatchState["history"][number]["result"]) {
@@ -116,23 +116,17 @@ function resultStyles(result: LiveMatchState["history"][number]["result"]) {
 function LiveDartboard({
   onSegmentSelect,
   disabled,
-  caption,
   markers,
 }: {
   onSegmentSelect: (segment: Segment) => void;
   disabled: boolean;
-  caption: string;
   markers: LiveBoardMarker[];
 }) {
   const [hoveredSegment, setHoveredSegment] = useState<Segment | null>(null);
 
   return (
     <div className={`rounded-[1.5rem] border border-white/10 bg-black/20 p-3 transition ${disabled ? "opacity-45" : ""}`}>
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <div>
-          <h3 className="text-base font-semibold text-white">Visuelles Dartboard</h3>
-          <p className="text-xs text-stone-400">{caption}</p>
-        </div>
+      <div className="mb-3 flex items-center justify-end gap-3">
         {hoveredSegment ? (
           <div className="min-h-[3rem] min-w-[8.5rem] rounded-2xl border border-amber-300/30 bg-amber-300/10 px-3 py-2 text-right">
             <p className="text-[10px] uppercase tracking-[0.22em] text-amber-100">Ziel</p>
@@ -471,6 +465,9 @@ export default function LivePage() {
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [connectedNames, setConnectedNames] = useState<string[]>([]);
+  const [createOpen, setCreateOpen] = useState(true);
+  const [joinOpen, setJoinOpen] = useState(true);
+  const [historyOpen, setHistoryOpen] = useState(true);
   const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL ?? "";
   const liveChannelRef = useRef<ReturnType<NonNullable<typeof supabase>["channel"]> | null>(null);
 
@@ -675,6 +672,8 @@ export default function LivePage() {
     });
 
     if (match?.room_code) {
+      setCreateOpen(false);
+      setJoinOpen(false);
       await broadcastRefresh(match.room_code, "create");
     }
   }
@@ -692,6 +691,7 @@ export default function LivePage() {
     });
 
     if (match?.room_code) {
+      setJoinOpen(false);
       await broadcastRefresh(match.room_code, "join");
     }
   }
@@ -758,6 +758,7 @@ export default function LivePage() {
   const pendingVisit = liveState?.pendingVisit;
   const pendingLabels = pendingVisit?.darts.map((dart) => dart.label) ?? [];
   const currentVisitTotal = pendingVisit?.darts.reduce((sum, dart) => sum + dart.score, 0) ?? 0;
+  const compactVisitText = pendingLabels.length > 0 ? pendingLabels.join(", ") : "Noch kein Dart";
   const boardMarkers = useMemo(() => {
     if (!liveState) {
       return [] as LiveBoardMarker[];
@@ -855,6 +856,10 @@ export default function LivePage() {
   const historyHeading = liveState?.bullOff.enabled && !liveState.bullOff.completed
     ? `Live Historie - ${currentPlayer?.name ?? "Niemand"} wirft Bull-Off`
     : `Live Historie - ${currentPlayer?.name ?? "Niemand"} ist dran!`;
+  const boardHeading = liveState?.bullOff.enabled && !liveState.bullOff.completed
+    ? `${currentPlayer?.name ?? "Niemand"} wirft Bull-Off`
+    : `${currentPlayer?.name ?? "Niemand"} ist dran${pendingLabels.length > 0 ? ` - ${pendingLabels.join(", ")}` : ""}`;
+  const playerStatusLine = `${connectedNames.length > 0 ? connectedNames.join(", ") : "Noch keine aktiven Verbindungen"}${isCurrentUsersTurn ? " · Du bist dran" : ""}`;
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top,_#1f2937,_#09090b_55%)] px-3 py-4 text-stone-100 sm:px-4 sm:py-6">
@@ -881,10 +886,15 @@ export default function LivePage() {
           <>
             <section className="grid gap-4 lg:grid-cols-[0.95fr_1.05fr]">
               <div className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur">
-                <h2 className="text-xl font-semibold text-white">Raum erstellen</h2>
-                <p className="mt-1 text-sm text-stone-400">Alles ist auf schnelles Handy-Spiel ausgelegt.</p>
+                <button
+                  onClick={() => setCreateOpen((prev) => !prev)}
+                  className="flex w-full items-center justify-between gap-3 text-left"
+                >
+                  <h2 className="text-xl font-semibold text-white">Raum erstellen</h2>
+                  <span className="text-sm text-stone-400">{createOpen ? "Einklappen" : "Ausklappen"}</span>
+                </button>
 
-                <div className="mt-4 space-y-3">
+                {createOpen ? <div className="mt-4 space-y-3">
                   <input
                     value={displayName}
                     onChange={(event) => setDisplayName(event.target.value)}
@@ -972,13 +982,18 @@ export default function LivePage() {
                   >
                     Raum erstellen
                   </button>
-                </div>
+                </div> : null}
               </div>
 
               <div className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur">
-                <h2 className="text-xl font-semibold text-white">Raum beitreten</h2>
-                <p className="mt-1 text-sm text-stone-400">Code rein, rein ins Match.</p>
-                <div className="mt-4 flex gap-2">
+                <button
+                  onClick={() => setJoinOpen((prev) => !prev)}
+                  className="flex w-full items-center justify-between gap-3 text-left"
+                >
+                  <h2 className="text-xl font-semibold text-white">Raum beitreten</h2>
+                  <span className="text-sm text-stone-400">{joinOpen ? "Einklappen" : "Ausklappen"}</span>
+                </button>
+                {joinOpen ? <div className="mt-4 flex gap-2">
                   <input
                     value={roomCodeInput}
                     onChange={(event) => setRoomCodeInput(event.target.value.toUpperCase())}
@@ -992,7 +1007,7 @@ export default function LivePage() {
                   >
                     Join
                   </button>
-                </div>
+                </div> : null}
                 {liveRoomCode ? (
                   <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4">
                     <p className="text-[11px] uppercase tracking-[0.22em] text-stone-400">Aktueller Raumcode</p>
@@ -1072,62 +1087,55 @@ export default function LivePage() {
                       })}
                     </div>
 
-                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                      <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
-                        <p className="text-[11px] uppercase tracking-[0.22em] text-stone-400">Gerade online im Raum</p>
-                        <p className="mt-1 text-sm text-stone-300">
-                          {connectedNames.length > 0 ? connectedNames.join(", ") : "Noch keine aktiven Verbindungen erkannt."}
-                        </p>
-                      </div>
-                      <div
-                        className={`rounded-2xl border p-3 ${
-                          isCurrentUsersTurn
-                            ? "border-emerald-300/40 bg-emerald-300/10"
-                            : "border-white/10 bg-black/20"
-                        }`}
-                      >
-                        <p className="text-[11px] uppercase tracking-[0.22em] text-stone-400">Dein Status</p>
-                        <p className={`mt-1 text-sm font-semibold ${isCurrentUsersTurn ? "text-emerald-200" : "text-white"}`}>
-                          {turnStatus}
-                        </p>
+                    <div
+                      className={`mt-4 rounded-2xl border p-3 ${
+                        isCurrentUsersTurn ? "border-emerald-300/40 bg-emerald-300/10" : "border-white/10 bg-black/20"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[11px] uppercase tracking-[0.22em] text-stone-400">Gerade online im Raum</p>
+                          <p className="mt-1 truncate text-sm text-stone-300">{playerStatusLine}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[11px] uppercase tracking-[0.22em] text-stone-400">Dein Status</p>
+                          <p className={`mt-1 text-sm font-semibold ${isCurrentUsersTurn ? "text-emerald-200" : "text-white"}`}>
+                            {turnStatus}
+                          </p>
+                        </div>
                       </div>
                     </div>
                   </section>
 
                   <section className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur">
-                    <h2 className="text-xl font-semibold text-white">Visit buchen</h2>
-                    <p className="mt-1 text-sm text-stone-400">
-                      Nur das Board zaehlt. Miss ist ebenfalls direkt klickbar.
-                    </p>
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h2 className="text-lg font-semibold text-white">{boardHeading}</h2>
+                        <p className="mt-1 text-sm text-stone-400">
+                          {liveState.bullOff.enabled && !liveState.bullOff.completed
+                            ? "Ein Wurf pro Spieler entscheidet ueber den Start."
+                            : `${currentVisitTotal} Punkte · ${compactVisitText}`}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => void handleMiss()}
+                        disabled={!isCurrentUsersTurn || loading}
+                        className="rounded-2xl border border-red-400/30 bg-red-400/10 px-4 py-2 text-sm font-semibold text-red-100 disabled:opacity-40"
+                      >
+                        Miss
+                      </button>
+                    </div>
 
                     <div className="mt-4">
                       <LiveDartboard
                         onSegmentSelect={handleBoardSegment}
                         disabled={!isCurrentUsersTurn}
-                        caption={
-                          liveState.bullOff.enabled && !liveState.bullOff.completed
-                            ? "Bull-Off aktiv: jeder Spieler wirft einmal auf das Board."
-                            : "Tippe deine Darts der Reihe nach auf dem Board."
-                        }
                         markers={boardMarkers}
                       />
                     </div>
 
                     <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4">
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div>
-                          <p className="text-[11px] uppercase tracking-[0.22em] text-stone-400">Aktueller Board-Besuch</p>
-                          <p className="mt-1 text-3xl font-semibold text-white">{currentVisitTotal}</p>
-                        </div>
-                        <button
-                          onClick={() => void handleMiss()}
-                          disabled={!isCurrentUsersTurn || loading}
-                          className="rounded-2xl border border-red-400/30 bg-red-400/10 px-4 py-2 text-sm font-semibold text-red-100 disabled:opacity-40"
-                        >
-                          Schwarzwald / Daneben
-                        </button>
-                      </div>
-                      <div className="mt-3 flex flex-wrap gap-2">
+                      <div className="flex flex-wrap gap-2">
                         {pendingLabels.length > 0 ? (
                           pendingLabels.map((label, index) => (
                             <div
@@ -1185,26 +1193,22 @@ export default function LivePage() {
                 </div>
 
                 <section className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur">
-                  <h2 className="text-xl font-semibold text-white">{historyHeading}</h2>
-                  <p className="mt-1 text-sm text-stone-400">Kompakt, farblich markiert und gut lesbar auf dem Handy.</p>
-                  <div className="mt-4 space-y-2">
+                  <button
+                    onClick={() => setHistoryOpen((prev) => !prev)}
+                    className="flex w-full items-center justify-between gap-3 text-left"
+                  >
+                    <h2 className="text-lg font-semibold text-white">{historyHeading}</h2>
+                    <span className="text-sm text-stone-400">{historyOpen ? "Einklappen" : "Ausklappen"}</span>
+                  </button>
+                  {historyOpen ? <div className="mt-4 space-y-2">
                     {liveState.history.length > 0 ? (
                       liveState.history.map((visit, index) => (
                         <div key={`${visit.createdAt}-${index}`} className={`rounded-2xl border p-3 text-sm ${resultStyles(visit.result)}`}>
                           <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <p className="font-semibold">{visit.playerName}</p>
-                              <p className="mt-1 text-xs opacity-80">{visit.note}</p>
-                            </div>
+                            <p className="font-semibold">{visit.playerName}</p>
                             <p className="text-xs opacity-70">{new Date(visit.createdAt).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}</p>
                           </div>
-                          <div className="mt-2 flex flex-wrap gap-2 text-xs opacity-90">
-                            {visit.darts.map((dart, dartIndex) => (
-                              <span key={`${dart}-${dartIndex}`} className="rounded-full border border-white/10 bg-black/20 px-2 py-1">
-                                {dart}
-                              </span>
-                            ))}
-                          </div>
+                          <p className="mt-1 text-xs opacity-85">{visit.note} · {visit.darts.join(", ") || "Ohne Dartdaten"}</p>
                           <p className="mt-2 text-xs opacity-90">
                             {visit.total} Punkte · {visit.scoreBefore} → {visit.scoreAfter}
                           </p>
@@ -1215,7 +1219,7 @@ export default function LivePage() {
                         Noch keine Besuche im Raum.
                       </div>
                     )}
-                  </div>
+                  </div> : null}
                 </section>
               </section>
             ) : null}

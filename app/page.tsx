@@ -1725,6 +1725,12 @@ export default function Page() {
                         >
                           Cloud-Historie laden
                         </button>
+                        <Link
+                          href="/profile"
+                          className="rounded-2xl border border-white/10 bg-black/20 px-4 py-2 text-sm font-semibold text-white"
+                        >
+                          Profilseite
+                        </Link>
                         <button
                           onClick={() => void loadCloudDashboard(session)}
                           className="rounded-2xl border border-white/10 bg-black/20 px-4 py-2 text-sm font-semibold text-white"

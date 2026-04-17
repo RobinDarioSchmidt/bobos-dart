@@ -15,6 +15,37 @@ type LiveMatchRow = {
   state: LiveMatchState;
 };
 
+function mergePlayers(currentState: LiveMatchState, nextState: LiveMatchState) {
+  return currentState.players.map((currentPlayer, index) => {
+    const incomingPlayer = nextState.players[index];
+
+    if (!incomingPlayer) {
+      return currentPlayer;
+    }
+
+    if (currentPlayer.joined && !incomingPlayer.joined) {
+      return currentPlayer;
+    }
+
+    if (currentPlayer.profileId && incomingPlayer.profileId !== currentPlayer.profileId) {
+      return currentPlayer;
+    }
+
+    return {
+      ...currentPlayer,
+      ...incomingPlayer,
+    };
+  });
+}
+
+function mergeLiveState(currentState: LiveMatchState, nextState: LiveMatchState) {
+  return normalizeLiveState({
+    ...currentState,
+    ...nextState,
+    players: mergePlayers(currentState, nextState),
+  });
+}
+
 async function authorizeRequest(request: Request) {
   const authHeader = request.headers.get("authorization");
 
@@ -200,7 +231,7 @@ export async function POST(request: Request) {
 
     const match = data as LiveMatchRow;
     const currentState = normalizeLiveState(match.state);
-    const isParticipant = body.state.players.some(
+    const isParticipant = currentState.players.some(
       (player) => player.joined && player.profileId === authResult.user.id,
     );
     if (!isParticipant) {
@@ -210,10 +241,7 @@ export async function POST(request: Request) {
     const { data: updated, error: updateError } = await adminClient
       .from("live_matches")
       .update({
-        state: normalizeLiveState({
-          ...currentState,
-          ...body.state,
-        }),
+        state: mergeLiveState(currentState, body.state),
         updated_at: new Date().toISOString(),
       })
       .eq("id", match.id)
