@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { applyLiveVisit, getPreferredDisplayName, startNextLiveLeg, type LiveMatchState } from "@/lib/live-match";
 import { supabase, supabaseEnabled } from "@/lib/supabase";
@@ -30,7 +30,9 @@ export default function LivePage() {
   const [confirmCheckout, setConfirmCheckout] = useState(false);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [connectedNames, setConnectedNames] = useState<string[]>([]);
   const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL ?? "";
+  const liveChannelRef = useRef<ReturnType<NonNullable<typeof supabase>["channel"]> | null>(null);
 
   useEffect(() => {
     if (!supabase) {
@@ -106,6 +108,67 @@ export default function LivePage() {
     };
   }, [fetchMatch, liveRoomCode, session]);
 
+  const broadcastRefresh = useCallback(async (roomCode: string, reason: string) => {
+    const channel = liveChannelRef.current;
+    if (!channel) {
+      return;
+    }
+
+    await channel.send({
+      type: "broadcast",
+      event: "match_updated",
+      payload: {
+        roomCode,
+        reason,
+        updatedAt: new Date().toISOString(),
+      },
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!supabase || !session || !liveRoomCode || !displayName) {
+      return;
+    }
+
+    const client = supabase;
+    const channel = client.channel(`live-room:${liveRoomCode}`, {
+      config: {
+        broadcast: { self: false },
+        presence: { key: session.user.id },
+      },
+    });
+
+    liveChannelRef.current = channel;
+
+    channel
+      .on("broadcast", { event: "match_updated" }, () => {
+        void fetchMatch(liveRoomCode);
+      })
+      .on("presence", { event: "sync" }, () => {
+        const state = channel.presenceState() as Record<string, Array<{ name?: string }>>;
+        const names = Object.values(state)
+          .flat()
+          .map((entry) => entry.name)
+          .filter((name): name is string => Boolean(name));
+        setConnectedNames(Array.from(new Set(names)));
+      })
+      .subscribe(async (status) => {
+        if (status === "SUBSCRIBED") {
+          await channel.track({
+            name: displayName,
+            online_at: new Date().toISOString(),
+          });
+        }
+      });
+
+    return () => {
+      setConnectedNames([]);
+      liveChannelRef.current = null;
+      void channel.untrack();
+      void client.removeChannel(channel);
+    };
+  }, [displayName, fetchMatch, liveRoomCode, session]);
+
   async function callLiveApi(body: object) {
     const accessToken = await getAccessToken();
     if (!accessToken) {
@@ -139,7 +202,7 @@ export default function LivePage() {
   }
 
   async function createRoom() {
-    await callLiveApi({
+    const match = await callLiveApi({
       action: "create",
       mode,
       doubleOut,
@@ -148,6 +211,10 @@ export default function LivePage() {
       maxPlayers,
       displayName,
     });
+
+    if (match?.room_code) {
+      await broadcastRefresh(match.room_code, "create");
+    }
   }
 
   async function joinRoom() {
@@ -156,11 +223,15 @@ export default function LivePage() {
       return;
     }
 
-    await callLiveApi({
+    const match = await callLiveApi({
       action: "join",
       roomCode: roomCodeInput,
       displayName,
     });
+
+    if (match?.room_code) {
+      await broadcastRefresh(match.room_code, "join");
+    }
   }
 
   async function updateRoom(nextState: LiveMatchState) {
@@ -177,6 +248,7 @@ export default function LivePage() {
     if (result) {
       setVisitTotal("");
       setConfirmCheckout(false);
+      await broadcastRefresh(liveRoomCode, "update");
     }
   }
 
@@ -375,6 +447,12 @@ export default function LivePage() {
                           </div>
                         </div>
                       ))}
+                    </div>
+                    <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-4">
+                      <p className="text-xs uppercase tracking-[0.22em] text-stone-400">Gerade online im Raum</p>
+                      <p className="mt-2 text-sm text-stone-300">
+                        {connectedNames.length > 0 ? connectedNames.join(", ") : "Noch keine aktiven Verbindungen erkannt."}
+                      </p>
                     </div>
                   </section>
 
