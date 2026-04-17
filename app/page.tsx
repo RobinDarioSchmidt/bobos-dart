@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase, supabaseEnabled } from "@/lib/supabase";
 
@@ -91,6 +91,7 @@ type CloudMatchPlayerRow = {
 type CloudProfileRow = {
   display_name: string;
   username: string | null;
+  app_settings?: CloudAppSettings | null;
 };
 
 type CloudDashboardStats = {
@@ -113,16 +114,19 @@ type TrainingCloudRow = {
   played_at: string;
 };
 
-type LocalBackupPayload = {
+type CloudAppSettings = {
   appMode: AppMode;
   mode: GameMode;
   doubleOut: boolean;
   legsToWin: number;
   setsToWin: number;
   playerNames: string[];
+  trainingMode: TrainingMode;
+};
+
+type LocalStoredState = CloudAppSettings & {
   stats: StoredStats;
   localMatchHistory: MatchHistoryEntry[];
-  trainingMode: TrainingMode;
 };
 
 const STORAGE_KEY = "bobos-dart-state-v3";
@@ -374,12 +378,8 @@ function getPreferredProfileName(email: string | undefined, fallbackName: string
   return fallbackName.trim() || email?.split("@")[0] || "Spieler";
 }
 
-function buildLocalBackup(payload: LocalBackupPayload) {
-  return {
-    exportedAt: new Date().toISOString(),
-    version: 1,
-    ...payload,
-  };
+function buildCloudSettings(payload: CloudAppSettings) {
+  return payload;
 }
 
 function toHistoryEntry(row: CloudMatchRow, players: CloudMatchPlayerRow[]): MatchHistoryEntry {
@@ -662,11 +662,11 @@ export default function Page() {
     createTrainingSession("around-the-clock"),
   );
   const [hydrated, setHydrated] = useState(false);
+  const [cloudSettingsReady, setCloudSettingsReady] = useState(false);
   const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL ?? "";
   const isAdmin = Boolean(session?.user.email && adminEmail && session.user.email === adminEmail);
-  const importInputRef = useRef<HTMLInputElement | null>(null);
 
-  const applyLocalBackup = useCallback((parsed: Partial<LocalBackupPayload>) => {
+  const applyStoredState = useCallback((parsed: Partial<LocalStoredState>) => {
     const parsedMode = parsed.mode === 301 || parsed.mode === 501 ? parsed.mode : 501;
     const names =
       parsed.playerNames && parsed.playerNames.length >= 2 && parsed.playerNames.length <= 4
@@ -740,13 +740,13 @@ export default function Page() {
         localMatchHistory: MatchHistoryEntry[];
         trainingMode: TrainingMode;
       }>;
-      applyLocalBackup(parsed);
+      applyStoredState(parsed);
     } catch {
       // Ignore invalid local state and continue with defaults.
     } finally {
       setHydrated(true);
     }
-  }, [applyLocalBackup]);
+  }, [applyStoredState]);
 
   useEffect(() => {
     if (!hydrated) {
@@ -806,13 +806,23 @@ export default function Page() {
     }
 
     const displayName = getPreferredProfileName(nextSession.user.email, players[0]?.name ?? "", adminEmail);
+    const appSettings = buildCloudSettings({
+      appMode,
+      mode,
+      doubleOut,
+      legsToWin,
+      setsToWin,
+      playerNames: players.map((player) => player.name),
+      trainingMode: trainingSession.mode,
+    });
 
     await supabase.from("profiles").upsert({
       id: nextSession.user.id,
       display_name: displayName,
       username: nextSession.user.email,
+      app_settings: appSettings,
     });
-  }, [adminEmail, players]);
+  }, [adminEmail, appMode, doubleOut, legsToWin, mode, players, setsToWin, trainingSession.mode]);
 
   const loadCloudProfile = useCallback(async (nextSession: Session) => {
     if (!supabase) {
@@ -821,7 +831,7 @@ export default function Page() {
 
     const { data, error } = await supabase
       .from("profiles")
-      .select("display_name, username")
+      .select("display_name, username, app_settings")
       .eq("id", nextSession.user.id)
       .single();
 
@@ -831,6 +841,9 @@ export default function Page() {
 
     const profile = data as CloudProfileRow;
     const preferredName = getPreferredProfileName(nextSession.user.email, profile.display_name, adminEmail);
+    if (profile.app_settings) {
+      applyStoredState(profile.app_settings as Partial<LocalStoredState>);
+    }
 
     if (preferredName !== profile.display_name) {
       await supabase.from("profiles").update({ display_name: preferredName }).eq("id", nextSession.user.id);
@@ -857,7 +870,8 @@ export default function Page() {
           : player,
       );
     });
-  }, [adminEmail]);
+    setCloudSettingsReady(true);
+  }, [adminEmail, applyStoredState]);
 
   const loadCloudMatches = useCallback(async (nextSession: Session) => {
     if (!supabase) {
@@ -1025,6 +1039,7 @@ export default function Page() {
         setCloudMatchHistory([]);
         setCloudStats(null);
         setRecentTrainingSessions([]);
+        setCloudSettingsReady(false);
       }
     });
 
@@ -1063,6 +1078,29 @@ export default function Page() {
     });
   }, [adminEmail, ensureProfile, players, profileName, session]);
 
+  useEffect(() => {
+    if (!session || !supabase || !cloudSettingsReady) {
+      return;
+    }
+
+    const appSettings = buildCloudSettings({
+      appMode,
+      mode,
+      doubleOut,
+      legsToWin,
+      setsToWin,
+      playerNames: players.map((player) => player.name),
+      trainingMode: trainingSession.mode,
+    });
+
+    void supabase
+      .from("profiles")
+      .update({
+        app_settings: appSettings,
+      })
+      .eq("id", session.user.id);
+  }, [appMode, cloudSettingsReady, doubleOut, legsToWin, mode, players, session, setsToWin, trainingSession.mode]);
+
   async function handleAuthSubmit() {
     if (!supabase) {
       setAuthMessage("Supabase ist noch nicht konfiguriert.");
@@ -1097,48 +1135,6 @@ export default function Page() {
 
     await supabase.auth.signOut();
     setCloudMessage("Abgemeldet. Lokale Daten bleiben erhalten.");
-  }
-
-  function exportLocalBackup() {
-    const backup = buildLocalBackup({
-      appMode,
-      mode,
-      doubleOut,
-      legsToWin,
-      setsToWin,
-      playerNames: players.map((player) => player.name),
-      stats,
-      localMatchHistory,
-      trainingMode: trainingSession.mode,
-    });
-    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `bobos-dart-backup-${new Date().toISOString().slice(0, 10)}.json`;
-    link.click();
-    window.URL.revokeObjectURL(url);
-    setCloudMessage("Lokales Backup exportiert.");
-  }
-
-  async function importLocalBackup(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) {
-      return;
-    }
-
-    try {
-      const text = await file.text();
-      const parsed = JSON.parse(text) as Partial<LocalBackupPayload>;
-      applyLocalBackup(parsed);
-      setCloudMessage("Lokales Backup importiert.");
-    } catch {
-      setCloudMessage("Backup konnte nicht gelesen werden.");
-    } finally {
-      if (importInputRef.current) {
-        importInputRef.current.value = "";
-      }
-    }
   }
 
   async function saveMatchToCloud(winnerIndex: number, finalPlayers: Player[]) {
@@ -1706,6 +1702,9 @@ export default function Page() {
                       <div className="text-sm text-stone-300">
                         <p>{session.user.email}</p>
                         {profileName ? <p className="text-stone-400">Profilname: {profileName}</p> : null}
+                        <p className="mt-1 text-stone-400">
+                          Match-Historie, Training und deine App-Einstellungen werden fuer eingeloggte Nutzer in der Cloud gehalten.
+                        </p>
                       </div>
                       <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
                         <input
@@ -1786,36 +1785,6 @@ export default function Page() {
                 {authMessage ? <p className="mt-3 text-sm text-amber-200">{authMessage}</p> : null}
                 {cloudMessage ? <p className="mt-2 text-sm text-stone-300">{cloudMessage}</p> : null}
                 {cloudLoading ? <p className="mt-2 text-sm text-stone-500">Cloud-Historie wird geladen...</p> : null}
-
-                <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-xs uppercase tracking-[0.24em] text-stone-400">Lokales Backup</p>
-                    <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-stone-300">
-                      Browserdaten
-                    </span>
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-3">
-                    <button
-                      onClick={exportLocalBackup}
-                      className="rounded-2xl bg-amber-300 px-4 py-2 text-sm font-semibold text-black"
-                    >
-                      Backup exportieren
-                    </button>
-                    <button
-                      onClick={() => importInputRef.current?.click()}
-                      className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white"
-                    >
-                      Backup importieren
-                    </button>
-                    <input
-                      ref={importInputRef}
-                      type="file"
-                      accept="application/json"
-                      onChange={importLocalBackup}
-                      className="hidden"
-                    />
-                  </div>
-                </div>
 
                 {session && cloudStats ? (
                   <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-4">

@@ -4,6 +4,7 @@ import { getSupabaseAdminClients, supabaseAdminEnabled } from "@/lib/supabase-ad
 type ProfileRow = {
   display_name: string;
   username: string | null;
+  app_settings: Record<string, unknown> | null;
   created_at: string;
 };
 
@@ -62,7 +63,7 @@ export async function GET(request: Request) {
 
   const [{ data: profile, error: profileError }, { data: matchPlayers, error: matchPlayersError }, { data: trainings, error: trainingsError }] =
     await Promise.all([
-      adminClient.from("profiles").select("display_name, username, created_at").eq("id", user.id).single(),
+      adminClient.from("profiles").select("display_name, username, app_settings, created_at").eq("id", user.id).single(),
       adminClient
         .from("match_players")
         .select("sets_won, legs_won, average, best_visit, is_winner")
