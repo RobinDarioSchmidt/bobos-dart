@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { MobileAppNav } from "@/components/mobile-app-nav";
+import { getCheckoutSuggestions } from "@/lib/checkout-hints";
 import { supabase, supabaseEnabled } from "@/lib/supabase";
 
 type AppMode = "match" | "training";
@@ -163,107 +164,6 @@ const BOARD_RADIUS = {
   doubleInner: 150,
   doubleOuter: 172,
   label: 188,
-};
-
-const CHECKOUTS: Record<number, string[]> = {
-  2: ["D1"],
-  4: ["D2"],
-  6: ["D3"],
-  8: ["D4"],
-  10: ["D5"],
-  12: ["D6"],
-  16: ["D8"],
-  20: ["D10"],
-  24: ["D12"],
-  32: ["D16"],
-  36: ["D18"],
-  40: ["D20"],
-  50: ["Bull"],
-  60: ["20, D20"],
-  61: ["25, D18"],
-  62: ["10, D26", "12, D25"],
-  64: ["16, D24"],
-  66: ["10, D28", "18, D24"],
-  68: ["20, D24"],
-  70: ["10, D30", "18, D26"],
-  72: ["16, D28", "20, D26"],
-  74: ["14, D30"],
-  76: ["20, D28"],
-  78: ["18, D30"],
-  80: ["20, D30", "D20, D20"],
-  81: ["19, D31"],
-  82: ["Bull, D16", "14, D34"],
-  84: ["20, D32"],
-  85: ["15, Bull"],
-  86: ["18, D34"],
-  87: ["17, Bull"],
-  88: ["16, D36"],
-  89: ["19, Bull"],
-  90: ["20, D35", "Bull, D20"],
-  91: ["17, D37"],
-  92: ["20, D36"],
-  93: ["19, D37"],
-  94: ["18, D38"],
-  95: ["19, D38"],
-  96: ["20, D38"],
-  97: ["17, D40"],
-  98: ["18, D40"],
-  99: ["19, D40"],
-  100: ["T20, D20"],
-  101: ["T17, D25"],
-  102: ["T20, D21"],
-  103: ["T17, D26"],
-  104: ["T18, D25"],
-  105: ["T19, D24"],
-  106: ["T20, D23"],
-  107: ["T19, D25"],
-  108: ["T20, D24"],
-  110: ["T20, Bull"],
-  112: ["T20, D26"],
-  113: ["T19, D28"],
-  116: ["T20, D28"],
-  118: ["T20, D29"],
-  119: ["T19, D31"],
-  120: ["20, T20, D20"],
-  121: ["T20, 11, Bull"],
-  122: ["T18, 18, Bull"],
-  124: ["T20, 14, Bull"],
-  125: ["25, T20, D20"],
-  126: ["T19, 19, Bull"],
-  127: ["T20, 17, Bull"],
-  128: ["T18, 14, Bull"],
-  129: ["T19, 16, Bull"],
-  130: ["T20, 20, Bull"],
-  131: ["T20, T13, D16"],
-  132: ["Bull, Bull, D16"],
-  134: ["T20, T14, D16"],
-  135: ["Bull, T15, D20"],
-  136: ["T20, T20, D8"],
-  137: ["T18, T17, D16"],
-  138: ["T20, T18, D12"],
-  140: ["T20, T16, D16"],
-  141: ["T20, T19, D12"],
-  142: ["T20, T14, D20"],
-  143: ["T20, T17, D16"],
-  144: ["T20, T20, D12"],
-  145: ["T20, T15, D20"],
-  146: ["T20, T18, D16"],
-  147: ["T20, T17, D18"],
-  148: ["T20, T16, D20"],
-  149: ["T20, T19, D16"],
-  150: ["T20, T18, D18"],
-  151: ["T20, T17, D20"],
-  152: ["T20, T20, D16"],
-  153: ["T20, T19, D18"],
-  154: ["T20, T18, D20"],
-  155: ["T20, T19, D19"],
-  156: ["T20, T20, D18"],
-  157: ["T20, T19, D20"],
-  160: ["T20, T20, D20"],
-  161: ["T20, T17, Bull"],
-  164: ["T20, T18, Bull"],
-  167: ["T20, T19, Bull"],
-  170: ["T20, T20, Bull"],
 };
 
 const emptyStats: StoredStats = {
@@ -432,15 +332,7 @@ function formatAverage(pointsScored: number, dartsThrown: number) {
 }
 
 function getCheckoutHints(score: number, doubleOut: boolean) {
-  if (!doubleOut) {
-    if (score <= 60) {
-      return [`Direkt moeglich mit ${score} Punkten.`];
-    }
-
-    return [];
-  }
-
-  return CHECKOUTS[score] ?? [];
+  return getCheckoutSuggestions(score, doubleOut ? "double" : "single");
 }
 
 function getPlayerMetrics(player: Player) {

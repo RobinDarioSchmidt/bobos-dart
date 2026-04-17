@@ -18,6 +18,7 @@ import {
   type LiveMatchState,
   type LiveSegmentRing,
 } from "@/lib/live-match";
+import { getCheckoutSuggestions } from "@/lib/checkout-hints";
 import { supabase, supabaseEnabled } from "@/lib/supabase";
 
 type LiveMatchResponse = {
@@ -880,6 +881,13 @@ export default function LivePage() {
   const pendingLabels = pendingVisit?.darts.map((dart) => dart.label) ?? [];
   const currentVisitTotal = pendingVisit?.darts.reduce((sum, dart) => sum + dart.score, 0) ?? 0;
   const compactVisitText = pendingLabels.length > 0 ? pendingLabels.join(", ") : "Noch kein Dart";
+  const checkoutHints = useMemo(() => {
+    if (!liveState || !currentPlayer || (liveState.bullOff.enabled && !liveState.bullOff.completed)) {
+      return [];
+    }
+
+    return getCheckoutSuggestions(currentPlayer.score, liveState.finishMode);
+  }, [currentPlayer, liveState]);
   const boardMarkers = useMemo(() => {
     if (!liveState) {
       return [] as LiveBoardMarker[];
@@ -1362,6 +1370,24 @@ export default function LivePage() {
                         </button>
                       ) : null}
                     </div>
+
+                    {checkoutHints.length > 0 ? (
+                      <div className="mt-4 rounded-2xl border border-emerald-300/20 bg-emerald-400/10 p-4">
+                        <p className="text-[10px] uppercase tracking-[0.18em] text-emerald-100">
+                          Moegliche Finishes fuer {currentPlayer?.name}
+                        </p>
+                        <div className="mt-2 flex flex-col gap-2">
+                          {checkoutHints.map((hint) => (
+                            <div
+                              key={hint}
+                              className="rounded-2xl border border-emerald-300/15 bg-black/20 px-3 py-2 text-sm text-emerald-50"
+                            >
+                              {hint}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
                   </section>
                 </div>
 
