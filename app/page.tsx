@@ -1017,7 +1017,6 @@ export default function Page() {
     void supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
       if (data.session) {
-        void ensureProfile(data.session);
         void loadCloudProfile(data.session);
         void loadCloudMatches(data.session);
         void loadCloudDashboard(data.session);
@@ -1029,7 +1028,6 @@ export default function Page() {
     } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       setSession(nextSession);
       if (nextSession) {
-        void ensureProfile(nextSession);
         void loadCloudProfile(nextSession);
         void loadCloudMatches(nextSession);
         void loadCloudDashboard(nextSession);
@@ -1046,7 +1044,7 @@ export default function Page() {
     return () => {
       subscription.unsubscribe();
     };
-  }, [ensureProfile, loadCloudDashboard, loadCloudMatches, loadCloudProfile]);
+  }, [loadCloudDashboard, loadCloudMatches, loadCloudProfile]);
 
   useEffect(() => {
     if (!session || !supabase) {
