@@ -1,6 +1,13 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdminClients, supabaseAdminEnabled } from "@/lib/supabase-admin";
-import { createEmptyLiveState, generateRoomCode, getPreferredDisplayName, type LiveMatchState } from "@/lib/live-match";
+import {
+  createEmptyLiveState,
+  generateRoomCode,
+  getPreferredDisplayName,
+  normalizeLiveState,
+  type LiveFinishMode,
+  type LiveMatchState,
+} from "@/lib/live-match";
 
 type LiveMatchRow = {
   id: string;
@@ -60,7 +67,12 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: error?.message ?? "match_not_found" }, { status: 404 });
   }
 
-  return NextResponse.json({ match: data });
+  return NextResponse.json({
+    match: {
+      ...data,
+      state: normalizeLiveState(data.state),
+    },
+  });
 }
 
 export async function POST(request: Request) {
@@ -73,11 +85,12 @@ export async function POST(request: Request) {
     | {
         action: "create";
         mode: 301 | 501;
-        doubleOut: boolean;
+        finishMode: LiveFinishMode;
         legsToWin: number;
         setsToWin: number;
         maxPlayers: number;
         displayName: string;
+        bullOffEnabled: boolean;
       }
     | {
         action: "join";
@@ -98,12 +111,13 @@ export async function POST(request: Request) {
     const roomCode = generateRoomCode();
     const state = createEmptyLiveState({
       mode: body.mode,
-      doubleOut: body.doubleOut,
+      finishMode: body.finishMode,
       legsToWin: body.legsToWin,
       setsToWin: body.setsToWin,
       maxPlayers: body.maxPlayers,
       ownerName: displayName,
       ownerId: authResult.user.id,
+      bullOffEnabled: body.bullOffEnabled,
     });
 
     const { data, error } = await adminClient
@@ -136,7 +150,7 @@ export async function POST(request: Request) {
     }
 
     const match = data as LiveMatchRow;
-    const state = match.state;
+    const state = normalizeLiveState(match.state);
     const alreadyJoinedIndex = state.players.findIndex((player) => player.profileId === authResult.user.id);
     if (alreadyJoinedIndex >= 0) {
       return NextResponse.json({ match });
@@ -185,6 +199,7 @@ export async function POST(request: Request) {
     }
 
     const match = data as LiveMatchRow;
+    const currentState = normalizeLiveState(match.state);
     const isParticipant = body.state.players.some(
       (player) => player.joined && player.profileId === authResult.user.id,
     );
@@ -195,7 +210,10 @@ export async function POST(request: Request) {
     const { data: updated, error: updateError } = await adminClient
       .from("live_matches")
       .update({
-        state: body.state,
+        state: normalizeLiveState({
+          ...currentState,
+          ...body.state,
+        }),
         updated_at: new Date().toISOString(),
       })
       .eq("id", match.id)
