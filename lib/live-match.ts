@@ -233,22 +233,12 @@ function getJoinedPlayerIndexes(state: LiveMatchState) {
 }
 
 function getBullOffRank(dart: LiveDart) {
-  switch (dart.ring) {
-    case "bull":
-      return 6;
-    case "outer-bull":
-      return 5;
-    case "single-inner":
-      return 4;
-    case "triple":
-      return 3;
-    case "single-outer":
-      return 2;
-    case "double":
-      return 1;
-    default:
-      return 0;
+  if (!dart.marker) {
+    return Number.NEGATIVE_INFINITY;
   }
+
+  const distance = Math.hypot(dart.marker.x - 200, dart.marker.y - 200);
+  return -distance;
 }
 
 function evaluateVisit(
