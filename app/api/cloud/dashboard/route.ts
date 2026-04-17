@@ -18,6 +18,7 @@ type MatchPlayerRow = {
 };
 
 type TrainingRow = {
+  mode?: string;
   score: number;
   darts_thrown: number;
   hits: number;
@@ -145,24 +146,24 @@ export async function GET(request: Request) {
 
   const profileRow = profile as ProfileRow;
   const playerRows = (matchPlayers ?? []) as MatchPlayerRow[];
-  const trainingRows = (trainings ?? []) as (TrainingRow & { mode?: string })[];
+  const trainingRows = (trainings ?? []) as TrainingRow[];
   const matchRows = (allMatches ?? []) as MatchRow[];
   const dartRows = dartEventsError ? [] : ((dartEvents ?? []) as DartEventRow[]);
   const recentMatchRows = matchRows.slice(0, 8);
-  const recentMatchIds = recentMatchRows.map((match) => match.id);
-  const { data: recentMatchPlayers, error: recentMatchPlayersError } = recentMatchIds.length
+  const matchIds = matchRows.map((match) => match.id);
+  const { data: allMatchPlayers, error: allMatchPlayersError } = matchIds.length
     ? await adminClient
         .from("match_players")
         .select("match_id, guest_name, seat_index, is_winner, sets_won, legs_won, average, best_visit, profile_id")
-        .in("match_id", recentMatchIds)
+        .in("match_id", matchIds)
         .order("seat_index", { ascending: true })
     : { data: [], error: null };
 
-  if (recentMatchPlayersError) {
-    return NextResponse.json({ error: recentMatchPlayersError.message }, { status: 400 });
+  if (allMatchPlayersError) {
+    return NextResponse.json({ error: allMatchPlayersError.message }, { status: 400 });
   }
 
-  const matchDetailRows = (recentMatchPlayers ?? []) as MatchDetailRow[];
+  const matchDetailRows = (allMatchPlayers ?? []) as MatchDetailRow[];
   const totalTrainingDarts = trainingRows.reduce((sum, row) => sum + row.darts_thrown, 0);
   const totalTrainingHits = trainingRows.reduce((sum, row) => sum + row.hits, 0);
   const stats = {
@@ -376,29 +377,75 @@ export async function GET(request: Request) {
       acc[match.mode].matches += 1;
       acc[match.mode].wins += match.did_win ? 1 : 0;
       return acc;
-    }, {}),
+      }, {}),
   );
-  const opponentBreakdown = Object.entries(
-    allMatchesWithDetails.reduce<Record<string, { matches: number; wins: number }>>((acc, match) => {
-      const names = match.opponents
-        .split(",")
-        .map((entry) => entry.trim())
-        .filter(Boolean);
-      for (const name of names) {
-        if (!acc[name]) {
-          acc[name] = { matches: 0, wins: 0 };
+  const opponentBreakdown = Object.values(
+    matchRows.reduce<
+      Record<
+        string,
+        {
+          name: string;
+          matches: number;
+          wins: number;
+          myAverageTotal: number;
+          myAverageCount: number;
+          bestVisit: number;
+          legsFor: number;
+          legsAgainst: number;
+          lastPlayed: string;
         }
-        acc[name].matches += 1;
-        acc[name].wins += match.did_win ? 1 : 0;
+      >
+    >((acc, match) => {
+      const players = matchDetailRows.filter((row) => row.match_id === match.id);
+      const mySeat = players.find((row) => row.profile_id === user.id) ?? null;
+      if (!mySeat) {
+        return acc;
+      }
+
+      const opponents = players.filter((row) => row.profile_id !== user.id);
+      for (const opponent of opponents) {
+        const name = opponent.guest_name ?? "Gast";
+        const key = opponent.profile_id ?? `${name}:${opponent.seat_index}`;
+        if (!acc[key]) {
+          acc[key] = {
+            name,
+            matches: 0,
+            wins: 0,
+            myAverageTotal: 0,
+            myAverageCount: 0,
+            bestVisit: 0,
+            legsFor: 0,
+            legsAgainst: 0,
+            lastPlayed: match.played_at,
+          };
+        }
+
+        acc[key].matches += 1;
+        acc[key].wins += mySeat.is_winner ? 1 : 0;
+        acc[key].legsFor += mySeat.legs_won ?? 0;
+        acc[key].legsAgainst += opponent.legs_won ?? 0;
+        acc[key].bestVisit = Math.max(acc[key].bestVisit, opponent.best_visit ?? 0);
+        if ((mySeat.average ?? 0) > 0) {
+          acc[key].myAverageTotal += Number(mySeat.average ?? 0);
+          acc[key].myAverageCount += 1;
+        }
+        if (new Date(match.played_at).getTime() > new Date(acc[key].lastPlayed).getTime()) {
+          acc[key].lastPlayed = match.played_at;
+        }
       }
       return acc;
     }, {}),
   )
-    .map(([name, values]) => ({
-      name,
-      matches: values.matches,
-      wins: values.wins,
-      winRate: values.matches > 0 ? Number(((values.wins / values.matches) * 100).toFixed(1)) : 0,
+    .map((entry) => ({
+      name: entry.name,
+      matches: entry.matches,
+      wins: entry.wins,
+      winRate: entry.matches > 0 ? Number(((entry.wins / entry.matches) * 100).toFixed(1)) : 0,
+      average: entry.myAverageCount > 0 ? Number((entry.myAverageTotal / entry.myAverageCount).toFixed(1)) : 0,
+      bestVisit: entry.bestVisit,
+      legsFor: entry.legsFor,
+      legsAgainst: entry.legsAgainst,
+      lastPlayed: entry.lastPlayed,
     }))
     .sort((left, right) => right.matches - left.matches)
     .slice(0, 8);

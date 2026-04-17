@@ -112,6 +112,11 @@ type ProfileResponse = {
       matches: number;
       wins: number;
       winRate: number;
+      average: number;
+      bestVisit: number;
+      legsFor: number;
+      legsAgainst: number;
+      lastPlayed: string;
     }>;
   };
 };
@@ -303,6 +308,58 @@ function SimpleBarChart({
   );
 }
 
+function LineChart({
+  data,
+  valueKey,
+  stroke,
+}: {
+  data: Array<Record<string, string | number>>;
+  valueKey: string;
+  stroke: string;
+}) {
+  if (data.length === 0) {
+    return <p className="text-sm text-stone-400">Keine Daten im aktuellen Filter.</p>;
+  }
+
+  const values = data.map((entry) => Number(entry[valueKey] ?? 0));
+  const max = Math.max(1, ...values);
+  const min = Math.min(...values);
+  const points = data.map((entry, index) => {
+    const x = data.length === 1 ? 150 : 16 + (index / (data.length - 1)) * 288;
+    const raw = Number(entry[valueKey] ?? 0);
+    const normalized = max === min ? 0.5 : (raw - min) / (max - min);
+    const y = 124 - normalized * 92;
+    return `${x},${y}`;
+  });
+
+  return (
+    <div className="space-y-3">
+      <svg viewBox="0 0 320 140" className="w-full overflow-visible">
+        <path d="M16 124 H304" stroke="#44403c" strokeWidth="1" strokeDasharray="4 4" />
+        <polyline
+          fill="none"
+          stroke={stroke}
+          strokeWidth="3"
+          strokeLinejoin="round"
+          strokeLinecap="round"
+          points={points.join(" ")}
+        />
+        {data.map((entry, index) => {
+          const [x, y] = points[index].split(",").map(Number);
+          return <circle key={`${entry.period ?? index}`} cx={x} cy={y} r="4" fill={stroke} />;
+        })}
+      </svg>
+      <div className="flex flex-wrap gap-2">
+        {data.map((entry) => (
+          <div key={String(entry.period ?? entry.label ?? "")} className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-stone-300">
+            {String(entry.period ?? entry.label ?? "")}: {Number(entry[valueKey] ?? 0)}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function ProfilePage() {
   const [session, setSession] = useState<Session | null>(null);
   const [data, setData] = useState<ProfileResponse | null>(null);
@@ -396,7 +453,23 @@ export default function ProfilePage() {
         monthlyMatches: [] as Array<{ period: string; matches: number; wins: number; average: number }>,
         monthlyTraining: [] as Array<{ period: string; sessions: number; averageScore: number }>,
         modeBreakdown: [] as Array<{ mode: string; matches: number; wins: number }>,
-        opponentBreakdown: [] as Array<{ name: string; matches: number; wins: number; winRate: number }>,
+        opponentBreakdown: [] as Array<{
+          name: string;
+          matches: number;
+          wins: number;
+          winRate: number;
+          average: number;
+          bestVisit: number;
+          legsFor: number;
+          legsAgainst: number;
+          lastPlayed: string;
+        }>,
+        averageTrend: [] as Array<{ period: string; average: number }>,
+        bestVisitTrend: [] as Array<{ period: string; bestVisit: number }>,
+        filteredWinRate: 0,
+        filteredAverage: 0,
+        filteredBestVisit: 0,
+        filteredTrainingScore: 0,
         badges: [] as string[],
       };
     }
@@ -462,17 +535,35 @@ export default function ProfilePage() {
     );
 
     const opponentBreakdown = Object.entries(
-      filteredMatches.reduce<Record<string, { matches: number; wins: number }>>((acc, match) => {
+      filteredMatches.reduce<Record<string, { matches: number; wins: number; averageTotal: number; averageCount: number; bestVisit: number; legsFor: number; legsAgainst: number; lastPlayed: string }>>((acc, match) => {
         const names = match.opponents
           .split(",")
           .map((entry) => entry.trim())
           .filter(Boolean);
         for (const name of names) {
           if (!acc[name]) {
-            acc[name] = { matches: 0, wins: 0 };
+            acc[name] = {
+              matches: 0,
+              wins: 0,
+              averageTotal: 0,
+              averageCount: 0,
+              bestVisit: 0,
+              legsFor: 0,
+              legsAgainst: 0,
+              lastPlayed: match.played_at,
+            };
           }
           acc[name].matches += 1;
           acc[name].wins += match.did_win ? 1 : 0;
+          acc[name].bestVisit = Math.max(acc[name].bestVisit, match.player_best_visit);
+          acc[name].legsFor += match.player_legs;
+          if (match.player_average > 0) {
+            acc[name].averageTotal += match.player_average;
+            acc[name].averageCount += 1;
+          }
+          if (new Date(match.played_at).getTime() > new Date(acc[name].lastPlayed).getTime()) {
+            acc[name].lastPlayed = match.played_at;
+          }
         }
         return acc;
       }, {}),
@@ -482,9 +573,47 @@ export default function ProfilePage() {
         matches: values.matches,
         wins: values.wins,
         winRate: values.matches > 0 ? Number(((values.wins / values.matches) * 100).toFixed(1)) : 0,
+        average: values.averageCount > 0 ? Number((values.averageTotal / values.averageCount).toFixed(1)) : 0,
+        bestVisit: values.bestVisit,
+        legsFor: values.legsFor,
+        legsAgainst: values.legsAgainst,
+        lastPlayed: values.lastPlayed,
       }))
       .sort((left, right) => right.matches - left.matches)
       .slice(0, 8);
+
+    const averageTrend = monthlyMatches.map((entry) => ({
+      period: entry.period,
+      average: entry.average,
+    }));
+    const bestVisitTrend = Object.values(
+      filteredMatches.reduce<Record<string, { period: string; bestVisit: number }>>((acc, match) => {
+        const period = new Date(match.played_at).toLocaleDateString("de-DE", { month: "short", year: "2-digit" });
+        if (!acc[period]) {
+          acc[period] = { period, bestVisit: 0 };
+        }
+        acc[period].bestVisit = Math.max(acc[period].bestVisit, match.player_best_visit);
+        return acc;
+      }, {}),
+    );
+    const filteredWinRate =
+      filteredMatches.length > 0
+        ? Number(((filteredMatches.filter((match) => match.did_win).length / filteredMatches.length) * 100).toFixed(1))
+        : 0;
+    const filteredAverage =
+      filteredMatches.filter((match) => match.player_average > 0).length > 0
+        ? Number(
+            (
+              filteredMatches.reduce((sum, match) => sum + match.player_average, 0) /
+              filteredMatches.filter((match) => match.player_average > 0).length
+            ).toFixed(1),
+          )
+        : 0;
+    const filteredBestVisit = filteredMatches.reduce((best, match) => Math.max(best, match.player_best_visit), 0);
+    const filteredTrainingScore =
+      filteredTraining.length > 0
+        ? Number((filteredTraining.reduce((sum, entry) => sum + entry.score, 0) / filteredTraining.length).toFixed(1))
+        : 0;
 
     const badges = [
       data.stats.bestVisit >= 180 ? "180 Club" : "",
@@ -502,6 +631,12 @@ export default function ProfilePage() {
       monthlyTraining,
       modeBreakdown,
       opponentBreakdown,
+      averageTrend,
+      bestVisitTrend,
+      filteredWinRate,
+      filteredAverage,
+      filteredBestVisit,
+      filteredTrainingScore,
       badges,
     };
   }, [analyticsNow, analyticsWindow, data, modeFilter]);
@@ -782,6 +917,12 @@ export default function ProfilePage() {
                             {formatOutLabel(match.double_out, match.mode)}
                           </span>
                           <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1">{match.sets}</span>
+                          <Link
+                            href={`/profile/matches/${match.id}`}
+                            className="rounded-full border border-emerald-300/25 bg-emerald-400/12 px-2.5 py-1 font-semibold text-emerald-100"
+                          >
+                            Details
+                          </Link>
                         </div>
                       </div>
                     ))
@@ -799,6 +940,13 @@ export default function ProfilePage() {
                 Analyse-Dropdown
               </summary>
               <div className="mt-4 space-y-4">
+                <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+                  <StatPill label="Winrate im Filter" value={`${analytics.filteredWinRate.toFixed(1)}%`} tone={scoreTone(analytics.filteredWinRate)} />
+                  <StatPill label="Average im Filter" value={analytics.filteredAverage.toFixed(1)} tone={scoreTone(analytics.filteredAverage)} />
+                  <StatPill label="Best Visit" value={String(analytics.filteredBestVisit)} tone={scoreTone(Math.min(100, analytics.filteredBestVisit / 1.8))} />
+                  <StatPill label="Trainingsscore" value={analytics.filteredTrainingScore.toFixed(1)} tone={scoreTone(analytics.filteredTrainingScore / 1.2)} />
+                </div>
+
                 <div className="flex flex-wrap gap-2">
                   {([
                     ["30", "30 Tage"],
@@ -866,6 +1014,28 @@ export default function ProfilePage() {
                   </div>
                 </div>
 
+                <div className="grid gap-4 lg:grid-cols-2">
+                  <div className="rounded-[1.25rem] border border-white/10 bg-black/20 p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <h3 className="text-sm font-semibold text-white">Average-Trend</h3>
+                      <p className="text-xs text-stone-400">monatlich</p>
+                    </div>
+                    <div className="mt-4">
+                      <LineChart data={analytics.averageTrend} valueKey="average" stroke="#34d399" />
+                    </div>
+                  </div>
+
+                  <div className="rounded-[1.25rem] border border-white/10 bg-black/20 p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <h3 className="text-sm font-semibold text-white">Best-Visit-Trend</h3>
+                      <p className="text-xs text-stone-400">monatlich</p>
+                    </div>
+                    <div className="mt-4">
+                      <LineChart data={analytics.bestVisitTrend} valueKey="bestVisit" stroke="#fbbf24" />
+                    </div>
+                  </div>
+                </div>
+
                 <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
                   <div className="rounded-[1.25rem] border border-white/10 bg-black/20 p-4">
                     <h3 className="text-sm font-semibold text-white">Modi im Vergleich</h3>
@@ -896,9 +1066,12 @@ export default function ProfilePage() {
                               <p className="font-semibold text-white">{entry.name}</p>
                               <p className="text-sm text-stone-300">{entry.winRate.toFixed(1)}%</p>
                             </div>
-                            <p className="mt-1 text-xs text-stone-400">
-                              {entry.wins} Siege aus {entry.matches} Matches
-                            </p>
+                            <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-stone-400">
+                              <p>{entry.wins} Siege aus {entry.matches} Matches</p>
+                              <p>Average {entry.average.toFixed(1)}</p>
+                              <p>Best Visit {entry.bestVisit}</p>
+                              <p>Zuletzt {new Date(entry.lastPlayed).toLocaleDateString("de-DE")}</p>
+                            </div>
                           </div>
                         ))
                       ) : (
@@ -907,6 +1080,50 @@ export default function ProfilePage() {
                     </div>
                   </div>
                 </div>
+              </div>
+            </details>
+
+            <details className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4">
+              <summary className="cursor-pointer list-none text-lg font-semibold text-white">
+                Match-Archiv
+              </summary>
+              <div className="mt-4 space-y-2">
+                {analytics.filteredMatches.length > 0 ? (
+                  analytics.filteredMatches.slice(0, 18).map((match) => (
+                    <div key={`archive-${match.id}`} className="rounded-[1.25rem] border border-white/10 bg-black/20 p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span
+                              className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${
+                                match.did_win
+                                  ? "border-emerald-300/25 bg-emerald-400/12 text-emerald-100"
+                                  : "border-rose-300/25 bg-rose-400/12 text-rose-100"
+                              }`}
+                            >
+                              {match.did_win ? "Sieg" : "Niederlage"}
+                            </span>
+                            <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-stone-200">
+                              {match.mode}
+                            </span>
+                          </div>
+                          <p className="mt-2 text-sm font-semibold text-white">{match.winner} gewinnt</p>
+                          <p className="text-xs text-stone-400">gegen {match.opponents}</p>
+                        </div>
+                        <Link
+                          href={`/profile/matches/${match.id}`}
+                          className="rounded-full border border-emerald-300/25 bg-emerald-400/12 px-3 py-1.5 text-sm font-semibold text-emerald-100"
+                        >
+                          Oeffnen
+                        </Link>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="rounded-[1.25rem] border border-dashed border-white/10 bg-black/20 p-4 text-sm text-stone-400">
+                    Keine Matches im aktuellen Filter.
+                  </div>
+                )}
               </div>
             </details>
 
