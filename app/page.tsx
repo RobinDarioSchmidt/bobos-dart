@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
+import { MobileAppNav } from "@/components/mobile-app-nav";
 import { supabase, supabaseEnabled } from "@/lib/supabase";
 
 type AppMode = "match" | "training";
@@ -1562,7 +1563,7 @@ export default function Page() {
   const trainingTarget = getCurrentTrainingTarget(trainingSession);
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top,_#1f2937,_#09090b_55%)] text-stone-100">
+    <main className="min-h-screen bg-[radial-gradient(circle_at_top,_#1f2937,_#09090b_55%)] pb-28 text-stone-100 sm:pb-8">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
         {!session ? (
           <section className="overflow-hidden rounded-[2rem] border border-white/10 bg-white/5 shadow-2xl shadow-black/30 backdrop-blur">
@@ -2615,6 +2616,7 @@ export default function Page() {
           </>
         )}
       </div>
+      {session ? <MobileAppNav /> : null}
     </main>
   );
 }

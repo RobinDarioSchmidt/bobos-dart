@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
+import { MobileAppNav } from "@/components/mobile-app-nav";
 import {
   addPendingDart,
   clearPendingVisit,
@@ -998,7 +999,7 @@ export default function LivePage() {
   const playerStatusLine = `${connectedNames.length > 0 ? connectedNames.join(", ") : "Noch keine aktiven Verbindungen"}${isCurrentUsersTurn ? " · Du bist dran" : ""}`;
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top,_#1f2937,_#09090b_55%)] px-3 py-4 text-stone-100 sm:px-4 sm:py-6">
+    <main className="min-h-screen bg-[radial-gradient(circle_at_top,_#1f2937,_#09090b_55%)] px-3 py-4 pb-28 text-stone-100 sm:px-4 sm:py-6 sm:pb-8">
       <div className="mx-auto flex max-w-5xl flex-col gap-4">
         <div className="flex items-center justify-between gap-3">
           <div>
@@ -1398,6 +1399,7 @@ export default function LivePage() {
           </>
         )}
       </div>
+      {session ? <MobileAppNav /> : null}
     </main>
   );
 }
