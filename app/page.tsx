@@ -102,7 +102,7 @@ const LEGS_OPTIONS = [2, 3, 5];
 const SETS_OPTIONS = [1, 2, 3];
 const PLAYER_COUNT_OPTIONS = [2, 3, 4];
 const TRAINING_TARGETS = [...Array.from({ length: 20 }, (_, index) => index + 1), 25];
-const BOARD_START_ANGLE = -99;
+const BOARD_START_ANGLE = -9;
 const BOARD_SLICE_ANGLE = 18;
 const BOARD_RADIUS = {
   bullInner: 14,
@@ -332,6 +332,14 @@ function getCurrentTrainingTarget(session: TrainingSession) {
 
   const target = TRAINING_TARGETS[session.targetIndex];
   return target === 25 ? "Bull" : `${target}`;
+}
+
+function getPreferredProfileName(email: string | undefined, fallbackName: string, adminEmail: string) {
+  if (email && adminEmail && email === adminEmail) {
+    return "Robin";
+  }
+
+  return fallbackName.trim() || email?.split("@")[0] || "Spieler";
 }
 
 function toHistoryEntry(row: CloudMatchRow, players: CloudMatchPlayerRow[]): MatchHistoryEntry {
@@ -742,14 +750,14 @@ export default function Page() {
       return;
     }
 
-    const displayName = players[0]?.name?.trim() || nextSession.user.email.split("@")[0] || "Spieler";
+    const displayName = getPreferredProfileName(nextSession.user.email, players[0]?.name ?? "", adminEmail);
 
     await supabase.from("profiles").upsert({
       id: nextSession.user.id,
       display_name: displayName,
       username: nextSession.user.email,
     });
-  }, [players]);
+  }, [adminEmail, players]);
 
   const loadCloudProfile = useCallback(async (nextSession: Session) => {
     if (!supabase) {
@@ -767,14 +775,20 @@ export default function Page() {
     }
 
     const profile = data as CloudProfileRow;
-    setProfileName(profile.display_name);
+    const preferredName = getPreferredProfileName(nextSession.user.email, profile.display_name, adminEmail);
+
+    if (preferredName !== profile.display_name) {
+      await supabase.from("profiles").update({ display_name: preferredName }).eq("id", nextSession.user.id);
+    }
+
+    setProfileName(preferredName);
     setPlayers((prev) => {
-      if (prev.length === 0 || !profile.display_name) {
+      if (prev.length === 0 || !preferredName) {
         return prev;
       }
 
       const currentName = prev[0]?.name?.trim();
-      if (currentName === profile.display_name) {
+      if (currentName === preferredName) {
         return prev;
       }
 
@@ -782,12 +796,12 @@ export default function Page() {
         index === 0
           ? {
               ...player,
-              name: profile.display_name,
+              name: preferredName,
             }
           : player,
       );
     });
-  }, []);
+  }, [adminEmail]);
 
   const loadCloudMatches = useCallback(async (nextSession: Session) => {
     if (!supabase) {
@@ -885,14 +899,29 @@ export default function Page() {
     }
 
     const currentName = players[0]?.name?.trim();
-    if (!currentName || currentName === profileName) {
+    const preferredName = getPreferredProfileName(session.user.email, currentName ?? "", adminEmail);
+
+    if (!currentName || currentName !== preferredName) {
+      setPlayers((prev) =>
+        prev.map((player, index) =>
+          index === 0
+            ? {
+                ...player,
+                name: preferredName,
+              }
+            : player,
+        ),
+      );
+    }
+
+    if (!preferredName || preferredName === profileName) {
       return;
     }
 
     void ensureProfile(session).then(() => {
-      setProfileName(currentName);
+      setProfileName(preferredName);
     });
-  }, [ensureProfile, players, profileName, session]);
+  }, [adminEmail, ensureProfile, players, profileName, session]);
 
   async function handleAuthSubmit() {
     if (!supabase) {
