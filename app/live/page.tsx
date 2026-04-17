@@ -36,6 +36,7 @@ type Segment = {
 };
 
 const BOARD_ORDER = [20, 1, 18, 4, 13, 6, 10, 15, 2, 17, 3, 19, 7, 16, 8, 11, 14, 9, 12, 5];
+const LIVE_ROOM_STORAGE_KEY = "bobos-dart-live-room";
 const BOARD_START_ANGLE = -9;
 const BOARD_SLICE_ANGLE = 18;
 const BOARD_RADIUS = {
@@ -113,14 +114,42 @@ function resultStyles(result: LiveMatchState["history"][number]["result"]) {
   return "border-emerald-400/20 bg-emerald-400/10 text-emerald-50";
 }
 
+function formatLiveError(error: string) {
+  switch (error) {
+    case "missing_bearer_token":
+    case "missing_user":
+      return "Bitte zuerst einloggen.";
+    case "missing_room_code":
+      return "Bitte zuerst einen Raumcode eingeben.";
+    case "match_not_found":
+      return "Dieser Raum existiert nicht mehr oder wurde geloescht.";
+    case "room_full":
+      return "Der Raum ist bereits voll.";
+    case "not_a_participant":
+      return "Du gehoerst aktuell nicht zu diesem Raum.";
+    case "invalid_action":
+      return "Diese Aktion wird gerade nicht unterstuetzt.";
+    case "missing_service_role_or_supabase_config":
+      return "Die Live-Cloud ist noch nicht fertig konfiguriert.";
+    default:
+      if (error.startsWith("invalid_token:")) {
+        return "Deine Sitzung ist abgelaufen. Bitte logge dich neu ein.";
+      }
+
+      return error.replaceAll("_", " ");
+  }
+}
+
 function LiveDartboard({
   onSegmentSelect,
   disabled,
   markers,
+  loading,
 }: {
   onSegmentSelect: (segment: Segment) => void;
   disabled: boolean;
   markers: LiveBoardMarker[];
+  loading: boolean;
 }) {
   const [hoveredSegment, setHoveredSegment] = useState<Segment | null>(null);
 
@@ -413,7 +442,7 @@ function LiveDartboard({
         {disabled ? (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
             <div className="rounded-full border border-white/10 bg-black/70 px-4 py-2 text-xs uppercase tracking-[0.22em] text-stone-200">
-              Warte auf deinen Zug
+              {loading ? "Synchronisiert..." : "Warte auf deinen Zug"}
             </div>
           </div>
         ) : null}
@@ -468,8 +497,31 @@ export default function LivePage() {
   const [createOpen, setCreateOpen] = useState(true);
   const [joinOpen, setJoinOpen] = useState(true);
   const [historyOpen, setHistoryOpen] = useState(true);
+  const [connectionState, setConnectionState] = useState<"online" | "offline" | "connecting">(
+    typeof navigator !== "undefined" && !navigator.onLine ? "offline" : "connecting",
+  );
   const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL ?? "";
   const liveChannelRef = useRef<ReturnType<NonNullable<typeof supabase>["channel"]> | null>(null);
+  const requestInFlightRef = useRef(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const updateConnectionState = () => {
+      setConnectionState(window.navigator.onLine ? "connecting" : "offline");
+    };
+
+    updateConnectionState();
+    window.addEventListener("online", updateConnectionState);
+    window.addEventListener("offline", updateConnectionState);
+
+    return () => {
+      window.removeEventListener("online", updateConnectionState);
+      window.removeEventListener("offline", updateConnectionState);
+    };
+  }, []);
 
   useEffect(() => {
     if (!supabase) {
@@ -497,6 +549,19 @@ export default function LivePage() {
     };
   }, [adminEmail]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    if (liveRoomCode) {
+      window.localStorage.setItem(LIVE_ROOM_STORAGE_KEY, liveRoomCode);
+      return;
+    }
+
+    window.localStorage.removeItem(LIVE_ROOM_STORAGE_KEY);
+  }, [liveRoomCode]);
+
   async function getAccessToken() {
     if (!supabase) {
       return null;
@@ -523,12 +588,19 @@ export default function LivePage() {
     });
     const result = (await response.json()) as LiveMatchResponse | { error: string };
     if (!response.ok || !("match" in result)) {
-      setMessage("Raum konnte nicht geladen werden.");
+      setConnectionState("offline");
+      const nextError = "error" in result && result.error ? result.error : "match_not_found";
+      setMessage(formatLiveError(nextError));
+      if (nextError === "match_not_found") {
+        setLiveRoomCode("");
+        setLiveState(null);
+      }
       return;
     }
 
     setLiveRoomCode(result.match.room_code);
     setLiveState(normalizeLiveState(result.match.state));
+    setConnectionState("online");
   }, []);
 
   useEffect(() => {
@@ -543,6 +615,21 @@ export default function LivePage() {
     return () => {
       window.clearInterval(interval);
     };
+  }, [fetchMatch, liveRoomCode, session]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !session || liveRoomCode) {
+      return;
+    }
+
+    const restoredRoomCode = window.localStorage.getItem(LIVE_ROOM_STORAGE_KEY);
+    if (!restoredRoomCode) {
+      return;
+    }
+
+    setRoomCodeInput(restoredRoomCode);
+    setMessage(`Letzten Raum ${restoredRoomCode} gefunden. Raum wird wieder geladen...`);
+    void fetchMatch(restoredRoomCode);
   }, [fetchMatch, liveRoomCode, session]);
 
   const broadcastRefresh = useCallback(async (roomCode: string, reason: string) => {
@@ -591,10 +678,13 @@ export default function LivePage() {
       })
       .subscribe(async (status) => {
         if (status === "SUBSCRIBED") {
+          setConnectionState("online");
           await channel.track({
             name: displayName,
             online_at: new Date().toISOString(),
           });
+        } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+          setConnectionState("offline");
         }
       });
 
@@ -607,39 +697,57 @@ export default function LivePage() {
   }, [displayName, fetchMatch, liveRoomCode, session]);
 
   async function callLiveApi(body: object) {
+    if (requestInFlightRef.current) {
+      setMessage("Bitte kurz warten, der letzte Spielzug wird noch synchronisiert.");
+      return null;
+    }
+
     const accessToken = await getAccessToken();
     if (!accessToken) {
       setMessage("Bitte zuerst einloggen.");
       return null;
     }
 
+    requestInFlightRef.current = true;
     setLoading(true);
     setMessage("");
+    setConnectionState((current) => (current === "offline" ? "offline" : "connecting"));
 
-    const response = await fetch("/api/live", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${accessToken}`,
-      },
-      body: JSON.stringify(body),
-    });
+    try {
+      const response = await fetch("/api/live", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify(body),
+      });
 
-    const result = (await response.json()) as LiveMatchResponse | { error: string };
-    setLoading(false);
+      const result = (await response.json()) as LiveMatchResponse | { error: string };
 
-    if (!response.ok || !("match" in result)) {
-      setMessage("error" in result ? result.error : "Aktion fehlgeschlagen.");
+      if (!response.ok || !("match" in result)) {
+        const nextError = "error" in result && result.error ? result.error : "update_failed";
+        setMessage(formatLiveError(nextError));
+        setConnectionState("offline");
+        return null;
+      }
+
+      const normalized = normalizeLiveState(result.match.state);
+      setLiveRoomCode(result.match.room_code);
+      setLiveState(normalized);
+      setConnectionState("online");
+      return {
+        room_code: result.match.room_code,
+        state: normalized,
+      };
+    } catch {
+      setMessage("Die Verbindung zum Live-Raum ist gerade unterbrochen.");
+      setConnectionState("offline");
       return null;
+    } finally {
+      requestInFlightRef.current = false;
+      setLoading(false);
     }
-
-    const normalized = normalizeLiveState(result.match.state);
-    setLiveRoomCode(result.match.room_code);
-    setLiveState(normalized);
-    return {
-      room_code: result.match.room_code,
-      state: normalized,
-    };
   }
 
   async function pushRoomState(nextState: LiveMatchState, reason: string) {
@@ -656,7 +764,10 @@ export default function LivePage() {
 
     if (result) {
       await broadcastRefresh(liveRoomCode, reason);
+      return;
     }
+
+    await fetchMatch(liveRoomCode);
   }
 
   async function createRoom() {
@@ -713,6 +824,15 @@ export default function LivePage() {
     const url = `${window.location.origin}/live?room=${encodeURIComponent(liveRoomCode)}`;
     await navigator.clipboard.writeText(url);
     setMessage("Raumlink kopiert.");
+  }
+
+  async function reconnectToRoom() {
+    if (!liveRoomCode) {
+      return;
+    }
+
+    setMessage("Live-Raum wird neu verbunden...");
+    await fetchMatch(liveRoomCode);
   }
 
   const currentPlayerIndex = useMemo(() => {
@@ -822,12 +942,20 @@ export default function LivePage() {
       return;
     }
 
+    if (loading) {
+      return;
+    }
+
     const nextState = removePendingDart(liveState);
     await pushRoomState(nextState, "undo_dart");
   }
 
   async function handleClearVisit() {
     if (!liveState) {
+      return;
+    }
+
+    if (loading) {
       return;
     }
 
@@ -840,12 +968,20 @@ export default function LivePage() {
       return;
     }
 
+    if (loading) {
+      return;
+    }
+
     const nextState = finalizePendingVisit(liveState);
     await pushRoomState(nextState, "finalize_visit");
   }
 
   async function handleNextLeg() {
     if (!liveState) {
+      return;
+    }
+
+    if (loading) {
       return;
     }
 
@@ -1025,6 +1161,13 @@ export default function LivePage() {
                       >
                         Raumlink kopieren
                       </button>
+                      <button
+                        onClick={() => void reconnectToRoom()}
+                        disabled={loading}
+                        className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                      >
+                        Neu verbinden
+                      </button>
                     </div>
                   </div>
                 ) : null}
@@ -1087,6 +1230,34 @@ export default function LivePage() {
                       })}
                     </div>
 
+                    <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-[11px] uppercase tracking-[0.22em] text-stone-400">Live-Verbindung</p>
+                        <span
+                          className={`rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${
+                            connectionState === "online"
+                              ? "bg-emerald-400/20 text-emerald-200"
+                              : connectionState === "connecting"
+                                ? "bg-amber-300/20 text-amber-100"
+                                : "bg-red-400/20 text-red-100"
+                          }`}
+                        >
+                          {connectionState === "online"
+                            ? "Online"
+                            : connectionState === "connecting"
+                              ? "Verbindet"
+                              : "Offline"}
+                        </span>
+                      </div>
+                      <p className="mt-2 text-sm text-stone-300">
+                        {connectionState === "online"
+                          ? "Der Raum ist synchronisiert."
+                          : connectionState === "connecting"
+                            ? "Der Raum wird gerade erneut verbunden oder aktualisiert."
+                            : "Der Raum ist gerade nicht erreichbar. Nutze bei Bedarf den Neu-verbinden-Button."}
+                      </p>
+                    </div>
+
                     <div
                       className={`mt-4 rounded-2xl border p-3 ${
                         isCurrentUsersTurn ? "border-emerald-300/40 bg-emerald-300/10" : "border-white/10 bg-black/20"
@@ -1129,8 +1300,9 @@ export default function LivePage() {
                     <div className="mt-4">
                       <LiveDartboard
                         onSegmentSelect={handleBoardSegment}
-                        disabled={!isCurrentUsersTurn}
+                        disabled={!isCurrentUsersTurn || loading}
                         markers={boardMarkers}
+                        loading={loading}
                       />
                     </div>
 
