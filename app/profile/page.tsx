@@ -6,6 +6,8 @@ import type { Session } from "@supabase/supabase-js";
 import { MobileAppNav } from "@/components/mobile-app-nav";
 import { supabase, supabaseEnabled } from "@/lib/supabase";
 
+const BOARD_ORDER = [20, 1, 18, 4, 13, 6, 10, 15, 2, 17, 3, 19, 7, 16, 8, 11, 14, 9, 12, 5];
+
 type ProfileStats = {
   matchesPlayed: number;
   matchesWon: number;
@@ -63,8 +65,76 @@ type ProfileResponse = {
     pressureScore: number;
     highlightTitle: string;
     highlightReason: string;
+    throwStats: {
+      totalThrows: number;
+      boardThrows: number;
+      bullsHit: number;
+      doublesHit: number;
+      triplesHit: number;
+      misses: number;
+      checkoutsHit: number;
+      favoriteSegment: string;
+      favoriteDouble: string;
+    };
+    favoriteSegments: Array<{
+      label: string;
+      count: number;
+    }>;
+    favoriteDoubles: Array<{
+      label: string;
+      count: number;
+    }>;
+    heatmap: {
+      numbers: Record<string, number>;
+      max: number;
+    };
   };
 };
+
+function polarToCartesian(radius: number, angleDeg: number) {
+  const angle = ((angleDeg - 90) * Math.PI) / 180;
+  return {
+    x: 120 + radius * Math.cos(angle),
+    y: 120 + radius * Math.sin(angle),
+  };
+}
+
+function describeSlice(innerRadius: number, outerRadius: number, startAngle: number, endAngle: number) {
+  const startOuter = polarToCartesian(outerRadius, startAngle);
+  const endOuter = polarToCartesian(outerRadius, endAngle);
+  const startInner = polarToCartesian(innerRadius, startAngle);
+  const endInner = polarToCartesian(innerRadius, endAngle);
+  const largeArcFlag = endAngle - startAngle > 180 ? 1 : 0;
+
+  return [
+    `M ${startOuter.x} ${startOuter.y}`,
+    `A ${outerRadius} ${outerRadius} 0 ${largeArcFlag} 1 ${endOuter.x} ${endOuter.y}`,
+    `L ${endInner.x} ${endInner.y}`,
+    `A ${innerRadius} ${innerRadius} 0 ${largeArcFlag} 0 ${startInner.x} ${startInner.y}`,
+    "Z",
+  ].join(" ");
+}
+
+function heatColor(count: number, max: number) {
+  if (!count || max <= 0) {
+    return "#111827";
+  }
+
+  const intensity = count / max;
+  if (intensity >= 0.8) {
+    return "#f59e0b";
+  }
+
+  if (intensity >= 0.55) {
+    return "#f97316";
+  }
+
+  if (intensity >= 0.3) {
+    return "#fb7185";
+  }
+
+  return "#374151";
+}
 
 function formatOutLabel(doubleOut: boolean, mode: string) {
   if (mode.toLowerCase().includes("master")) {
@@ -124,6 +194,54 @@ function MeterCard({
         <div className={`h-full rounded-full ${colorClass}`} style={{ width: `${Math.max(8, value)}%` }} />
       </div>
       <p className="mt-2 text-xs text-stone-400">{hint}</p>
+    </div>
+  );
+}
+
+function HeatmapBoard({ numbers, max }: { numbers: Record<string, number>; max: number }) {
+  return (
+    <div className="rounded-[1.25rem] border border-white/10 bg-black/20 p-4">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-[10px] uppercase tracking-[0.18em] text-stone-400">Board Heat</p>
+        <p className="text-xs text-stone-400">je heller, desto haeufiger</p>
+      </div>
+      <svg viewBox="0 0 240 240" className="mx-auto mt-3 w-full max-w-[17rem]">
+        <circle cx="120" cy="120" r="113" fill="#0b1120" />
+        {BOARD_ORDER.map((value, index) => {
+          const startAngle = -9 + index * 18;
+          const endAngle = startAngle + 18;
+          const midAngle = startAngle + 9;
+          const labelPoint = polarToCartesian(110, midAngle);
+          const count = numbers[String(value)] ?? 0;
+          return (
+            <g key={value}>
+              <path
+                d={describeSlice(34, 103, startAngle, endAngle)}
+                fill={heatColor(count, max)}
+                stroke="#09090b"
+                strokeWidth="1.5"
+              />
+              <text
+                x={labelPoint.x}
+                y={labelPoint.y}
+                fill="#e7e5e4"
+                fontSize="10"
+                fontWeight="700"
+                textAnchor="middle"
+                dominantBaseline="middle"
+              >
+                {value}
+              </text>
+            </g>
+          );
+        })}
+        <circle cx="120" cy="120" r="18" fill={heatColor(numbers["Bull"] ?? 0, max)} stroke="#09090b" strokeWidth="2" />
+        <circle cx="120" cy="120" r="33" fill={heatColor(numbers["Outer Bull"] ?? 0, max)} stroke="#09090b" strokeWidth="2" />
+      </svg>
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <StatPill label="Bull" value={String(numbers["Bull"] ?? 0)} />
+        <StatPill label="Outer Bull" value={String(numbers["Outer Bull"] ?? 0)} />
+      </div>
     </div>
   );
 }
@@ -195,7 +313,7 @@ export default function ProfilePage() {
           : stats.bestAverage >= 60
             ? "Scoring-Motor"
             : "Konstanter Leg-Jaeger";
-    const momentumText = `${stats.matchesWon} Siege · ${stats.totalLegsWon} Legs · ${stats.trainingSessions} Trainings`;
+    const momentumText = `${stats.matchesWon} Siege - ${stats.totalLegsWon} Legs - ${stats.trainingSessions} Trainings`;
     const trendText =
       insights.currentWinStreak > 1
         ? `${insights.currentWinStreak} Siege in Serie`
@@ -362,6 +480,49 @@ export default function ProfilePage() {
                       hint="Wie stark deine Top-Visits und dein Peak-Average wirken."
                       colorClass="bg-amber-300"
                     />
+                  </div>
+                </div>
+
+                <HeatmapBoard numbers={data.insights.heatmap.numbers} max={data.insights.heatmap.max} />
+
+                <div className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4">
+                  <h2 className="text-lg font-semibold text-white">Wurfmuster</h2>
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    <StatPill label="Alle Wuerfe" value={String(data.insights.throwStats.totalThrows)} />
+                    <StatPill label="Board-Treffer" value={String(data.insights.throwStats.boardThrows)} />
+                    <StatPill label="Triples" value={String(data.insights.throwStats.triplesHit)} />
+                    <StatPill label="Doubles" value={String(data.insights.throwStats.doublesHit)} />
+                    <StatPill label="Bulls" value={String(data.insights.throwStats.bullsHit)} />
+                    <StatPill label="Checkouts" value={String(data.insights.throwStats.checkoutsHit)} />
+                  </div>
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                    <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+                      <p className="text-[10px] uppercase tracking-[0.18em] text-stone-400">Lieblingsfeld</p>
+                      <p className="mt-1 text-lg font-semibold text-white">{data.insights.throwStats.favoriteSegment}</p>
+                    </div>
+                    <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+                      <p className="text-[10px] uppercase tracking-[0.18em] text-stone-400">Lieblings-Checkout</p>
+                      <p className="mt-1 text-lg font-semibold text-white">{data.insights.throwStats.favoriteDouble}</p>
+                    </div>
+                  </div>
+                  <div className="mt-3">
+                    <p className="text-[10px] uppercase tracking-[0.18em] text-stone-400">Top Segmente</p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {data.insights.favoriteSegments.length > 0 ? (
+                        data.insights.favoriteSegments.map((entry) => (
+                          <div
+                            key={entry.label}
+                            className="rounded-full border border-amber-300/25 bg-amber-300/10 px-3 py-1.5 text-sm font-semibold text-amber-100"
+                          >
+                            {entry.label} · {entry.count}
+                          </div>
+                        ))
+                      ) : (
+                        <div className="rounded-full border border-white/10 bg-black/20 px-3 py-1.5 text-sm text-stone-400">
+                          Noch keine Board-Wurfdaten.
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
 

@@ -42,6 +42,18 @@ type MatchDetailRow = {
   profile_id: string | null;
 };
 
+type DartEventRow = {
+  segment_label: string;
+  base_value: number;
+  multiplier: number;
+  ring: string;
+  score: number;
+  is_hit: boolean;
+  is_checkout_dart: boolean;
+  target_label: string | null;
+  source_type: "match" | "training";
+};
+
 async function authorizeRequest(request: Request) {
   const authHeader = request.headers.get("authorization");
 
@@ -85,6 +97,7 @@ export async function GET(request: Request) {
     { data: matchPlayers, error: matchPlayersError },
     { data: trainings, error: trainingsError },
     { data: recentMatches, error: recentMatchesError },
+    { data: dartEvents, error: dartEventsError },
   ] = await Promise.all([
     adminClient
       .from("profiles")
@@ -107,6 +120,10 @@ export async function GET(request: Request) {
       .eq("owner_id", user.id)
       .order("played_at", { ascending: false })
       .limit(8),
+    adminClient
+      .from("dart_events")
+      .select("segment_label, base_value, multiplier, ring, score, is_hit, is_checkout_dart, target_label, source_type")
+      .eq("owner_id", user.id),
   ]);
 
   if (profileError) {
@@ -129,6 +146,7 @@ export async function GET(request: Request) {
   const playerRows = (matchPlayers ?? []) as MatchPlayerRow[];
   const trainingRows = (trainings ?? []) as TrainingRow[];
   const matchRows = (recentMatches ?? []) as MatchRow[];
+  const dartRows = dartEventsError ? [] : ((dartEvents ?? []) as DartEventRow[]);
   const recentMatchIds = matchRows.map((match) => match.id);
   const { data: recentMatchPlayers, error: recentMatchPlayersError } = recentMatchIds.length
     ? await adminClient
@@ -221,6 +239,49 @@ export async function GET(request: Request) {
     trainingRows.length > 0
       ? Number((trainingRows.reduce((sum, row) => sum + row.score, 0) / trainingRows.length).toFixed(1))
       : 0;
+  const countedBoardThrows = dartRows.filter((row) => row.ring !== "unknown");
+  const favoriteSegments = Object.entries(
+    countedBoardThrows.reduce<Record<string, number>>((acc, row) => {
+      acc[row.segment_label] = (acc[row.segment_label] ?? 0) + 1;
+      return acc;
+    }, {}),
+  )
+    .sort((left, right) => right[1] - left[1])
+    .slice(0, 6)
+    .map(([label, count]) => ({ label, count }));
+  const favoriteDoubles = Object.entries(
+    countedBoardThrows
+      .filter((row) => row.ring === "double" || row.ring === "bull")
+      .reduce<Record<string, number>>((acc, row) => {
+        acc[row.segment_label] = (acc[row.segment_label] ?? 0) + 1;
+        return acc;
+      }, {}),
+  )
+    .sort((left, right) => right[1] - left[1])
+    .slice(0, 4)
+    .map(([label, count]) => ({ label, count }));
+  const heatmapNumbers = countedBoardThrows.reduce<Record<string, number>>((acc, row) => {
+    const key =
+      row.base_value === 25
+        ? row.ring === "bull"
+          ? "Bull"
+          : "Outer Bull"
+        : String(row.base_value);
+    acc[key] = (acc[key] ?? 0) + 1;
+    return acc;
+  }, {});
+  const heatmapMax = Math.max(0, ...Object.values(heatmapNumbers));
+  const throwStats = {
+    totalThrows: dartRows.length,
+    boardThrows: countedBoardThrows.length,
+    bullsHit: countedBoardThrows.filter((row) => row.ring === "bull" || row.ring === "outer-bull").length,
+    doublesHit: countedBoardThrows.filter((row) => row.ring === "double" || row.ring === "bull").length,
+    triplesHit: countedBoardThrows.filter((row) => row.ring === "triple").length,
+    misses: dartRows.filter((row) => row.ring === "miss" || row.score === 0).length,
+    checkoutsHit: dartRows.filter((row) => row.is_checkout_dart).length,
+    favoriteSegment: favoriteSegments[0]?.label ?? "Noch offen",
+    favoriteDouble: favoriteDoubles[0]?.label ?? "Noch offen",
+  };
   const consistencyScore = Math.round(
     Math.min(
       100,
@@ -271,6 +332,13 @@ export async function GET(request: Request) {
       pressureScore,
       highlightTitle,
       highlightReason,
+      throwStats,
+      favoriteSegments,
+      favoriteDoubles,
+      heatmap: {
+        numbers: heatmapNumbers,
+        max: heatmapMax,
+      },
     },
   });
 }

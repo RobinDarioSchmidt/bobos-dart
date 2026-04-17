@@ -10,6 +10,7 @@ type AppMode = "match" | "training";
 type SelectedFlow = "overview" | "local" | "training";
 type GameMode = 301 | 501;
 type TrainingMode = "around-the-clock" | "bull-drill";
+type SegmentRing = "single" | "double" | "triple" | "outer-bull" | "bull" | "miss" | "unknown";
 
 type Visit = {
   darts: number[];
@@ -66,6 +67,7 @@ type TrainingSession = {
   finished: boolean;
   message: string;
   history: string[];
+  throws: StoredThrow[];
 };
 
 type Segment = {
@@ -73,6 +75,17 @@ type Segment = {
   score: number;
   number: number;
   multiplier: 1 | 2 | 3;
+};
+
+type StoredThrow = {
+  label: string;
+  baseValue: number;
+  multiplier: 0 | 1 | 2 | 3;
+  ring: SegmentRing;
+  score: number;
+  hit: boolean;
+  checkout: boolean;
+  target: string | null;
 };
 
 type CloudMatchRow = {
@@ -283,6 +296,7 @@ function createTrainingSession(mode: TrainingMode): TrainingSession {
       finished: false,
       message: "Bull Drill gestartet. Triff 10 Darts lang Bull oder Outer Bull.",
       history: [],
+      throws: [],
     };
   }
 
@@ -295,6 +309,7 @@ function createTrainingSession(mode: TrainingMode): TrainingSession {
     finished: false,
     message: "Around the Clock gestartet. Ziel ist die 1.",
     history: [],
+    throws: [],
   };
 }
 
@@ -307,6 +322,101 @@ function clonePlayers(players: Player[]) {
       labels: [...visit.labels],
     })),
   }));
+}
+
+function parseThrowLabel(label: string, fallbackScore = 0): StoredThrow {
+  const trimmed = label.trim();
+
+  if (trimmed === "Bull") {
+    return {
+      label: trimmed,
+      baseValue: 25,
+      multiplier: 2,
+      ring: "bull",
+      score: 50,
+      hit: true,
+      checkout: true,
+      target: null,
+    };
+  }
+
+  if (trimmed === "Outer Bull") {
+    return {
+      label: trimmed,
+      baseValue: 25,
+      multiplier: 1,
+      ring: "outer-bull",
+      score: 25,
+      hit: true,
+      checkout: false,
+      target: null,
+    };
+  }
+
+  const match = trimmed.match(/^([SDT])(\d{1,2})$/i);
+  if (match) {
+    const multiplier = match[1].toUpperCase() === "D" ? 2 : match[1].toUpperCase() === "T" ? 3 : 1;
+    const baseValue = Number(match[2]);
+    return {
+      label: trimmed.toUpperCase(),
+      baseValue,
+      multiplier,
+      ring: multiplier === 3 ? "triple" : multiplier === 2 ? "double" : "single",
+      score: baseValue * multiplier,
+      hit: true,
+      checkout: multiplier === 2,
+      target: null,
+    };
+  }
+
+  const numeric = trimmed.startsWith("Visit ") ? Number(trimmed.replace("Visit ", "")) : Number(trimmed);
+  if (!Number.isNaN(numeric)) {
+    return {
+      label: trimmed,
+      baseValue: numeric,
+      multiplier: 1,
+      ring: numeric === 0 ? "miss" : "unknown",
+      score: numeric,
+      hit: numeric > 0,
+      checkout: false,
+      target: null,
+    };
+  }
+
+  return {
+    label: trimmed,
+    baseValue: fallbackScore,
+    multiplier: 1,
+    ring: fallbackScore === 0 ? "miss" : "unknown",
+    score: fallbackScore,
+    hit: fallbackScore > 0,
+    checkout: false,
+    target: null,
+  };
+}
+
+function segmentToStoredThrow(segment: Segment, target: string | null = null): StoredThrow {
+  const ring: SegmentRing =
+    segment.number === 25 && segment.multiplier === 2
+      ? "bull"
+      : segment.number === 25
+        ? "outer-bull"
+        : segment.multiplier === 3
+          ? "triple"
+          : segment.multiplier === 2
+            ? "double"
+            : "single";
+
+  return {
+    label: segment.label,
+    baseValue: segment.number,
+    multiplier: segment.multiplier,
+    ring,
+    score: segment.score,
+    hit: segment.score > 0,
+    checkout: ring === "double" || ring === "bull",
+    target,
+  };
 }
 
 function isDouble(value: number) {
@@ -1187,6 +1297,42 @@ export default function Page() {
       return;
     }
 
+    const dartRows = finalPlayers.flatMap((player, seatIndex) =>
+      player.visits.flatMap((visit, visitIndex) =>
+        visit.labels.map((label, dartIndex) => {
+          const parsed = parseThrowLabel(label, visit.darts[dartIndex] ?? 0);
+          const isLastDart = dartIndex === visit.labels.length - 1;
+
+          return {
+            owner_id: session.user.id,
+            source_type: "match",
+            match_id: matchRow.id,
+            training_session_id: null,
+            player_name: player.name,
+            player_seat_index: seatIndex,
+            visit_index: visitIndex,
+            dart_index: dartIndex,
+            segment_label: parsed.label,
+            base_value: parsed.baseValue,
+            multiplier: parsed.multiplier,
+            ring: parsed.ring,
+            score: parsed.score,
+            is_hit: parsed.hit,
+            is_checkout_dart: visit.checkout && isLastDart,
+            target_label: null,
+          };
+        }),
+      ),
+    );
+
+    if (dartRows.length > 0) {
+      const { error: dartsError } = await supabase.from("dart_events").insert(dartRows);
+      if (dartsError) {
+        setCloudMessage("Match gespeichert, aber Wurfdaten konnten nicht gesichert werden.");
+        return;
+      }
+    }
+
     setCloudMessage(`Cloud-Save erfolgreich fuer ${winner.name}.`);
     await loadCloudMatches(session);
     await loadCloudDashboard(session);
@@ -1197,7 +1343,7 @@ export default function Page() {
       return;
     }
 
-    const { error } = await supabase.from("training_sessions").insert({
+    const { data: trainingRow, error } = await supabase.from("training_sessions").insert({
       owner_id: session.user.id,
       mode: nextSession.mode,
       score: nextSession.score,
@@ -1205,11 +1351,38 @@ export default function Page() {
       darts_thrown: nextSession.dartsThrown,
       finished: nextSession.finished,
       notes: nextSession.history,
-    });
+    }).select("id").single();
 
-    if (error) {
+    if (error || !trainingRow) {
       setCloudMessage("Training konnte nicht in der Cloud gespeichert werden.");
       return;
+    }
+
+    if (nextSession.throws.length > 0) {
+      const dartRows = nextSession.throws.map((entry, index) => ({
+        owner_id: session.user.id,
+        source_type: "training",
+        match_id: null,
+        training_session_id: trainingRow.id,
+        player_name: profileName || players[0]?.name || "Spieler",
+        player_seat_index: 0,
+        visit_index: 0,
+        dart_index: index,
+        segment_label: entry.label,
+        base_value: entry.baseValue,
+        multiplier: entry.multiplier,
+        ring: entry.ring,
+        score: entry.score,
+        is_hit: entry.hit,
+        is_checkout_dart: false,
+        target_label: entry.target,
+      }));
+
+      const { error: dartsError } = await supabase.from("dart_events").insert(dartRows);
+      if (dartsError) {
+        setCloudMessage("Training gespeichert, aber Wurfdaten konnten nicht gesichert werden.");
+        return;
+      }
     }
 
     setCloudMessage("Training in der Cloud gespeichert.");
@@ -1472,6 +1645,13 @@ export default function Page() {
       return;
     }
 
+    const targetLabel = trainingSession.mode === "bull-drill"
+      ? "Bull"
+      : TRAINING_TARGETS[trainingSession.targetIndex] === 25
+        ? "Bull"
+        : `${TRAINING_TARGETS[trainingSession.targetIndex]}`;
+    const storedThrow = segmentToStoredThrow(segment, targetLabel);
+
     if (trainingSession.mode === "bull-drill") {
       const isBull = segment.number === 25;
       const gained = isBull ? segment.score : 0;
@@ -1492,6 +1672,7 @@ export default function Page() {
         finished,
         message,
         history: [historyEntry, ...prev.history].slice(0, 12),
+        throws: [...prev.throws, storedThrow],
       }));
 
       if (finished) {
@@ -1508,6 +1689,7 @@ export default function Page() {
           finished,
           message,
           history: [historyEntry, ...trainingSession.history].slice(0, 12),
+          throws: [...trainingSession.throws, storedThrow],
         });
       }
 
@@ -1538,6 +1720,7 @@ export default function Page() {
       finished,
       message,
       history: [historyEntry, ...prev.history].slice(0, 12),
+      throws: [...prev.throws, storedThrow],
     }));
 
     if (finished) {
@@ -1555,6 +1738,7 @@ export default function Page() {
         finished,
         message,
         history: [historyEntry, ...trainingSession.history].slice(0, 12),
+        throws: [...trainingSession.throws, storedThrow],
       });
     }
   }
