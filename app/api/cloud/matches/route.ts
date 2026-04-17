@@ -4,8 +4,12 @@ import { getSupabaseAdminClients, supabaseAdminEnabled } from "@/lib/supabase-ad
 async function authorizeRequest(request: Request) {
   const authHeader = request.headers.get("authorization");
 
-  if (!supabaseAdminEnabled || !authHeader?.startsWith("Bearer ")) {
-    return { ok: false as const, reason: "missing_config_or_token" };
+  if (!supabaseAdminEnabled) {
+    return { ok: false as const, reason: "missing_service_role_or_supabase_config" };
+  }
+
+  if (!authHeader?.startsWith("Bearer ")) {
+    return { ok: false as const, reason: "missing_bearer_token" };
   }
 
   const token = authHeader.replace("Bearer ", "");
@@ -15,8 +19,12 @@ async function authorizeRequest(request: Request) {
     error,
   } = await authClient.auth.getUser(token);
 
-  if (error || !user) {
-    return { ok: false as const, reason: "forbidden" };
+  if (error) {
+    return { ok: false as const, reason: `invalid_token:${error.message}` };
+  }
+
+  if (!user) {
+    return { ok: false as const, reason: "missing_user" };
   }
 
   return { ok: true as const, user };

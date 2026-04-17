@@ -12,8 +12,16 @@ async function authorizeRequest(request: Request) {
   const adminEmail = process.env.ADMIN_EMAIL;
   const authHeader = request.headers.get("authorization");
 
-  if (!supabaseAdminEnabled || !adminEmail || !authHeader?.startsWith("Bearer ")) {
-    return { ok: false as const, reason: "missing_config_or_token" };
+  if (!supabaseAdminEnabled) {
+    return { ok: false as const, reason: "missing_service_role_or_supabase_config" };
+  }
+
+  if (!adminEmail) {
+    return { ok: false as const, reason: "missing_admin_email" };
+  }
+
+  if (!authHeader?.startsWith("Bearer ")) {
+    return { ok: false as const, reason: "missing_bearer_token" };
   }
 
   const token = authHeader.replace("Bearer ", "");
@@ -23,8 +31,16 @@ async function authorizeRequest(request: Request) {
     error,
   } = await authClient.auth.getUser(token);
 
-  if (error || !user?.email || user.email !== adminEmail) {
-    return { ok: false as const, reason: "forbidden" };
+  if (error) {
+    return { ok: false as const, reason: `invalid_token:${error.message}` };
+  }
+
+  if (!user?.email) {
+    return { ok: false as const, reason: "missing_user_email" };
+  }
+
+  if (user.email !== adminEmail) {
+    return { ok: false as const, reason: `admin_email_mismatch:${user.email}` };
   }
 
   return { ok: true as const };
