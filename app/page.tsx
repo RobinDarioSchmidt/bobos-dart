@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase, supabaseEnabled } from "@/lib/supabase";
 
@@ -91,6 +91,38 @@ type CloudMatchPlayerRow = {
 type CloudProfileRow = {
   display_name: string;
   username: string | null;
+};
+
+type CloudDashboardStats = {
+  matchesPlayed: number;
+  matchesWon: number;
+  totalSetsWon: number;
+  totalLegsWon: number;
+  bestAverage: number;
+  bestVisit: number;
+  trainingSessions: number;
+  bestTrainingScore: number;
+  totalTrainingDarts: number;
+  totalTrainingHits: number;
+};
+
+type TrainingCloudRow = {
+  score: number;
+  darts_thrown: number;
+  hits: number;
+  played_at: string;
+};
+
+type LocalBackupPayload = {
+  appMode: AppMode;
+  mode: GameMode;
+  doubleOut: boolean;
+  legsToWin: number;
+  setsToWin: number;
+  playerNames: string[];
+  stats: StoredStats;
+  localMatchHistory: MatchHistoryEntry[];
+  trainingMode: TrainingMode;
 };
 
 const STORAGE_KEY = "bobos-dart-state-v3";
@@ -340,6 +372,14 @@ function getPreferredProfileName(email: string | undefined, fallbackName: string
   }
 
   return fallbackName.trim() || email?.split("@")[0] || "Spieler";
+}
+
+function buildLocalBackup(payload: LocalBackupPayload) {
+  return {
+    exportedAt: new Date().toISOString(),
+    version: 1,
+    ...payload,
+  };
 }
 
 function toHistoryEntry(row: CloudMatchRow, players: CloudMatchPlayerRow[]): MatchHistoryEntry {
@@ -610,17 +650,76 @@ export default function Page() {
   const [undoStack, setUndoStack] = useState<UndoSnapshot[]>([]);
   const [session, setSession] = useState<Session | null>(null);
   const [profileName, setProfileName] = useState("");
+  const [profileDraft, setProfileDraft] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [authMessage, setAuthMessage] = useState("");
   const [cloudMessage, setCloudMessage] = useState("");
   const [cloudLoading, setCloudLoading] = useState(false);
+  const [cloudStats, setCloudStats] = useState<CloudDashboardStats | null>(null);
+  const [recentTrainingSessions, setRecentTrainingSessions] = useState<TrainingCloudRow[]>([]);
   const [trainingSession, setTrainingSession] = useState<TrainingSession>(() =>
     createTrainingSession("around-the-clock"),
   );
   const [hydrated, setHydrated] = useState(false);
   const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL ?? "";
   const isAdmin = Boolean(session?.user.email && adminEmail && session.user.email === adminEmail);
+  const importInputRef = useRef<HTMLInputElement | null>(null);
+
+  const applyLocalBackup = useCallback((parsed: Partial<LocalBackupPayload>) => {
+    const parsedMode = parsed.mode === 301 || parsed.mode === 501 ? parsed.mode : 501;
+    const names =
+      parsed.playerNames && parsed.playerNames.length >= 2 && parsed.playerNames.length <= 4
+        ? parsed.playerNames
+        : ["Bobo", "Guest"];
+
+    setMode(parsedMode);
+    setPlayers(createPlayers(parsedMode, names));
+    setStatusText(`Match bereit. ${names[0]} beginnt.`);
+    setActivePlayer(0);
+    setCurrentDarts([]);
+    setCurrentLabels([]);
+    setManualDart("");
+    setManualVisit("");
+    setLegWinner(null);
+    setMatchWinner(null);
+    setUndoStack([]);
+
+    if (parsed.appMode === "match" || parsed.appMode === "training") {
+      setAppMode(parsed.appMode);
+    }
+
+    if (typeof parsed.doubleOut === "boolean") {
+      setDoubleOut(parsed.doubleOut);
+    }
+
+    if (typeof parsed.legsToWin === "number" && LEGS_OPTIONS.includes(parsed.legsToWin)) {
+      setLegsToWin(parsed.legsToWin);
+    }
+
+    if (typeof parsed.setsToWin === "number" && SETS_OPTIONS.includes(parsed.setsToWin)) {
+      setSetsToWin(parsed.setsToWin);
+    }
+
+    if (parsed.stats) {
+      setStats({
+        legsFinished: parsed.stats.legsFinished ?? 0,
+        matchesFinished: parsed.stats.matchesFinished ?? 0,
+        bestCheckout: parsed.stats.bestCheckout ?? 0,
+        bestAverage: parsed.stats.bestAverage ?? 0,
+        trainingSessions: parsed.stats.trainingSessions ?? 0,
+        bestTrainingScore: parsed.stats.bestTrainingScore ?? 0,
+      });
+    }
+
+    if (parsed.localMatchHistory) {
+      setLocalMatchHistory(parsed.localMatchHistory.slice(0, 8));
+    }
+
+    if (parsed.trainingMode === "bull-drill" || parsed.trainingMode === "around-the-clock") {
+      setTrainingSession(createTrainingSession(parsed.trainingMode));
+    }
+  }, []);
 
   useEffect(() => {
     try {
@@ -641,57 +740,13 @@ export default function Page() {
         localMatchHistory: MatchHistoryEntry[];
         trainingMode: TrainingMode;
       }>;
-
-      const parsedMode = parsed.mode === 301 || parsed.mode === 501 ? parsed.mode : 501;
-      const names =
-        parsed.playerNames && parsed.playerNames.length >= 2 && parsed.playerNames.length <= 4
-          ? parsed.playerNames
-          : ["Bobo", "Guest"];
-
-      setMode(parsedMode);
-      setPlayers(createPlayers(parsedMode, names));
-      setStatusText(`Match bereit. ${names[0]} beginnt.`);
-
-      if (parsed.appMode === "match" || parsed.appMode === "training") {
-        setAppMode(parsed.appMode);
-      }
-
-      if (typeof parsed.doubleOut === "boolean") {
-        setDoubleOut(parsed.doubleOut);
-      }
-
-      if (typeof parsed.legsToWin === "number" && LEGS_OPTIONS.includes(parsed.legsToWin)) {
-        setLegsToWin(parsed.legsToWin);
-      }
-
-      if (typeof parsed.setsToWin === "number" && SETS_OPTIONS.includes(parsed.setsToWin)) {
-        setSetsToWin(parsed.setsToWin);
-      }
-
-      if (parsed.stats) {
-        setStats({
-          legsFinished: parsed.stats.legsFinished ?? 0,
-          matchesFinished: parsed.stats.matchesFinished ?? 0,
-          bestCheckout: parsed.stats.bestCheckout ?? 0,
-          bestAverage: parsed.stats.bestAverage ?? 0,
-          trainingSessions: parsed.stats.trainingSessions ?? 0,
-          bestTrainingScore: parsed.stats.bestTrainingScore ?? 0,
-        });
-      }
-
-      if (parsed.localMatchHistory) {
-        setLocalMatchHistory(parsed.localMatchHistory.slice(0, 8));
-      }
-
-      if (parsed.trainingMode === "bull-drill" || parsed.trainingMode === "around-the-clock") {
-        setTrainingSession(createTrainingSession(parsed.trainingMode));
-      }
+      applyLocalBackup(parsed);
     } catch {
       // Ignore invalid local state and continue with defaults.
     } finally {
       setHydrated(true);
     }
-  }, []);
+  }, [applyLocalBackup]);
 
   useEffect(() => {
     if (!hydrated) {
@@ -782,6 +837,7 @@ export default function Page() {
     }
 
     setProfileName(preferredName);
+    setProfileDraft(preferredName);
     setPlayers((prev) => {
       if (prev.length === 0 || !preferredName) {
         return prev;
@@ -860,6 +916,85 @@ export default function Page() {
     setCloudMessage("Cloud-Historie geladen.");
   }, []);
 
+  const loadCloudDashboard = useCallback(async (nextSession: Session) => {
+    if (!supabase) {
+      return;
+    }
+
+    const {
+      data: { session: freshSession },
+    } = await supabase.auth.getSession();
+
+    const accessToken = freshSession?.access_token ?? nextSession.access_token;
+    if (!accessToken) {
+      return;
+    }
+
+    const response = await fetch("/api/cloud/dashboard", {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    const result = (await response.json()) as {
+      error?: string;
+      profile?: CloudProfileRow & { created_at?: string };
+      stats?: CloudDashboardStats;
+      recentTraining?: TrainingCloudRow[];
+    };
+
+    if (!response.ok || result.error) {
+      setCloudMessage(`Cloud-Profil konnte nicht geladen werden: ${result.error ?? "Unbekannter Fehler"}`);
+      return;
+    }
+
+    if (result.profile?.display_name) {
+      setProfileName(result.profile.display_name);
+      setProfileDraft(result.profile.display_name);
+    }
+
+    setCloudStats(result.stats ?? null);
+    setRecentTrainingSessions(result.recentTraining ?? []);
+  }, []);
+
+  async function saveProfileDraft() {
+    if (!supabase || !session) {
+      return;
+    }
+
+    const trimmedName = profileDraft.trim();
+    if (!trimmedName) {
+      setCloudMessage("Profilname darf nicht leer sein.");
+      return;
+    }
+
+    const { error } = await supabase
+      .from("profiles")
+      .update({
+        display_name: trimmedName,
+      })
+      .eq("id", session.user.id);
+
+    if (error) {
+      setCloudMessage(`Profil konnte nicht gespeichert werden: ${error.message}`);
+      return;
+    }
+
+    setProfileName(trimmedName);
+    setPlayers((prev) =>
+      prev.map((player, index) =>
+        index === 0
+          ? {
+              ...player,
+              name: trimmedName,
+            }
+          : player,
+      ),
+    );
+    setCloudMessage("Profilname in der Cloud gespeichert.");
+    await loadCloudDashboard(session);
+  }
+
   useEffect(() => {
     if (!supabase) {
       return;
@@ -871,6 +1006,7 @@ export default function Page() {
         void ensureProfile(data.session);
         void loadCloudProfile(data.session);
         void loadCloudMatches(data.session);
+        void loadCloudDashboard(data.session);
       }
     });
 
@@ -882,16 +1018,20 @@ export default function Page() {
         void ensureProfile(nextSession);
         void loadCloudProfile(nextSession);
         void loadCloudMatches(nextSession);
+        void loadCloudDashboard(nextSession);
       } else {
         setProfileName("");
+        setProfileDraft("");
         setCloudMatchHistory([]);
+        setCloudStats(null);
+        setRecentTrainingSessions([]);
       }
     });
 
     return () => {
       subscription.unsubscribe();
     };
-  }, [ensureProfile, loadCloudMatches, loadCloudProfile]);
+  }, [ensureProfile, loadCloudDashboard, loadCloudMatches, loadCloudProfile]);
 
   useEffect(() => {
     if (!session || !supabase) {
@@ -945,6 +1085,7 @@ export default function Page() {
     if (data.session) {
       await ensureProfile(data.session);
       await loadCloudMatches(data.session);
+      await loadCloudDashboard(data.session);
       setAuthMessage("Login erfolgreich.");
     }
   }
@@ -956,6 +1097,48 @@ export default function Page() {
 
     await supabase.auth.signOut();
     setCloudMessage("Abgemeldet. Lokale Daten bleiben erhalten.");
+  }
+
+  function exportLocalBackup() {
+    const backup = buildLocalBackup({
+      appMode,
+      mode,
+      doubleOut,
+      legsToWin,
+      setsToWin,
+      playerNames: players.map((player) => player.name),
+      stats,
+      localMatchHistory,
+      trainingMode: trainingSession.mode,
+    });
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `bobos-dart-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    link.click();
+    window.URL.revokeObjectURL(url);
+    setCloudMessage("Lokales Backup exportiert.");
+  }
+
+  async function importLocalBackup(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text) as Partial<LocalBackupPayload>;
+      applyLocalBackup(parsed);
+      setCloudMessage("Lokales Backup importiert.");
+    } catch {
+      setCloudMessage("Backup konnte nicht gelesen werden.");
+    } finally {
+      if (importInputRef.current) {
+        importInputRef.current.value = "";
+      }
+    }
   }
 
   async function saveMatchToCloud(winnerIndex: number, finalPlayers: Player[]) {
@@ -1006,6 +1189,7 @@ export default function Page() {
 
     setCloudMessage(`Cloud-Save erfolgreich fuer ${winner.name}.`);
     await loadCloudMatches(session);
+    await loadCloudDashboard(session);
   }
 
   async function saveTrainingSessionToCloud(nextSession: TrainingSession) {
@@ -1029,6 +1213,7 @@ export default function Page() {
     }
 
     setCloudMessage("Training in der Cloud gespeichert.");
+    await loadCloudDashboard(session);
   }
 
   function resetLegBoards(nextPlayers: Player[]) {
@@ -1421,6 +1606,12 @@ export default function Page() {
                 >
                   Training
                 </button>
+                <Link
+                  href="/live"
+                  className="rounded-2xl border border-emerald-300/30 bg-emerald-400/10 px-5 py-3 font-semibold text-emerald-100 transition hover:bg-emerald-400/20"
+                >
+                  Live-Match
+                </Link>
               </div>
             </div>
 
@@ -1516,12 +1707,32 @@ export default function Page() {
                         <p>{session.user.email}</p>
                         {profileName ? <p className="text-stone-400">Profilname: {profileName}</p> : null}
                       </div>
+                      <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+                        <input
+                          value={profileDraft}
+                          onChange={(event) => setProfileDraft(event.target.value)}
+                          placeholder="Profilname"
+                          className="h-11 rounded-2xl border border-white/10 bg-black/20 px-4 text-white outline-none placeholder:text-stone-500"
+                        />
+                        <button
+                          onClick={() => void saveProfileDraft()}
+                          className="rounded-2xl bg-emerald-400 px-4 py-2 text-sm font-semibold text-black"
+                        >
+                          Profil speichern
+                        </button>
+                      </div>
                       <div className="flex flex-wrap gap-3">
                         <button
                           onClick={() => void loadCloudMatches(session)}
                           className="rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-black"
                         >
                           Cloud-Historie laden
+                        </button>
+                        <button
+                          onClick={() => void loadCloudDashboard(session)}
+                          className="rounded-2xl border border-white/10 bg-black/20 px-4 py-2 text-sm font-semibold text-white"
+                        >
+                          Cloud-Statistik laden
                         </button>
                         {isAdmin ? (
                           <Link
@@ -1575,6 +1786,93 @@ export default function Page() {
                 {authMessage ? <p className="mt-3 text-sm text-amber-200">{authMessage}</p> : null}
                 {cloudMessage ? <p className="mt-2 text-sm text-stone-300">{cloudMessage}</p> : null}
                 {cloudLoading ? <p className="mt-2 text-sm text-stone-500">Cloud-Historie wird geladen...</p> : null}
+
+                <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-xs uppercase tracking-[0.24em] text-stone-400">Lokales Backup</p>
+                    <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-stone-300">
+                      Browserdaten
+                    </span>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-3">
+                    <button
+                      onClick={exportLocalBackup}
+                      className="rounded-2xl bg-amber-300 px-4 py-2 text-sm font-semibold text-black"
+                    >
+                      Backup exportieren
+                    </button>
+                    <button
+                      onClick={() => importInputRef.current?.click()}
+                      className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white"
+                    >
+                      Backup importieren
+                    </button>
+                    <input
+                      ref={importInputRef}
+                      type="file"
+                      accept="application/json"
+                      onChange={importLocalBackup}
+                      className="hidden"
+                    />
+                  </div>
+                </div>
+
+                {session && cloudStats ? (
+                  <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-4">
+                    <p className="text-xs uppercase tracking-[0.24em] text-stone-400">Deine Cloud-Zahlen</p>
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                      <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                        <p className="text-xs uppercase tracking-[0.2em] text-stone-400">Matches</p>
+                        <p className="mt-2 text-2xl font-semibold text-white">
+                          {cloudStats.matchesWon} / {cloudStats.matchesPlayed}
+                        </p>
+                      </div>
+                      <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                        <p className="text-xs uppercase tracking-[0.2em] text-stone-400">Bestes Avg</p>
+                        <p className="mt-2 text-2xl font-semibold text-white">{cloudStats.bestAverage.toFixed(2)}</p>
+                      </div>
+                      <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                        <p className="text-xs uppercase tracking-[0.2em] text-stone-400">Best Visit</p>
+                        <p className="mt-2 text-2xl font-semibold text-white">{cloudStats.bestVisit}</p>
+                      </div>
+                      <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                        <p className="text-xs uppercase tracking-[0.2em] text-stone-400">Sets / Legs</p>
+                        <p className="mt-2 text-2xl font-semibold text-white">
+                          {cloudStats.totalSetsWon} / {cloudStats.totalLegsWon}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                      <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                        <p className="text-xs uppercase tracking-[0.2em] text-stone-400">Training</p>
+                        <p className="mt-2 text-xl font-semibold text-white">{cloudStats.trainingSessions}</p>
+                      </div>
+                      <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                        <p className="text-xs uppercase tracking-[0.2em] text-stone-400">Best Score</p>
+                        <p className="mt-2 text-xl font-semibold text-white">{cloudStats.bestTrainingScore}</p>
+                      </div>
+                      <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                        <p className="text-xs uppercase tracking-[0.2em] text-stone-400">Trainingsdarts</p>
+                        <p className="mt-2 text-xl font-semibold text-white">{cloudStats.totalTrainingDarts}</p>
+                      </div>
+                    </div>
+                    <div className="mt-4 space-y-2">
+                      <p className="text-xs uppercase tracking-[0.2em] text-stone-400">Letzte Trainingssessions</p>
+                      {recentTrainingSessions.length > 0 ? (
+                        recentTrainingSessions.slice(0, 3).map((entry, index) => (
+                          <div
+                            key={`${entry.played_at}-${index}`}
+                            className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-stone-300"
+                          >
+                            {new Date(entry.played_at).toLocaleString("de-DE")} · Score {entry.score} · Treffer {entry.hits} · Darts {entry.darts_thrown}
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-sm text-stone-400">Noch keine Trainingsdaten in der Cloud.</p>
+                      )}
+                    </div>
+                  </div>
+                ) : null}
               </div>
             </div>
           </div>
