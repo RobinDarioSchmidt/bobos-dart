@@ -16,6 +16,7 @@ Eine lokale Dart-Scoring-App auf Basis von Next.js 16, React 19 und Tailwind CSS
 - Trainingsmodus mit `Around the Clock` und `Bull Drill`
 - Lokale Trainingsstatistik im Browser
 - Online-Setup-Dateien fuer Vercel + Supabase in `docs/online-setup.md` und `supabase/schema.sql`
+- Admin-Flow fuer manuell angelegte Nutzer unter `/admin`
 
 ## Entwicklung
 
@@ -40,3 +41,5 @@ npm run start
 - `docs/online-setup.md`: Anleitung fuer eine kostenlose Online-Version
 - `docs/deploy-step-by-step.md`: sehr genaue Schritt-fuer-Schritt-Anleitung fuer Supabase + Vercel
 - `supabase/schema.sql`: erste Datenbankstruktur fuer Cloud-Speicherung
+- `app/admin/page.tsx`: Admin-Seite fuer manuelle Nutzer und Test-Accounts
+- `app/api/admin/users/route.ts`: sichere Server-Route zum Nutzer-Anlegen mit Service Role Key

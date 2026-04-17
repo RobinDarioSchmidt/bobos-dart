@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase, supabaseEnabled } from "@/lib/supabase";
@@ -77,12 +78,14 @@ type CloudMatchRow = {
   played_at: string;
   mode: string;
   double_out: boolean;
-  match_players: Array<{
-    guest_name: string | null;
-    seat_index: number;
-    is_winner: boolean;
-    sets_won: number;
-  }>;
+};
+
+type CloudMatchPlayerRow = {
+  match_id: string;
+  guest_name: string | null;
+  seat_index: number;
+  is_winner: boolean;
+  sets_won: number;
 };
 
 type CloudProfileRow = {
@@ -331,8 +334,8 @@ function getCurrentTrainingTarget(session: TrainingSession) {
   return target === 25 ? "Bull" : `${target}`;
 }
 
-function toHistoryEntry(row: CloudMatchRow): MatchHistoryEntry {
-  const orderedPlayers = [...row.match_players].sort((a, b) => a.seat_index - b.seat_index);
+function toHistoryEntry(row: CloudMatchRow, players: CloudMatchPlayerRow[]): MatchHistoryEntry {
+  const orderedPlayers = [...players].sort((a, b) => a.seat_index - b.seat_index);
   const winner = orderedPlayers.find((player) => player.is_winner)?.guest_name ?? "Unbekannt";
   const opponents = orderedPlayers
     .filter((player) => !player.is_winner)
@@ -599,7 +602,6 @@ export default function Page() {
   const [undoStack, setUndoStack] = useState<UndoSnapshot[]>([]);
   const [session, setSession] = useState<Session | null>(null);
   const [profileName, setProfileName] = useState("");
-  const [authMode, setAuthMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [authMessage, setAuthMessage] = useState("");
@@ -609,6 +611,8 @@ export default function Page() {
     createTrainingSession("around-the-clock"),
   );
   const [hydrated, setHydrated] = useState(false);
+  const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL ?? "";
+  const isAdmin = Boolean(session?.user.email && adminEmail && session.user.email === adminEmail);
 
   useEffect(() => {
     try {
@@ -795,7 +799,7 @@ export default function Page() {
 
     const { data, error } = await supabase
       .from("matches")
-      .select("id, played_at, mode, double_out, match_players(guest_name, seat_index, is_winner, sets_won)")
+      .select("id, played_at, mode, double_out")
       .eq("owner_id", nextSession.user.id)
       .order("played_at", { ascending: false })
       .limit(8);
@@ -803,18 +807,39 @@ export default function Page() {
     setCloudLoading(false);
 
     if (error) {
-      setCloudMessage("Cloud-Historie konnte nicht geladen werden.");
+      setCloudMessage(`Cloud-Historie konnte nicht geladen werden: ${error.message}`);
       return;
     }
 
     const rows = (data ?? []) as CloudMatchRow[];
-    if (rows.length > 0) {
-      setCloudMatchHistory(rows.map(toHistoryEntry));
-      setCloudMessage("Cloud-Historie geladen.");
-    } else {
+    if (rows.length === 0) {
       setCloudMatchHistory([]);
       setCloudMessage("Noch keine Cloud-Matches gespeichert.");
+      return;
     }
+
+    const matchIds = rows.map((row) => row.id);
+    const { data: playersData, error: playersError } = await supabase
+      .from("match_players")
+      .select("match_id, guest_name, seat_index, is_winner, sets_won")
+      .in("match_id", matchIds)
+      .order("seat_index", { ascending: true });
+
+    if (playersError) {
+      setCloudMessage(`Cloud-Spieler konnten nicht geladen werden: ${playersError.message}`);
+      return;
+    }
+
+    const playerRows = (playersData ?? []) as CloudMatchPlayerRow[];
+    const history = rows.map((row) =>
+      toHistoryEntry(
+        row,
+        playerRows.filter((player) => player.match_id === row.id),
+      ),
+    );
+
+    setCloudMatchHistory(history);
+    setCloudMessage("Cloud-Historie geladen.");
   }, []);
 
   useEffect(() => {
@@ -877,22 +902,6 @@ export default function Page() {
     }
 
     setAuthMessage("");
-
-    if (authMode === "signup") {
-      const { data, error } = await supabase.auth.signUp({ email, password });
-      if (error) {
-        setAuthMessage(error.message);
-        return;
-      }
-
-      if (data.session) {
-        await ensureProfile(data.session);
-        await loadCloudMatches(data.session);
-      }
-
-      setAuthMessage("Konto erstellt. Falls noetig, bestaetige die E-Mail.");
-      return;
-    }
 
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
@@ -1481,6 +1490,14 @@ export default function Page() {
                         >
                           Cloud-Historie laden
                         </button>
+                        {isAdmin ? (
+                          <Link
+                            href="/admin"
+                            className="rounded-2xl bg-amber-300 px-4 py-2 text-sm font-semibold text-black"
+                          >
+                            Admin-Nutzer
+                          </Link>
+                        ) : null}
                         <button
                           onClick={() => void handleSignOut()}
                           className="rounded-2xl border border-white/10 bg-black/20 px-4 py-2 text-sm font-semibold text-white"
@@ -1491,28 +1508,9 @@ export default function Page() {
                     </div>
                   ) : (
                     <div className="mt-3 space-y-3">
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => setAuthMode("login")}
-                          className={`rounded-2xl px-4 py-2 text-sm font-semibold ${
-                            authMode === "login"
-                              ? "bg-white text-black"
-                              : "border border-white/10 bg-black/20 text-white"
-                          }`}
-                        >
-                          Login
-                        </button>
-                        <button
-                          onClick={() => setAuthMode("signup")}
-                          className={`rounded-2xl px-4 py-2 text-sm font-semibold ${
-                            authMode === "signup"
-                              ? "bg-amber-300 text-black"
-                              : "border border-white/10 bg-black/20 text-white"
-                          }`}
-                        >
-                          Registrieren
-                        </button>
-                      </div>
+                      <p className="text-sm text-stone-400">
+                        Konten werden manuell vom Admin angelegt. Hier ist nur der Login offen.
+                      </p>
                       <input
                         type="email"
                         value={email}
@@ -1531,7 +1529,7 @@ export default function Page() {
                         onClick={() => void handleAuthSubmit()}
                         className="w-full rounded-2xl bg-emerald-400 px-4 py-3 text-sm font-semibold text-black"
                       >
-                        {authMode === "login" ? "Einloggen" : "Konto erstellen"}
+                        Einloggen
                       </button>
                     </div>
                   )
