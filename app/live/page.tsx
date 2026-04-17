@@ -86,14 +86,14 @@ function LiveDartboard({
           <p className="text-sm text-stone-400">{caption}</p>
         </div>
         {hoveredSegment ? (
-          <div className="rounded-2xl border border-amber-300/30 bg-amber-300/10 px-3 py-2 text-right">
+          <div className="min-h-[3.5rem] min-w-[9rem] rounded-2xl border border-amber-300/30 bg-amber-300/10 px-3 py-2 text-right">
             <p className="text-[11px] uppercase tracking-[0.22em] text-amber-100">Ziel</p>
-            <p className="text-sm font-semibold text-white">
+            <p className="whitespace-nowrap text-sm font-semibold text-white">
               {hoveredSegment.label} · {hoveredSegment.score} Punkte
             </p>
           </div>
         ) : (
-          <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs uppercase tracking-[0.22em] text-stone-300">
+          <div className="flex min-h-[3.5rem] min-w-[9rem] items-center justify-center rounded-2xl border border-white/10 bg-white/5 px-3 py-1 text-center text-xs uppercase tracking-[0.22em] text-stone-300 whitespace-nowrap">
             Hover + Klick
           </div>
         )}
