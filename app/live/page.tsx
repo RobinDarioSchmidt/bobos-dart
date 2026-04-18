@@ -138,6 +138,7 @@ export default function LivePage() {
   const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL ?? "";
   const liveChannelRef = useRef<ReturnType<NonNullable<typeof supabase>["channel"]> | null>(null);
   const requestInFlightRef = useRef(false);
+  const lastSpokenCalloutRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -672,6 +673,39 @@ export default function LivePage() {
     () => (currentPlayer ? livePlayerStats.find((entry) => entry.name === currentPlayer.name) ?? null : null),
     [currentPlayer, livePlayerStats],
   );
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) {
+      return;
+    }
+
+    const callout = liveState?.lastCallout?.trim();
+    if (!callout) {
+      return;
+    }
+
+    if (lastSpokenCalloutRef.current === callout) {
+      return;
+    }
+
+    lastSpokenCalloutRef.current = callout;
+    const utterance = new SpeechSynthesisUtterance(callout);
+    utterance.lang = "en-US";
+    utterance.rate = 1;
+    utterance.pitch = 1;
+    utterance.volume = 1;
+
+    const voices = window.speechSynthesis.getVoices();
+    const preferredVoice =
+      voices.find((voice) => voice.lang.toLowerCase().startsWith("en")) ??
+      voices.find((voice) => voice.default);
+    if (preferredVoice) {
+      utterance.voice = preferredVoice;
+    }
+
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(utterance);
+  }, [liveState?.lastCallout]);
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top,_#1f2937,_#09090b_55%)] px-3 py-4 pb-28 text-stone-100 sm:px-4 sm:py-6 sm:pb-8">
