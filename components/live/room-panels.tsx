@@ -133,7 +133,7 @@ export function LiveRoomCreatePanel({
             disabled={loading}
             className="w-full rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-black disabled:opacity-50"
           >
-            Raum erstellen
+            Online-Match starten
           </button>
         </div>
       ) : null}
@@ -185,13 +185,13 @@ export function LiveRoomJoinPanel({
             disabled={loading}
             className="rounded-2xl bg-emerald-400 px-4 py-3 text-sm font-semibold text-black disabled:opacity-50"
           >
-            Join
+            Beitreten
           </button>
         </div>
       ) : null}
       {liveRoomCode ? (
         <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4">
-          <p className="text-[11px] uppercase tracking-[0.22em] text-stone-400">Aktueller Raumcode</p>
+          <p className="text-[11px] uppercase tracking-[0.22em] text-stone-400">Dein Raumcode</p>
           <p className="mt-2 text-3xl font-semibold text-white">{liveRoomCode}</p>
           <div className="mt-3 flex flex-wrap gap-2">
             <button
@@ -211,7 +211,7 @@ export function LiveRoomJoinPanel({
               disabled={loading}
               className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
             >
-              Neu verbinden
+              Verbindung erneuern
             </button>
           </div>
         </div>

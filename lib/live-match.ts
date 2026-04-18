@@ -26,6 +26,7 @@ export type LiveDart = {
 };
 
 export type LiveVisit = {
+  playerIndex: number;
   playerName: string;
   total: number;
   scoreBefore: number;
@@ -36,6 +37,12 @@ export type LiveVisit = {
   darts: string[];
   note: string;
   createdAt: string;
+};
+
+export type LiveCloudSyncState = {
+  sessionKey: string;
+  persistedOwnerIds: string[];
+  persistedAt: string | null;
 };
 
 export type LivePlayer = {
@@ -85,10 +92,29 @@ export type LiveMatchState = {
   players: LivePlayer[];
   history: LiveVisit[];
   pendingVisit: LivePendingVisit | null;
+  lastCallout: string | null;
+  cloudSync: LiveCloudSyncState;
 };
 
 function cloneState<T>(value: T) {
   return JSON.parse(JSON.stringify(value)) as T;
+}
+
+function generateSessionKey() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+
+  return `live-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function deriveLegacySessionKey(state: Partial<LiveMatchState>) {
+  const playerSignature = (state.players ?? [])
+    .filter((player) => player?.joined)
+    .map((player) => player?.name ?? "spieler")
+    .join("-");
+  const historySeed = state.history?.[state.history.length - 1]?.createdAt ?? "legacy";
+  return `legacy-${state.mode ?? 501}-${state.finishMode ?? "double"}-${playerSignature}-${historySeed}`;
 }
 
 export function createEmptyLiveState(params: {
@@ -146,6 +172,12 @@ export function createEmptyLiveState(params: {
     players,
     history: [],
     pendingVisit: null,
+    lastCallout: null,
+    cloudSync: {
+      sessionKey: generateSessionKey(),
+      persistedOwnerIds: [],
+      persistedAt: null,
+    },
   } satisfies LiveMatchState;
 }
 
@@ -206,7 +238,36 @@ export function normalizeLiveState(state: LiveMatchState | (Record<string, unkno
     players: nextState.players ?? [],
     history: nextState.history ?? [],
     pendingVisit: nextState.pendingVisit ?? null,
+    lastCallout: nextState.lastCallout ?? null,
+    cloudSync: nextState.cloudSync ?? {
+      sessionKey: deriveLegacySessionKey(nextState),
+      persistedOwnerIds: [],
+      persistedAt: null,
+    },
   } satisfies LiveMatchState;
+}
+
+export function getThrowCallout(dart: LiveDart) {
+  if (dart.ring === "miss" || dart.score === 0) {
+    return "No score!";
+  }
+
+  if (dart.ring === "bull") {
+    return "Bullseye!";
+  }
+
+  if (dart.ring === "outer-bull") {
+    return "Outer bull!";
+  }
+
+  const numberText = dart.number === 25 ? "bull" : String(dart.number === 0 ? dart.score : dart.number);
+  if (dart.multiplier === 3) {
+    return `Triple ${numberText}!`;
+  }
+  if (dart.multiplier === 2) {
+    return `Double ${numberText}!`;
+  }
+  return `${numberText}!`;
 }
 
 export function getNextJoinedPlayerIndex(state: LiveMatchState, fromIndex: number) {
@@ -309,7 +370,7 @@ function resetPendingVisit(state: LiveMatchState) {
 }
 
 function appendHistoryEntry(state: LiveMatchState, entry: LiveVisit) {
-  state.history = [entry, ...state.history].slice(0, 32);
+  state.history = [entry, ...state.history];
 }
 
 function resolveBullOff(state: LiveMatchState) {
@@ -353,6 +414,7 @@ export function applyBullOffThrow(previousState: LiveMatchState, dart: LiveDart)
       createdAt: new Date().toISOString(),
     },
   ];
+  nextState.lastCallout = getThrowCallout(dart);
 
   const joinedPlayers = getJoinedPlayerIndexes(nextState);
   const attemptedPlayers = new Set(nextState.bullOff.attempts.map((entry) => entry.playerIndex));
@@ -390,6 +452,7 @@ export function addPendingDart(previousState: LiveMatchState, dart: LiveDart) {
     darts: nextDarts,
     updatedAt: new Date().toISOString(),
   };
+  nextState.lastCallout = getThrowCallout(dart);
 
   const evaluation = evaluateVisit(player.score, nextDarts, nextState.finishMode);
   if (evaluation.bust || evaluation.checkout || nextDarts.length === 3) {
@@ -445,6 +508,7 @@ export function finalizePendingVisit(previousState: LiveMatchState) {
   const usedLabels = evaluation.usedDarts.map((dart) => dart.label);
 
   appendHistoryEntry(nextState, {
+    playerIndex: nextState.activePlayer,
     playerName: player.name,
     total: evaluation.total,
     scoreBefore,
@@ -473,6 +537,7 @@ export function finalizePendingVisit(previousState: LiveMatchState) {
     nextState.statusText = `${player.name} gewinnt das Leg.`;
 
     appendHistoryEntry(nextState, {
+      playerIndex: nextState.activePlayer,
       playerName: player.name,
       total: evaluation.total,
       scoreBefore,
@@ -514,6 +579,7 @@ export function startNextLiveLeg(previousState: LiveMatchState) {
   }));
   nextState.pendingVisit = null;
   nextState.legWinner = null;
+  nextState.lastCallout = null;
 
   if (nextState.bullOff.enabled) {
     const firstJoined = getJoinedPlayerIndexes(nextState)[0] ?? 0;
@@ -552,6 +618,12 @@ export function startRematchLiveMatch(previousState: LiveMatchState) {
   nextState.pendingVisit = null;
   nextState.legWinner = null;
   nextState.matchWinner = null;
+  nextState.lastCallout = null;
+  nextState.cloudSync = {
+    sessionKey: generateSessionKey(),
+    persistedOwnerIds: [],
+    persistedAt: null,
+  };
 
   if (nextState.bullOff.enabled) {
     nextState.bullOff = {

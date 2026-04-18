@@ -35,11 +35,21 @@ type MatchDetailResponse = {
       label: string;
       count: number;
     }>;
+    checkoutRoutes: Array<{
+      route: string;
+      score: number;
+    }>;
+    tonPlusVisits: number;
+    tonFortyPlus: number;
+    maxVisits: number;
   }>;
   throwSummary: {
     totalThrows: number;
     checkoutDarts: number;
     misses: number;
+    tonPlusVisits: number;
+    tonFortyPlus: number;
+    maxVisits: number;
   };
   visitTimeline: Array<{
     playerName: string;
@@ -56,6 +66,15 @@ type MatchDetailResponse = {
       visitScore: number;
       cumulative: number;
     }>;
+  }>;
+  highlightVisits: Array<{
+    playerName: string;
+    playerSeatIndex: number;
+    visitIndex: number;
+    score: number;
+    darts: string[];
+    createdAt: string;
+    route: string;
   }>;
 };
 
@@ -275,6 +294,20 @@ export default function MatchDetailPage() {
                   <p className="mt-1 text-lg font-semibold text-white">{data.throwSummary.misses}</p>
                 </div>
               </div>
+              <div className="mt-2 grid grid-cols-3 gap-2">
+                <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+                  <p className="text-[10px] uppercase tracking-[0.18em] text-stone-400">100+</p>
+                  <p className="mt-1 text-lg font-semibold text-white">{data.throwSummary.tonPlusVisits}</p>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+                  <p className="text-[10px] uppercase tracking-[0.18em] text-stone-400">140+</p>
+                  <p className="mt-1 text-lg font-semibold text-white">{data.throwSummary.tonFortyPlus}</p>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+                  <p className="text-[10px] uppercase tracking-[0.18em] text-stone-400">180er</p>
+                  <p className="mt-1 text-lg font-semibold text-white">{data.throwSummary.maxVisits}</p>
+                </div>
+              </div>
             </section>
 
             <section className="grid gap-3">
@@ -332,6 +365,27 @@ export default function MatchDetailPage() {
                 </div>
               ) : null}
 
+              {data.highlightVisits.length > 0 ? (
+                <div className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4">
+                  <h2 className="text-lg font-semibold text-white">Top Visits der Partie</h2>
+                  <div className="mt-3 space-y-2">
+                    {data.highlightVisits.map((visit) => (
+                      <div key={`highlight-${visit.playerSeatIndex}-${visit.visitIndex}`} className="rounded-[1.25rem] border border-white/10 bg-black/20 p-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-semibold text-white">
+                              {visit.playerName} - Visit {visit.visitIndex + 1}
+                            </p>
+                            <p className="text-xs text-stone-400">{visit.route || "No score"}</p>
+                          </div>
+                          <p className="text-lg font-semibold text-white">{visit.score}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
               {data.players.map((player) => (
                 <div key={`${player.seat_index}-${player.name}`} className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4">
                   <div className="flex items-start justify-between gap-3">
@@ -369,6 +423,20 @@ export default function MatchDetailPage() {
                       <p className="mt-1 text-lg font-semibold text-white">{player.misses}</p>
                     </div>
                   </div>
+                  <div className="mt-2 grid grid-cols-3 gap-2">
+                    <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+                      <p className="text-[10px] uppercase tracking-[0.18em] text-stone-400">100+</p>
+                      <p className="mt-1 text-lg font-semibold text-white">{player.tonPlusVisits}</p>
+                    </div>
+                    <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+                      <p className="text-[10px] uppercase tracking-[0.18em] text-stone-400">140+</p>
+                      <p className="mt-1 text-lg font-semibold text-white">{player.tonFortyPlus}</p>
+                    </div>
+                    <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+                      <p className="text-[10px] uppercase tracking-[0.18em] text-stone-400">180er</p>
+                      <p className="mt-1 text-lg font-semibold text-white">{player.maxVisits}</p>
+                    </div>
+                  </div>
 
                   <div className="mt-3 rounded-2xl border border-white/10 bg-black/20 p-3">
                     <p className="text-[10px] uppercase tracking-[0.18em] text-stone-400">Top Segmente</p>
@@ -385,6 +453,26 @@ export default function MatchDetailPage() {
                       ) : (
                         <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-stone-400">
                           Noch keine Wurfdaten vorhanden.
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="mt-3 rounded-2xl border border-white/10 bg-black/20 p-3">
+                    <p className="text-[10px] uppercase tracking-[0.18em] text-stone-400">Checkout-Routen</p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {player.checkoutRoutes.length > 0 ? (
+                        player.checkoutRoutes.map((route) => (
+                          <span
+                            key={`${player.name}-${route.route}-${route.score}`}
+                            className="rounded-full border border-emerald-300/25 bg-emerald-400/12 px-3 py-1.5 text-sm font-semibold text-emerald-100"
+                          >
+                            {route.route} · {route.score}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-stone-400">
+                          Kein Checkout in dieser Partie.
                         </span>
                       )}
                     </div>

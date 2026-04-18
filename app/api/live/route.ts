@@ -6,7 +6,9 @@ import {
   getPreferredDisplayName,
   normalizeLiveState,
   type LiveFinishMode,
+  type LiveCloudSyncState,
   type LiveMatchState,
+  type LiveVisit,
 } from "@/lib/live-match";
 import { authorizeSupabaseRequest } from "@/lib/server/request-auth";
 
@@ -15,6 +17,210 @@ type LiveMatchRow = {
   room_code: string;
   state: LiveMatchState;
 };
+
+type CloudMatchInsert = {
+  id: string;
+  owner_id: string;
+  mode: string;
+  double_out: boolean;
+  legs_to_win: number;
+  sets_to_win: number;
+  status: "finished";
+  winner_profile_id: string | null;
+};
+
+function mergeCloudSync(currentSync: LiveCloudSyncState, nextSync?: Partial<LiveCloudSyncState> | null) {
+  return {
+    sessionKey: nextSync?.sessionKey ?? currentSync.sessionKey,
+    persistedOwnerIds: Array.from(new Set([...(currentSync.persistedOwnerIds ?? []), ...(nextSync?.persistedOwnerIds ?? [])])),
+    persistedAt: nextSync?.persistedAt ?? currentSync.persistedAt ?? null,
+  } satisfies LiveCloudSyncState;
+}
+
+function mergeHistory(currentState: LiveMatchState, nextState: LiveMatchState) {
+  const incoming = nextState.history ?? [];
+  const existing = currentState.history ?? [];
+  const seen = new Set<string>();
+  const merged: LiveVisit[] = [];
+
+  for (const entry of [...incoming, ...existing]) {
+    const key = `${entry.createdAt}-${entry.playerName}-${entry.result}-${entry.darts.join("|")}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    merged.push(entry);
+  }
+
+  return merged;
+}
+
+function buildStableUuid(seed: string) {
+  const hex = Buffer.from(seed, "utf8").toString("hex").padEnd(32, "0").slice(0, 32);
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
+}
+
+function parseLiveThrowLabel(label: string) {
+  const trimmed = label.trim();
+  if (trimmed === "Bull") {
+    return { baseValue: 25, multiplier: 2, ring: "bull", score: 50, hit: true };
+  }
+  if (trimmed === "Outer Bull") {
+    return { baseValue: 25, multiplier: 1, ring: "outer-bull", score: 25, hit: true };
+  }
+  if (trimmed === "Miss") {
+    return { baseValue: 0, multiplier: 0, ring: "miss", score: 0, hit: false };
+  }
+
+  const prefix = trimmed[0];
+  const numeric = Number(trimmed.slice(1));
+  if (!Number.isFinite(numeric)) {
+    return { baseValue: 0, multiplier: 0, ring: "unknown", score: 0, hit: false };
+  }
+
+  if (prefix === "T") {
+    return { baseValue: numeric, multiplier: 3, ring: "triple", score: numeric * 3, hit: true };
+  }
+  if (prefix === "D") {
+    return { baseValue: numeric, multiplier: 2, ring: "double", score: numeric * 2, hit: true };
+  }
+  return { baseValue: numeric, multiplier: 1, ring: "single", score: numeric, hit: numeric > 0 };
+}
+
+function getPersistedOwnerIds(state: LiveMatchState) {
+  return new Set(state.cloudSync.persistedOwnerIds ?? []);
+}
+
+async function persistCompletedLiveMatch(adminClient: ReturnType<typeof getSupabaseAdminClients>["adminClient"], state: LiveMatchState) {
+  if (state.matchWinner === null) {
+    return state;
+  }
+
+  const joinedPlayers = state.players.filter((player) => player.joined && player.profileId);
+  const persistedIds = getPersistedOwnerIds(state);
+  const missingOwners = joinedPlayers
+    .map((player) => player.profileId)
+    .filter((profileId): profileId is string => typeof profileId === "string" && !persistedIds.has(profileId));
+
+  if (missingOwners.length === 0) {
+    return state;
+  }
+
+  const visitRows = [...state.history]
+    .filter((entry) => entry.result !== "leg-win")
+    .reverse();
+  const winner = state.players[state.matchWinner];
+
+  for (const ownerId of missingOwners) {
+    const visitIndexByPlayer = new Map<number, number>();
+    const matchId = buildStableUuid(`${state.cloudSync.sessionKey}:${ownerId}`);
+    const matchInsert: CloudMatchInsert = {
+      id: matchId,
+      owner_id: ownerId,
+      mode: String(state.mode),
+      double_out: state.finishMode !== "single",
+      legs_to_win: state.legsToWin,
+      sets_to_win: state.setsToWin,
+      status: "finished",
+      winner_profile_id: winner?.profileId ?? null,
+    };
+
+    const { error: matchError } = await adminClient.from("matches").upsert(matchInsert);
+    if (matchError) {
+      throw new Error(matchError.message);
+    }
+
+    const playerRows = state.players
+      .map((player, seatIndex) => {
+        if (!player.joined) {
+          return null;
+        }
+        const playerVisits = visitRows.filter((entry) => entry.playerIndex === seatIndex);
+        const totalScored = playerVisits
+          .filter((entry) => !entry.bust)
+          .reduce((sum, entry) => sum + (entry.scoreBefore - entry.scoreAfter), 0);
+        const dartsThrown = playerVisits.reduce((sum, entry) => sum + entry.darts.length, 0);
+        const bestVisit = playerVisits.reduce((best, entry) => Math.max(best, entry.total), 0);
+        const average = dartsThrown > 0 ? Number((((totalScored / dartsThrown) * 3)).toFixed(2)) : 0;
+        const legWins = state.history.filter((entry) => entry.result === "leg-win" && entry.playerIndex === seatIndex).length;
+
+        return {
+          match_id: matchId,
+          profile_id: player.profileId,
+          guest_name: player.name,
+          seat_index: seatIndex,
+          sets_won: player.sets,
+          legs_won: legWins,
+          average,
+          best_visit: bestVisit,
+          is_winner: seatIndex === state.matchWinner,
+        };
+      })
+      .filter(Boolean);
+
+    const { error: deletePlayersError } = await adminClient.from("match_players").delete().eq("match_id", matchId);
+    if (deletePlayersError) {
+      throw new Error(deletePlayersError.message);
+    }
+    if (playerRows.length > 0) {
+      const { error: playersError } = await adminClient.from("match_players").insert(playerRows);
+      if (playersError) {
+        throw new Error(playersError.message);
+      }
+    }
+
+    const dartRows = visitRows.flatMap((visit) => {
+      const playerVisitIndex = visitIndexByPlayer.get(visit.playerIndex) ?? 0;
+      visitIndexByPlayer.set(visit.playerIndex, playerVisitIndex + 1);
+      return visit.darts.map((label, dartIndex) => {
+        const parsed = parseLiveThrowLabel(label);
+        const isLastDart = dartIndex === visit.darts.length - 1;
+        return {
+          owner_id: ownerId,
+          source_type: "match",
+          match_id: matchId,
+          training_session_id: null,
+          player_name: visit.playerName,
+          player_seat_index: visit.playerIndex,
+          visit_index: playerVisitIndex,
+          dart_index: dartIndex,
+          segment_label: label,
+          base_value: parsed.baseValue,
+          multiplier: parsed.multiplier,
+          ring: parsed.ring,
+          score: parsed.score,
+          is_hit: parsed.hit,
+          is_checkout_dart: visit.checkout && isLastDart,
+          target_label: null,
+        };
+      });
+    });
+
+    const { error: deleteDartsError } = await adminClient
+      .from("dart_events")
+      .delete()
+      .eq("owner_id", ownerId)
+      .eq("match_id", matchId);
+    if (deleteDartsError) {
+      throw new Error(deleteDartsError.message);
+    }
+    if (dartRows.length > 0) {
+      const { error: dartsError } = await adminClient.from("dart_events").insert(dartRows);
+      if (dartsError) {
+        throw new Error(dartsError.message);
+      }
+    }
+  }
+
+  return normalizeLiveState({
+    ...state,
+    cloudSync: {
+      ...state.cloudSync,
+      persistedOwnerIds: Array.from(new Set([...(state.cloudSync.persistedOwnerIds ?? []), ...missingOwners])),
+      persistedAt: new Date().toISOString(),
+    },
+  });
+}
 
 function mergePlayers(currentState: LiveMatchState, nextState: LiveMatchState) {
   return currentState.players.map((currentPlayer, index) => {
@@ -44,6 +250,8 @@ function mergeLiveState(currentState: LiveMatchState, nextState: LiveMatchState)
     ...currentState,
     ...nextState,
     players: mergePlayers(currentState, nextState),
+    history: mergeHistory(currentState, nextState),
+    cloudSync: mergeCloudSync(currentState.cloudSync, nextState.cloudSync),
   });
 }
 
@@ -70,10 +278,29 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: error?.message ?? "match_not_found" }, { status: 404 });
   }
 
+  let state = normalizeLiveState(data.state);
+  if (state.matchWinner !== null) {
+    try {
+      const persisted = await persistCompletedLiveMatch(adminClient, state);
+      if (JSON.stringify(persisted.cloudSync) !== JSON.stringify(state.cloudSync)) {
+        state = persisted;
+        await adminClient
+          .from("live_matches")
+          .update({ state, updated_at: new Date().toISOString() })
+          .eq("id", data.id);
+      }
+    } catch {
+      state = normalizeLiveState({
+        ...state,
+        statusText: `${state.statusText} Cloud-Sync bleibt noch ausstehend.`,
+      });
+    }
+  }
+
   return NextResponse.json({
     match: {
       ...data,
-      state: normalizeLiveState(data.state),
+      state,
     },
   });
 }
@@ -171,7 +398,7 @@ export async function POST(request: Request) {
       score: state.mode,
       profileId: authResult.user.id,
     };
-    state.statusText = `${displayName} ist dem Raum beigetreten.`;
+    state.statusText = `${displayName} ist im Online-Match angekommen.`;
 
     const { data: updated, error: updateError } = await adminClient
       .from("live_matches")
@@ -210,10 +437,31 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "not_a_participant" }, { status: 403 });
     }
 
+    let stateToStore = currentState;
+    try {
+      stateToStore = await persistCompletedLiveMatch(adminClient, stateToStore);
+    } catch {
+      stateToStore = normalizeLiveState({
+        ...stateToStore,
+        statusText: `${stateToStore.statusText} Cloud-Sync wird beim naechsten Kontakt erneut versucht.`,
+      });
+    }
+
+    stateToStore = mergeLiveState(stateToStore, body.state);
+
+    try {
+      stateToStore = await persistCompletedLiveMatch(adminClient, stateToStore);
+    } catch {
+      stateToStore = normalizeLiveState({
+        ...stateToStore,
+        statusText: `${stateToStore.statusText} Match ist beendet, Cloud-Sync bleibt ausstehend.`,
+      });
+    }
+
     const { data: updated, error: updateError } = await adminClient
       .from("live_matches")
       .update({
-        state: mergeLiveState(currentState, body.state),
+        state: stateToStore,
         updated_at: new Date().toISOString(),
       })
       .eq("id", match.id)

@@ -34,6 +34,7 @@ export function LiveScoreboardPanel({
   isCurrentUsersTurn,
   turnStatus,
   onRefresh,
+  cloudSyncPending,
 }: {
   liveState: LiveMatchState;
   currentPlayerIndex: number;
@@ -43,19 +44,20 @@ export function LiveScoreboardPanel({
   isCurrentUsersTurn: boolean;
   turnStatus: string;
   onRefresh: () => void;
+  cloudSyncPending: boolean;
 }) {
   return (
     <section className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-xl font-semibold text-white">Synchronisierter Spielstand</h2>
+          <h2 className="text-xl font-semibold text-white">Live-Spielstand</h2>
           <p className="mt-1 text-sm text-stone-400">{liveState.statusText}</p>
         </div>
         <button
           onClick={onRefresh}
           className="rounded-2xl border border-white/10 bg-black/20 px-3 py-2 text-sm font-semibold"
         >
-          Refresh
+          Neu laden
         </button>
       </div>
 
@@ -110,6 +112,9 @@ export function LiveScoreboardPanel({
             {connectionState === "online" ? "Verbunden" : connectionState === "connecting" ? "Verbindet..." : "Offline"}
           </span>
         </div>
+        {cloudSyncPending ? (
+          <p className="mt-3 text-xs text-amber-200">Cloud-Statistiken werden fuer dieses Match noch gesichert.</p>
+        ) : null}
         <div className="mt-3 grid gap-2 sm:grid-cols-[1.2fr_0.8fr]">
           <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
             <p className="text-[10px] uppercase tracking-[0.18em] text-stone-400">Gerade online im Raum</p>
@@ -228,7 +233,7 @@ export function LiveHistoryPanel({
       {historyOpen ? (
         <div className="mt-4 space-y-2">
           {history.length > 0 ? (
-            history.map((visit, index) => (
+            history.slice(0, 32).map((visit, index) => (
               <div key={`${visit.createdAt}-${index}`} className={`rounded-2xl border p-3 text-sm ${resultStyles(visit.result)}`}>
                 <div className="flex items-start justify-between gap-3">
                   <p className="font-semibold">{visit.playerName}</p>
@@ -268,6 +273,7 @@ export function LiveMatchSummaryPanel({
 }) {
   const winnerIndex = liveState.matchWinner ?? 0;
   const winner = liveState.players[winnerIndex];
+  const winnerStats = playerStats.find((entry) => entry.name === winner?.name);
   const sortedPlayers = [...liveState.players]
     .filter((player) => player.joined)
     .sort((left, right) => {
@@ -291,6 +297,10 @@ export function LiveMatchSummaryPanel({
           <p className="text-[11px] uppercase tracking-[0.22em] text-emerald-100">Match beendet</p>
           <h2 className="mt-1 text-2xl font-semibold text-white">{winner?.name ?? "Spieler"} gewinnt das Match</h2>
           <p className="mt-1 text-sm text-stone-200">{liveState.statusText}</p>
+          <p className="mt-2 text-sm text-emerald-100">
+            {winner?.name ?? "Der Sieger"} bringt {winnerStats?.average.toFixed(1) ?? "0.0"} Average,{" "}
+            {winnerStats?.bestVisit ?? 0} als Best Visit und {winnerStats?.checkouts ?? 0} Checkout(s) ins Ziel.
+          </p>
         </div>
         <button
           onClick={onRematch}

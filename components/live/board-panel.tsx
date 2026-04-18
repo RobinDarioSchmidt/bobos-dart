@@ -387,6 +387,7 @@ export function LiveBoardPanel({
   boardHeading,
   currentVisitTotal,
   compactVisitText,
+  calloutText,
   isCurrentUsersTurn,
   loading,
   boardMarkers,
@@ -405,6 +406,7 @@ export function LiveBoardPanel({
   boardHeading: string;
   currentVisitTotal: number;
   compactVisitText: string;
+  calloutText: string | null;
   isCurrentUsersTurn: boolean;
   loading: boolean;
   boardMarkers: LiveBoardMarker[];
@@ -424,6 +426,9 @@ export function LiveBoardPanel({
       <div className="flex items-start justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold text-white">{boardHeading}</h2>
+          {calloutText ? (
+            <p className="mt-2 text-sm font-semibold uppercase tracking-[0.14em] text-amber-100">{calloutText}</p>
+          ) : null}
           <p className="mt-1 text-sm text-stone-400">
             {liveState.bullOff.enabled && !liveState.bullOff.completed
               ? "Ein Wurf pro Spieler entscheidet ueber den Start."
@@ -435,7 +440,7 @@ export function LiveBoardPanel({
           disabled={!isCurrentUsersTurn || loading}
           className="rounded-2xl border border-red-400/30 bg-red-400/10 px-4 py-2 text-sm font-semibold text-red-100 disabled:opacity-40"
         >
-          Miss
+          No score
         </button>
       </div>
 
@@ -474,7 +479,7 @@ export function LiveBoardPanel({
               disabled={!isCurrentUsersTurn || pendingLabels.length === 0}
               className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white disabled:opacity-40"
             >
-              Letzten Dart entfernen
+              Letzten Dart loeschen
             </button>
             <button
               onClick={onClearVisit}
@@ -488,7 +493,7 @@ export function LiveBoardPanel({
               disabled={!isCurrentUsersTurn || pendingLabels.length === 0}
               className="rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-black disabled:opacity-40"
             >
-              Zug abschliessen
+              Visit abschliessen
             </button>
           </div>
         ) : null}

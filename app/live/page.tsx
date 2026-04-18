@@ -46,15 +46,15 @@ function formatLiveError(error: string) {
     case "missing_room_code":
       return "Bitte zuerst einen Raumcode eingeben.";
     case "match_not_found":
-      return "Dieser Raum existiert nicht mehr oder wurde geloescht.";
+      return "Dieser Raum ist nicht mehr verfuegbar.";
     case "room_full":
       return "Der Raum ist bereits voll.";
     case "not_a_participant":
-      return "Du gehoerst aktuell nicht zu diesem Raum.";
+      return "Du bist aktuell nicht mehr Teil dieses Raums.";
     case "invalid_action":
       return "Diese Aktion wird gerade nicht unterstuetzt.";
     case "missing_service_role_or_supabase_config":
-      return "Die Live-Cloud ist noch nicht fertig konfiguriert.";
+        return "Der Online-Modus ist noch nicht komplett konfiguriert.";
     default:
       if (error.startsWith("invalid_token:")) {
         return "Deine Sitzung ist abgelaufen. Bitte logge dich neu ein.";
@@ -263,7 +263,7 @@ export default function LivePage() {
     }
 
     setRoomCodeInput(restoredRoomCode);
-    setMessage(`Letzten Raum ${restoredRoomCode} gefunden. Raum wird wieder geladen...`);
+      setMessage(`Letzten Raum ${restoredRoomCode} gefunden. Online-Match wird wiederhergestellt...`);
     void fetchMatch(restoredRoomCode);
   }, [fetchMatch, liveRoomCode, session]);
 
@@ -333,7 +333,7 @@ export default function LivePage() {
 
   async function callLiveApi(body: object) {
     if (requestInFlightRef.current) {
-      setMessage("Bitte kurz warten, der letzte Spielzug wird noch synchronisiert.");
+      setMessage("Kurz Geduld, der letzte Wurf wird noch synchronisiert.");
       return null;
     }
 
@@ -376,7 +376,7 @@ export default function LivePage() {
         state: normalized,
       };
     } catch {
-      setMessage("Die Verbindung zum Live-Raum ist gerade unterbrochen.");
+      setMessage("Die Verbindung zum Online-Match ist gerade unterbrochen.");
       setConnectionState("offline");
       return null;
     } finally {
@@ -458,7 +458,7 @@ export default function LivePage() {
 
     const url = `${window.location.origin}/live?room=${encodeURIComponent(liveRoomCode)}`;
     await navigator.clipboard.writeText(url);
-    setMessage("Raumlink kopiert.");
+    setMessage("Einladungslink kopiert.");
   }
 
   async function reconnectToRoom() {
@@ -466,7 +466,7 @@ export default function LivePage() {
       return;
     }
 
-    setMessage("Live-Raum wird neu verbunden...");
+    setMessage("Online-Match wird neu verbunden...");
     await fetchMatch(liveRoomCode);
   }
 
@@ -564,7 +564,7 @@ export default function LivePage() {
     }
 
     if (!isCurrentUsersTurn) {
-      setMessage("Du kannst nur klicken, wenn du gerade am Zug bist.");
+      setMessage("Du kannst nur werfen, wenn du selbst dran bist.");
       return;
     }
 
@@ -578,7 +578,7 @@ export default function LivePage() {
     }
 
     if (!isCurrentUsersTurn) {
-      setMessage("Du kannst nur klicken, wenn du gerade am Zug bist.");
+      setMessage("Du kannst nur werfen, wenn du selbst dran bist.");
       return;
     }
 
@@ -658,6 +658,16 @@ export default function LivePage() {
     ? `${currentPlayer?.name ?? "Niemand"} wirft Bull-Off`
     : `${currentPlayer?.name ?? "Niemand"} ist dran${pendingLabels.length > 0 ? ` - ${pendingLabels.join(", ")}` : ""}`;
   const livePlayerStats = useMemo(() => (liveState ? getLivePlayerStats(liveState) : []), [liveState]);
+  const cloudSyncPending = Boolean(
+    liveState &&
+      liveState.matchWinner !== null &&
+      liveState.players.some(
+        (player) =>
+          player.joined &&
+          player.profileId &&
+          !(liveState.cloudSync.persistedOwnerIds ?? []).includes(player.profileId),
+      ),
+  );
   const currentLiveStats = useMemo(
     () => (currentPlayer ? livePlayerStats.find((entry) => entry.name === currentPlayer.name) ?? null : null),
     [currentPlayer, livePlayerStats],
@@ -668,8 +678,8 @@ export default function LivePage() {
       <div className="mx-auto flex max-w-5xl flex-col gap-4">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <p className="text-[11px] uppercase tracking-[0.22em] text-stone-400">Shared Match</p>
-            <h1 className="mt-1 text-2xl font-semibold text-white sm:text-3xl">Gemeinsames Live-Match</h1>
+            <p className="text-[11px] uppercase tracking-[0.22em] text-stone-400">Online Match</p>
+            <h1 className="mt-1 text-2xl font-semibold text-white sm:text-3xl">Gemeinsam online spielen</h1>
           </div>
           <Link href="/" className="rounded-2xl border border-white/10 bg-black/20 px-3 py-2 text-sm font-semibold">
             Zurueck
@@ -735,6 +745,7 @@ export default function LivePage() {
                     isCurrentUsersTurn={isCurrentUsersTurn}
                     turnStatus={turnStatus}
                     onRefresh={() => void fetchMatch(liveRoomCode)}
+                    cloudSyncPending={cloudSyncPending}
                   />
 
                   <LiveStatsPanel
@@ -747,6 +758,7 @@ export default function LivePage() {
                     boardHeading={boardHeading}
                     currentVisitTotal={currentVisitTotal}
                     compactVisitText={compactVisitText}
+                    calloutText={liveState.lastCallout}
                     isCurrentUsersTurn={isCurrentUsersTurn}
                     loading={loading}
                     boardMarkers={boardMarkers}

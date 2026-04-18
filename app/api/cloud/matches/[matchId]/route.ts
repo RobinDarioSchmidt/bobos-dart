@@ -51,6 +51,35 @@ export async function GET(
   const playerSummaries = (players ?? []).map((player) => {
     const name = player.guest_name ?? "Gast";
     const playerThrows = (dartEvents ?? []).filter((event) => event.player_seat_index === player.seat_index);
+    const playerVisits = Object.values(
+      playerThrows.reduce<
+        Record<
+          string,
+          {
+            visitIndex: number;
+            score: number;
+            darts: string[];
+            checkout: boolean;
+          }
+        >
+      >((acc, event) => {
+        const key = String(event.visit_index ?? 0);
+        if (!acc[key]) {
+          acc[key] = {
+            visitIndex: event.visit_index ?? 0,
+            score: 0,
+            darts: [],
+            checkout: false,
+          };
+        }
+        acc[key].score += event.score;
+        acc[key].darts[event.dart_index ?? acc[key].darts.length] = event.segment_label;
+        if (event.is_checkout_dart) {
+          acc[key].checkout = true;
+        }
+        return acc;
+      }, {}),
+    );
     const topSegments = Object.entries(
       playerThrows.reduce<Record<string, number>>((acc, event) => {
         acc[event.segment_label] = (acc[event.segment_label] ?? 0) + 1;
@@ -60,6 +89,17 @@ export async function GET(
       .sort((left, right) => right[1] - left[1])
       .slice(0, 4)
       .map(([label, count]) => ({ label, count }));
+    const checkoutRoutes = playerVisits
+      .filter((visit) => visit.checkout)
+      .sort((left, right) => right.score - left.score)
+      .slice(0, 4)
+      .map((visit) => ({
+        route: visit.darts.filter(Boolean).join(" - "),
+        score: visit.score,
+      }));
+    const tonPlusVisits = playerVisits.filter((visit) => visit.score >= 100).length;
+    const tonFortyPlus = playerVisits.filter((visit) => visit.score >= 140).length;
+    const maxVisits = playerVisits.filter((visit) => visit.score === 180).length;
 
     return {
       ...player,
@@ -69,6 +109,10 @@ export async function GET(
       misses: playerThrows.filter((event) => !event.is_hit || event.score === 0).length,
       checkoutDarts: playerThrows.filter((event) => event.is_checkout_dart).length,
       topSegments,
+      checkoutRoutes,
+      tonPlusVisits,
+      tonFortyPlus,
+      maxVisits,
     };
   });
   const visitTimeline = Object.values(
@@ -123,6 +167,13 @@ export async function GET(
       }),
     };
   });
+  const highlightVisits = [...visitTimeline]
+    .sort((left, right) => right.score - left.score)
+    .slice(0, 10)
+    .map((visit) => ({
+      ...visit,
+      route: visit.darts.filter(Boolean).join(", "),
+    }));
 
   return NextResponse.json({
     match,
@@ -131,8 +182,12 @@ export async function GET(
       totalThrows: (dartEvents ?? []).length,
       checkoutDarts: (dartEvents ?? []).filter((event) => event.is_checkout_dart).length,
       misses: (dartEvents ?? []).filter((event) => !event.is_hit || event.score === 0).length,
+      tonPlusVisits: visitTimeline.filter((visit) => visit.score >= 100).length,
+      tonFortyPlus: visitTimeline.filter((visit) => visit.score >= 140).length,
+      maxVisits: visitTimeline.filter((visit) => visit.score === 180).length,
     },
     visitTimeline,
     scoringProgress,
+    highlightVisits,
   });
 }
