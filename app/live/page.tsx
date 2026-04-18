@@ -108,6 +108,28 @@ function missDart(): LiveDart {
   };
 }
 
+function pickEnglishVoice(voices: SpeechSynthesisVoice[]) {
+  const preferredLocales = ["en-US", "en-GB", "en-AU", "en-CA"];
+
+  for (const locale of preferredLocales) {
+    const exactMatch = voices.find((voice) => voice.lang === locale);
+    if (exactMatch) {
+      return exactMatch;
+    }
+  }
+
+  const englishNamedVoice = voices.find((voice) => {
+    const lang = voice.lang.toLowerCase();
+    const name = voice.name.toLowerCase();
+    return lang.startsWith("en") && !name.includes("deutsch") && !name.includes("german");
+  });
+  if (englishNamedVoice) {
+    return englishNamedVoice;
+  }
+
+  return voices.find((voice) => voice.lang.toLowerCase().startsWith("en")) ?? null;
+}
+
 export default function LivePage() {
   const [session, setSession] = useState<Session | null>(null);
   const [displayName, setDisplayName] = useState("");
@@ -696,11 +718,10 @@ export default function LivePage() {
     utterance.volume = 1;
 
     const voices = window.speechSynthesis.getVoices();
-    const preferredVoice =
-      voices.find((voice) => voice.lang.toLowerCase().startsWith("en")) ??
-      voices.find((voice) => voice.default);
+    const preferredVoice = pickEnglishVoice(voices);
     if (preferredVoice) {
       utterance.voice = preferredVoice;
+      utterance.lang = preferredVoice.lang;
     }
 
     window.speechSynthesis.cancel();
