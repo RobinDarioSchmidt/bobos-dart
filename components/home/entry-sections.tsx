@@ -124,7 +124,9 @@ export function SignedInOverviewSection({
   onLoadCloudMatches,
   onLogout,
   canInstallApp,
+  isInstalledApp,
   installBusy,
+  installHint,
   onInstallApp,
 }: {
   sessionEmail: string;
@@ -143,7 +145,9 @@ export function SignedInOverviewSection({
   onLoadCloudMatches: () => void;
   onLogout: () => void;
   canInstallApp: boolean;
+  isInstalledApp: boolean;
   installBusy: boolean;
+  installHint: string;
   onInstallApp: () => void;
 }) {
   return (
@@ -165,7 +169,7 @@ export function SignedInOverviewSection({
           </div>
 
           <div className="flex flex-wrap gap-3">
-            {canInstallApp ? (
+            {canInstallApp && !isInstalledApp ? (
               <button
                 onClick={onInstallApp}
                 disabled={installBusy}
@@ -173,6 +177,11 @@ export function SignedInOverviewSection({
               >
                 App installieren
               </button>
+            ) : null}
+            {isInstalledApp ? (
+              <div className="rounded-2xl border border-emerald-300/30 bg-emerald-400/10 px-4 py-2 text-sm font-semibold text-emerald-100">
+                App installiert
+              </div>
             ) : null}
             {isAdmin ? (
               <Link
@@ -306,12 +315,13 @@ export function SignedInOverviewSection({
               <p className="text-xs uppercase tracking-[0.24em] text-stone-400">App-Gefuehl</p>
               <p className="mt-1 text-lg font-semibold text-white">Fuer Handy vorbereitet</p>
               <p className="mt-2 text-sm text-stone-400">
-                Du kannst Bobo&apos;s Dart als Web-App auf dem Homescreen nutzen. Auf unterstuetzten Geraeten
-                erscheint hier direkt der Installieren-Button.
+                Du kannst Bobo&apos;s Dart als Web-App auf dem Homescreen nutzen. Wenn dein Browser keinen
+                direkten Installieren-Button anbietet, bekommst du hier die passende Anleitung.
               </p>
+              <p className="mt-3 text-sm text-stone-300">{installHint}</p>
             </div>
             <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-stone-200">
-              {canInstallApp ? "Installierbar" : "Browser entscheidet"}
+              {isInstalledApp ? "Installiert" : canInstallApp ? "Installierbar" : "Manuell installierbar"}
             </div>
           </div>
         </div>

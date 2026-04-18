@@ -6,6 +6,11 @@ export const metadata: Metadata = {
   description: "Dart Hub fuer lokales Spiel, Online-Matches, Training und Langzeitstatistiken.",
   applicationName: "Bobo's Dart",
   manifest: "/manifest.webmanifest",
+  icons: {
+    icon: "/favicon.ico",
+    shortcut: "/favicon.ico",
+    apple: "/icons/icon-192.png",
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",

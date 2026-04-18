@@ -734,6 +734,10 @@ export default function Page() {
   );
   const [installPromptEvent, setInstallPromptEvent] = useState<BeforeInstallPromptEvent | null>(null);
   const [installBusy, setInstallBusy] = useState(false);
+  const [installHint, setInstallHint] = useState(
+    "Je nach Browser kannst du die App direkt installieren oder ueber das Browser-Menue zum Homescreen hinzufuegen.",
+  );
+  const [isInstalledApp, setIsInstalledApp] = useState(false);
   const [hydrated, setHydrated] = useState(false);
   const [cloudSettingsReady, setCloudSettingsReady] = useState(false);
   const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL ?? "";
@@ -804,6 +808,28 @@ export default function Page() {
       return;
     }
 
+    const installMediaQuery = window.matchMedia("(display-mode: standalone)");
+
+    const updateInstalledState = () => {
+      const standaloneNavigator = window.navigator as Navigator & { standalone?: boolean };
+      setIsInstalledApp(Boolean(installMediaQuery.matches || standaloneNavigator.standalone));
+    };
+
+    const userAgent = window.navigator.userAgent.toLowerCase();
+    if (userAgent.includes("opr/") || userAgent.includes("opera")) {
+      setInstallHint(
+        "Opera zeigt den Installieren-Button oft nicht an. Oeffne das Browser-Menue und waehle 'Install app' oder 'Zum Startbildschirm'.",
+      );
+    } else if (userAgent.includes("iphone") || userAgent.includes("ipad") || userAgent.includes("safari")) {
+      setInstallHint(
+        "Auf Apple-Geraeten installierst du die App ueber Teilen > Zum Home-Bildschirm. Ein direkter Installieren-Button ist dort normal nicht verfuegbar.",
+      );
+    } else {
+      setInstallHint(
+        "Wenn dein Browser die App unterstuetzt, erscheint der Installieren-Button automatisch. Sonst findest du die Option meist im Browser-Menue.",
+      );
+    }
+
     const handleBeforeInstallPrompt = (event: Event) => {
       event.preventDefault();
       setInstallPromptEvent(event as BeforeInstallPromptEvent);
@@ -812,14 +838,18 @@ export default function Page() {
     const handleAppInstalled = () => {
       setInstallPromptEvent(null);
       setInstallBusy(false);
+      setIsInstalledApp(true);
     };
 
+    updateInstalledState();
     window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
     window.addEventListener("appinstalled", handleAppInstalled);
+    installMediaQuery.addEventListener("change", updateInstalledState);
 
     return () => {
       window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
       window.removeEventListener("appinstalled", handleAppInstalled);
+      installMediaQuery.removeEventListener("change", updateInstalledState);
     };
   }, []);
 
@@ -1915,7 +1945,9 @@ export default function Page() {
             onLoadCloudMatches={() => void loadCloudMatches(session)}
             onLogout={() => void handleSignOut()}
             canInstallApp={Boolean(installPromptEvent)}
+            isInstalledApp={isInstalledApp}
             installBusy={installBusy}
+            installHint={isInstalledApp ? "Die App laeuft bereits als installierte Web-App." : installHint}
             onInstallApp={() => void installApp()}
           />
         ) : (
