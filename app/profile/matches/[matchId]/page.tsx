@@ -42,6 +42,10 @@ type MatchDetailResponse = {
     tonPlusVisits: number;
     tonFortyPlus: number;
     maxVisits: number;
+    sixtyPlusVisits: number;
+    lowScoreVisits: number;
+    firstNineAverage: number;
+    bestCheckout: number;
   }>;
   throwSummary: {
     totalThrows: number;
@@ -76,6 +80,26 @@ type MatchDetailResponse = {
     createdAt: string;
     route: string;
   }>;
+  story: {
+    mvp: {
+      name: string;
+      average: number;
+      bestVisit: number;
+      checkouts: number;
+    } | null;
+    highestCheckout: {
+      name: string;
+      score: number;
+    } | null;
+    strongestStarter: {
+      name: string;
+      firstNineAverage: number;
+    } | null;
+    steadiestScorer: {
+      name: string;
+      sixtyPlusVisits: number;
+    } | null;
+  };
 };
 
 function CompareBars({
@@ -311,6 +335,41 @@ export default function MatchDetailPage() {
             </section>
 
             <section className="grid gap-3">
+              <div className="grid gap-3 lg:grid-cols-4">
+                <div className="rounded-[1.5rem] border border-emerald-300/20 bg-emerald-400/10 p-4">
+                  <p className="text-[10px] uppercase tracking-[0.18em] text-emerald-100">Match MVP</p>
+                  <p className="mt-2 text-lg font-semibold text-white">{data.story.mvp?.name ?? "-"}</p>
+                  <p className="mt-1 text-xs text-emerald-50">
+                    {data.story.mvp
+                      ? `${data.story.mvp.average.toFixed(2)} Avg - ${data.story.mvp.bestVisit} Best - ${data.story.mvp.checkouts} Checkout-Darts`
+                      : "Noch keine MVP-Daten"}
+                  </p>
+                </div>
+                <div className="rounded-[1.5rem] border border-amber-300/20 bg-amber-300/10 p-4">
+                  <p className="text-[10px] uppercase tracking-[0.18em] text-amber-100">Bestes Finish</p>
+                  <p className="mt-2 text-lg font-semibold text-white">{data.story.highestCheckout?.score ?? 0}</p>
+                  <p className="mt-1 text-xs text-amber-50">{data.story.highestCheckout?.name ?? "Kein Checkout"}</p>
+                </div>
+                <div className="rounded-[1.5rem] border border-sky-300/20 bg-sky-400/10 p-4">
+                  <p className="text-[10px] uppercase tracking-[0.18em] text-sky-100">Staerkster Start</p>
+                  <p className="mt-2 text-lg font-semibold text-white">{data.story.strongestStarter?.name ?? "-"}</p>
+                  <p className="mt-1 text-xs text-sky-50">
+                    {data.story.strongestStarter
+                      ? `${data.story.strongestStarter.firstNineAverage.toFixed(2)} First-9 Avg`
+                      : "Noch keine Startdaten"}
+                  </p>
+                </div>
+                <div className="rounded-[1.5rem] border border-fuchsia-300/20 bg-fuchsia-400/10 p-4">
+                  <p className="text-[10px] uppercase tracking-[0.18em] text-fuchsia-100">Konstantester Druck</p>
+                  <p className="mt-2 text-lg font-semibold text-white">{data.story.steadiestScorer?.name ?? "-"}</p>
+                  <p className="mt-1 text-xs text-fuchsia-50">
+                    {data.story.steadiestScorer
+                      ? `${data.story.steadiestScorer.sixtyPlusVisits} Visits mit 60+`
+                      : "Noch keine Konstanzdaten"}
+                  </p>
+                </div>
+              </div>
+
               {comparisons.length > 0 ? (
                 <div className="grid gap-3 lg:grid-cols-3">
                   {comparisons.map((comparison) => (
@@ -435,6 +494,20 @@ export default function MatchDetailPage() {
                     <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
                       <p className="text-[10px] uppercase tracking-[0.18em] text-stone-400">180er</p>
                       <p className="mt-1 text-lg font-semibold text-white">{player.maxVisits}</p>
+                    </div>
+                  </div>
+                  <div className="mt-2 grid grid-cols-3 gap-2">
+                    <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+                      <p className="text-[10px] uppercase tracking-[0.18em] text-stone-400">60+</p>
+                      <p className="mt-1 text-lg font-semibold text-white">{player.sixtyPlusVisits}</p>
+                    </div>
+                    <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+                      <p className="text-[10px] uppercase tracking-[0.18em] text-stone-400">0-45</p>
+                      <p className="mt-1 text-lg font-semibold text-white">{player.lowScoreVisits}</p>
+                    </div>
+                    <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+                      <p className="text-[10px] uppercase tracking-[0.18em] text-stone-400">First 9 Avg</p>
+                      <p className="mt-1 text-lg font-semibold text-white">{player.firstNineAverage.toFixed(2)}</p>
                     </div>
                   </div>
 

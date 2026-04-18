@@ -100,6 +100,22 @@ export async function GET(
     const tonPlusVisits = playerVisits.filter((visit) => visit.score >= 100).length;
     const tonFortyPlus = playerVisits.filter((visit) => visit.score >= 140).length;
     const maxVisits = playerVisits.filter((visit) => visit.score === 180).length;
+    const sixtyPlusVisits = playerVisits.filter((visit) => visit.score >= 60).length;
+    const lowScoreVisits = playerVisits.filter((visit) => visit.score <= 45).length;
+    const firstNineVisits = playerVisits.slice(0, 3);
+    const firstNineAverage =
+      firstNineVisits.length > 0
+        ? Number(
+            (
+              firstNineVisits.reduce((sum, visit) => sum + visit.score, 0) /
+              Math.max(1, firstNineVisits.reduce((sum, visit) => sum + visit.darts.filter(Boolean).length, 0))
+            * 3
+            ).toFixed(2),
+          )
+        : 0;
+    const bestCheckout = playerVisits
+      .filter((visit) => visit.checkout)
+      .reduce((best, visit) => Math.max(best, visit.score), 0);
 
     return {
       ...player,
@@ -113,6 +129,10 @@ export async function GET(
       tonPlusVisits,
       tonFortyPlus,
       maxVisits,
+      sixtyPlusVisits,
+      lowScoreVisits,
+      firstNineAverage,
+      bestCheckout,
     };
   });
   const visitTimeline = Object.values(
@@ -174,6 +194,31 @@ export async function GET(
       ...visit,
       route: visit.darts.filter(Boolean).join(", "),
     }));
+  const highestCheckout = playerSummaries
+    .filter((player) => player.bestCheckout > 0)
+    .sort((left, right) => right.bestCheckout - left.bestCheckout)[0] ?? null;
+  const strongestStarter = [...playerSummaries]
+    .sort((left, right) => right.firstNineAverage - left.firstNineAverage)[0] ?? null;
+  const steadiestScorer = [...playerSummaries]
+    .sort((left, right) => right.sixtyPlusVisits - left.sixtyPlusVisits)[0] ?? null;
+  const mvp = [...playerSummaries]
+    .sort((left, right) => {
+      const leftScore =
+        (left.is_winner ? 30 : 0) +
+        Number(left.average ?? 0) * 2 +
+        (left.best_visit ?? 0) / 3 +
+        left.checkoutDarts * 12 +
+        left.tonFortyPlus * 5 +
+        left.maxVisits * 12;
+      const rightScore =
+        (right.is_winner ? 30 : 0) +
+        Number(right.average ?? 0) * 2 +
+        (right.best_visit ?? 0) / 3 +
+        right.checkoutDarts * 12 +
+        right.tonFortyPlus * 5 +
+        right.maxVisits * 12;
+      return rightScore - leftScore;
+    })[0] ?? null;
 
   return NextResponse.json({
     match,
@@ -189,5 +234,33 @@ export async function GET(
     visitTimeline,
     scoringProgress,
     highlightVisits,
+    story: {
+      mvp: mvp
+        ? {
+            name: mvp.name,
+            average: Number(mvp.average ?? 0),
+            bestVisit: mvp.best_visit ?? 0,
+            checkouts: mvp.checkoutDarts,
+          }
+        : null,
+      highestCheckout: highestCheckout
+        ? {
+            name: highestCheckout.name,
+            score: highestCheckout.bestCheckout,
+          }
+        : null,
+      strongestStarter: strongestStarter
+        ? {
+            name: strongestStarter.name,
+            firstNineAverage: strongestStarter.firstNineAverage,
+          }
+        : null,
+      steadiestScorer: steadiestScorer
+        ? {
+            name: steadiestScorer.name,
+            sixtyPlusVisits: steadiestScorer.sixtyPlusVisits,
+          }
+        : null,
+    },
   });
 }

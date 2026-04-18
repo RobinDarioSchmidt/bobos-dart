@@ -14,6 +14,28 @@ type LivePlayerStat = {
   checkouts: number;
 };
 
+function getPlayerAwards(liveState: LiveMatchState, playerStats: LivePlayerStat[]) {
+  const completedVisits = liveState.history.filter((entry) => entry.result !== "leg-win");
+  const bestCheckoutVisit =
+    completedVisits
+      .filter((entry) => entry.checkout)
+      .sort((left, right) => right.total - left.total)[0] ?? null;
+  const maxVisit = playerStats.reduce((best, entry) => Math.max(best, entry.bestVisit), 0);
+  const scoringKing =
+    [...playerStats].sort((left, right) => right.average - left.average || right.scoredPoints - left.scoredPoints)[0] ?? null;
+  const pressureKing =
+    [...playerStats].sort((left, right) => right.checkouts - left.checkouts || right.bestVisit - left.bestVisit)[0] ?? null;
+  const maxVisitOwner = playerStats.find((entry) => entry.bestVisit === maxVisit) ?? null;
+
+  return {
+    bestCheckoutVisit,
+    scoringKing,
+    pressureKing,
+    maxVisitOwner,
+    maxVisit,
+  };
+}
+
 function resultStyles(result: LiveMatchState["history"][number]["result"]) {
   if (result === "bust") {
     return "border-red-400/30 bg-red-400/10 text-red-100";
@@ -308,6 +330,7 @@ export function LiveMatchSummaryPanel({
   const winnerIndex = liveState.matchWinner ?? 0;
   const winner = liveState.players[winnerIndex];
   const winnerStats = playerStats.find((entry) => entry.name === winner?.name);
+  const awards = getPlayerAwards(liveState, playerStats);
   const sortedPlayers = [...liveState.players]
     .filter((player) => player.joined)
     .sort((left, right) => {
@@ -366,6 +389,36 @@ export function LiveMatchSummaryPanel({
           <p className="text-[10px] uppercase tracking-[0.18em] text-stone-400">Best Visit</p>
           <p className="mt-1 text-lg font-semibold text-white">
             {playerStats.reduce((best, entry) => Math.max(best, entry.bestVisit), 0)}
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-2 sm:grid-cols-3">
+        <div className="rounded-2xl border border-amber-300/20 bg-amber-300/10 p-3">
+          <p className="text-[10px] uppercase tracking-[0.18em] text-amber-100">Scoring King</p>
+          <p className="mt-1 text-sm font-semibold text-white">{awards.scoringKing?.name ?? "-"}</p>
+          <p className="mt-1 text-xs text-amber-50">
+            {awards.scoringKing ? `${awards.scoringKing.average.toFixed(1)} Avg` : "Noch keine Daten"}
+          </p>
+        </div>
+        <div className="rounded-2xl border border-emerald-300/20 bg-emerald-400/10 p-3">
+          <p className="text-[10px] uppercase tracking-[0.18em] text-emerald-100">Ice in the Veins</p>
+          <p className="mt-1 text-sm font-semibold text-white">{awards.pressureKing?.name ?? "-"}</p>
+          <p className="mt-1 text-xs text-emerald-50">
+            {awards.pressureKing ? `${awards.pressureKing.checkouts} Checkout(s)` : "Kein Checkout gefallen"}
+          </p>
+        </div>
+        <div className="rounded-2xl border border-sky-300/20 bg-sky-400/10 p-3">
+          <p className="text-[10px] uppercase tracking-[0.18em] text-sky-100">Moment des Matches</p>
+          <p className="mt-1 text-sm font-semibold text-white">
+            {awards.bestCheckoutVisit ? `${awards.bestCheckoutVisit.playerName} - ${awards.bestCheckoutVisit.total}` : "-"}
+          </p>
+          <p className="mt-1 text-xs text-sky-50">
+            {awards.bestCheckoutVisit
+              ? `${awards.bestCheckoutVisit.darts.join(", ")} als Checkout`
+              : awards.maxVisitOwner
+                ? `${awards.maxVisitOwner.name} mit ${awards.maxVisit} als Best Visit`
+                : "Noch kein Highlight verfuegbar"}
           </p>
         </div>
       </div>
