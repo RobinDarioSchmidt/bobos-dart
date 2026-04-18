@@ -26,6 +26,11 @@ import {
   type LiveFinishMode,
   type LiveMatchState,
 } from "@/lib/live-match";
+import {
+  LIVE_AUDIO_MODE_STORAGE_KEY,
+  playLiveCallout,
+  type LiveAudioMode,
+} from "@/lib/live-audio";
 import { getCheckoutSuggestions } from "@/lib/checkout-hints";
 import { supabase, supabaseEnabled } from "@/lib/supabase";
 
@@ -108,28 +113,6 @@ function missDart(): LiveDart {
   };
 }
 
-function pickEnglishVoice(voices: SpeechSynthesisVoice[]) {
-  const preferredLocales = ["en-US", "en-GB", "en-AU", "en-CA"];
-
-  for (const locale of preferredLocales) {
-    const exactMatch = voices.find((voice) => voice.lang === locale);
-    if (exactMatch) {
-      return exactMatch;
-    }
-  }
-
-  const englishNamedVoice = voices.find((voice) => {
-    const lang = voice.lang.toLowerCase();
-    const name = voice.name.toLowerCase();
-    return lang.startsWith("en") && !name.includes("deutsch") && !name.includes("german");
-  });
-  if (englishNamedVoice) {
-    return englishNamedVoice;
-  }
-
-  return voices.find((voice) => voice.lang.toLowerCase().startsWith("en")) ?? null;
-}
-
 export default function LivePage() {
   const [session, setSession] = useState<Session | null>(null);
   const [displayName, setDisplayName] = useState("");
@@ -154,6 +137,7 @@ export default function LivePage() {
   const [createOpen, setCreateOpen] = useState(true);
   const [joinOpen, setJoinOpen] = useState(true);
   const [historyOpen, setHistoryOpen] = useState(true);
+  const [audioMode, setAudioMode] = useState<LiveAudioMode>("clips");
   const [connectionState, setConnectionState] = useState<"online" | "offline" | "connecting">(
     typeof navigator !== "undefined" && !navigator.onLine ? "offline" : "connecting",
   );
@@ -161,6 +145,25 @@ export default function LivePage() {
   const liveChannelRef = useRef<ReturnType<NonNullable<typeof supabase>["channel"]> | null>(null);
   const requestInFlightRef = useRef(false);
   const lastSpokenCalloutRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const storedMode = window.localStorage.getItem(LIVE_AUDIO_MODE_STORAGE_KEY);
+    if (storedMode === "off" || storedMode === "speech" || storedMode === "clips") {
+      setAudioMode(storedMode);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.localStorage.setItem(LIVE_AUDIO_MODE_STORAGE_KEY, audioMode);
+  }, [audioMode]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -697,7 +700,7 @@ export default function LivePage() {
   );
 
   useEffect(() => {
-    if (typeof window === "undefined" || !("speechSynthesis" in window)) {
+    if (typeof window === "undefined") {
       return;
     }
 
@@ -711,22 +714,8 @@ export default function LivePage() {
     }
 
     lastSpokenCalloutRef.current = callout;
-    const utterance = new SpeechSynthesisUtterance(callout);
-    utterance.lang = "en-US";
-    utterance.rate = 1;
-    utterance.pitch = 1;
-    utterance.volume = 1;
-
-    const voices = window.speechSynthesis.getVoices();
-    const preferredVoice = pickEnglishVoice(voices);
-    if (preferredVoice) {
-      utterance.voice = preferredVoice;
-      utterance.lang = preferredVoice.lang;
-    }
-
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(utterance);
-  }, [liveState?.lastCallout]);
+    void playLiveCallout(callout, audioMode);
+  }, [audioMode, liveState?.lastCallout]);
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top,_#1f2937,_#09090b_55%)] px-3 py-4 pb-28 text-stone-100 sm:px-4 sm:py-6 sm:pb-8">
@@ -801,6 +790,8 @@ export default function LivePage() {
                     turnStatus={turnStatus}
                     onRefresh={() => void fetchMatch(liveRoomCode)}
                     cloudSyncPending={cloudSyncPending}
+                    audioMode={audioMode}
+                    onAudioModeChange={setAudioMode}
                   />
 
                   <LiveStatsPanel

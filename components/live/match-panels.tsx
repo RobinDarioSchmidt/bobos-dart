@@ -1,6 +1,7 @@
 "use client";
 
 import type { LiveMatchState } from "@/lib/live-match";
+import type { LiveAudioMode } from "@/lib/live-audio";
 
 type LivePlayerStat = {
   name: string;
@@ -35,6 +36,8 @@ export function LiveScoreboardPanel({
   turnStatus,
   onRefresh,
   cloudSyncPending,
+  audioMode,
+  onAudioModeChange,
 }: {
   liveState: LiveMatchState;
   currentPlayerIndex: number;
@@ -45,6 +48,8 @@ export function LiveScoreboardPanel({
   turnStatus: string;
   onRefresh: () => void;
   cloudSyncPending: boolean;
+  audioMode: LiveAudioMode;
+  onAudioModeChange: (mode: LiveAudioMode) => void;
 }) {
   return (
     <section className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur">
@@ -130,6 +135,35 @@ export function LiveScoreboardPanel({
             <p className="text-[10px] uppercase tracking-[0.18em] text-stone-400">Dein Status</p>
             <p className={`mt-2 text-sm font-semibold ${isCurrentUsersTurn ? "text-emerald-100" : "text-white"}`}>{turnStatus}</p>
           </div>
+        </div>
+        <div className="mt-3 rounded-2xl border border-white/10 bg-white/5 p-3">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-[10px] uppercase tracking-[0.18em] text-stone-400">Audio</p>
+            <div className="flex flex-wrap gap-2">
+              {([
+                ["off", "Aus"],
+                ["speech", "Stimme"],
+                ["clips", "Clips"],
+              ] as const).map(([value, label]) => (
+                <button
+                  key={value}
+                  onClick={() => onAudioModeChange(value)}
+                  className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
+                    audioMode === value ? "bg-amber-300 text-black" : "border border-white/10 bg-black/20 text-white"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <p className="mt-2 text-xs text-stone-400">
+            {audioMode === "clips"
+              ? "Bereit fuer deine aufgenommenen Audiofiles unter /public/audio/live."
+              : audioMode === "speech"
+                ? "Browser-Sprachausgabe ist aktiv."
+                : "Live-Sounds sind aktuell ausgeschaltet."}
+          </p>
         </div>
       </div>
     </section>
