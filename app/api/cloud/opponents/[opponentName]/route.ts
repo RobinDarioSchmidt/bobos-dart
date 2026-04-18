@@ -70,6 +70,64 @@ export async function GET(
     .filter(Boolean);
 
   const matchesAgainst = relevantMatches.filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
+  const chronologicalMatches = [...matchesAgainst].sort(
+    (left, right) => new Date(left.played_at).getTime() - new Date(right.played_at).getTime(),
+  );
+  let currentWinStreak = 0;
+  let bestWinStreak = 0;
+  let running = 0;
+  for (const match of chronologicalMatches) {
+    if (match.didWin) {
+      running += 1;
+      currentWinStreak = running;
+      bestWinStreak = Math.max(bestWinStreak, running);
+    } else {
+      running = 0;
+      currentWinStreak = 0;
+    }
+  }
+
+  const modeBreakdown = Object.values(
+    matchesAgainst.reduce<
+      Record<
+        string,
+        {
+          mode: string;
+          matches: number;
+          wins: number;
+          myAverageTotal: number;
+          opponentAverageTotal: number;
+        }
+      >
+    >((acc, match) => {
+      if (!acc[match.mode]) {
+        acc[match.mode] = {
+          mode: match.mode,
+          matches: 0,
+          wins: 0,
+          myAverageTotal: 0,
+          opponentAverageTotal: 0,
+        };
+      }
+      acc[match.mode].matches += 1;
+      acc[match.mode].wins += match.didWin ? 1 : 0;
+      acc[match.mode].myAverageTotal += match.myAverage;
+      acc[match.mode].opponentAverageTotal += match.opponentAverage;
+      return acc;
+    }, {}),
+  ).map((entry) => ({
+    mode: entry.mode,
+    matches: entry.matches,
+    wins: entry.wins,
+    winRate: entry.matches > 0 ? Number(((entry.wins / entry.matches) * 100).toFixed(1)) : 0,
+    myAverage: entry.matches > 0 ? Number((entry.myAverageTotal / entry.matches).toFixed(1)) : 0,
+    opponentAverage: entry.matches > 0 ? Number((entry.opponentAverageTotal / entry.matches).toFixed(1)) : 0,
+  }));
+
+  const closestMatches = [...matchesAgainst]
+    .sort((left, right) => Math.abs(left.myLegs - left.opponentLegs) - Math.abs(right.myLegs - right.opponentLegs))
+    .slice(0, 3);
+
   const summary =
     matchesAgainst.length > 0
       ? {
@@ -97,10 +155,37 @@ export async function GET(
           opponentLegs: matchesAgainst.reduce((sum, match) => sum + match.opponentLegs, 0),
         }
       : null;
+  const rivalryStory =
+    matchesAgainst.length === 0
+      ? null
+      : {
+          currentWinStreak,
+          bestWinStreak,
+          recentForm: chronologicalMatches.slice(-8).map((match) => (match.didWin ? "W" : "L")),
+          closestMatches: closestMatches.map((match) => ({
+            id: match.id,
+            played_at: match.played_at,
+            didWin: match.didWin,
+            legs: `${match.myLegs}:${match.opponentLegs}`,
+            sets: `${match.mySets}:${match.opponentSets}`,
+          })),
+          bestMode:
+            [...modeBreakdown].sort((left, right) => right.winRate - left.winRate || right.matches - left.matches)[0] ?? null,
+          rivalryTone:
+            matchesAgainst.length >= 6 && Math.abs((summary?.wins ?? 0) - (summary?.losses ?? 0)) <= 2
+              ? "Klassische Rivalitaet"
+              : (summary?.winRate ?? 0) >= 65
+                ? "Lieblingsgegner"
+                : (summary?.winRate ?? 0) <= 35
+                  ? "Problemgegner"
+                  : "Ausgeglichenes Duell",
+        };
 
   return NextResponse.json({
     opponentName: decodedName,
     summary,
     matches: matchesAgainst,
+    modeBreakdown,
+    rivalryStory,
   });
 }

@@ -36,6 +36,35 @@ type OpponentResponse = {
     mySets: number;
     opponentSets: number;
   }>;
+  modeBreakdown: Array<{
+    mode: string;
+    matches: number;
+    wins: number;
+    winRate: number;
+    myAverage: number;
+    opponentAverage: number;
+  }>;
+  rivalryStory: {
+    currentWinStreak: number;
+    bestWinStreak: number;
+    recentForm: Array<"W" | "L">;
+    closestMatches: Array<{
+      id: string;
+      played_at: string;
+      didWin: boolean;
+      legs: string;
+      sets: string;
+    }>;
+    bestMode: {
+      mode: string;
+      matches: number;
+      wins: number;
+      winRate: number;
+      myAverage: number;
+      opponentAverage: number;
+    } | null;
+    rivalryTone: string;
+  } | null;
 };
 
 function MiniLine({
@@ -148,6 +177,60 @@ export default function OpponentDetailPage() {
           <div className="rounded-[1.5rem] border border-rose-300/20 bg-rose-400/10 p-5 text-sm text-rose-100">{message}</div>
         ) : data?.summary ? (
           <>
+            {data.rivalryStory ? (
+              <section className="rounded-[1.5rem] border border-white/10 bg-[linear-gradient(145deg,rgba(59,130,246,0.16),rgba(217,70,239,0.12),rgba(15,23,42,0.82))] p-4">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <p className="text-[10px] uppercase tracking-[0.18em] text-stone-200">Rivalitaet</p>
+                    <h2 className="mt-2 text-2xl font-semibold text-white">{data.rivalryStory.rivalryTone}</h2>
+                    <p className="mt-2 text-sm text-stone-300">
+                      {data.summary.wins} Siege zu {data.summary.losses} Niederlagen bei {data.summary.matches} direkten Duellen.
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 sm:min-w-[260px]">
+                    <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+                      <p className="text-[10px] uppercase tracking-[0.18em] text-stone-400">Aktuelle Serie</p>
+                      <p className="mt-1 text-lg font-semibold text-white">
+                        {data.rivalryStory.currentWinStreak > 0 ? `${data.rivalryStory.currentWinStreak} Siege` : "Keine"}
+                      </p>
+                    </div>
+                    <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+                      <p className="text-[10px] uppercase tracking-[0.18em] text-stone-400">Beste Serie</p>
+                      <p className="mt-1 text-lg font-semibold text-white">{data.rivalryStory.bestWinStreak}</p>
+                    </div>
+                    <div className="rounded-2xl border border-white/10 bg-black/20 p-3 col-span-2">
+                      <p className="text-[10px] uppercase tracking-[0.18em] text-stone-400">Lieblingsmodus</p>
+                      <p className="mt-1 text-lg font-semibold text-white">
+                        {data.rivalryStory.bestMode
+                          ? `${data.rivalryStory.bestMode.mode} · ${data.rivalryStory.bestMode.winRate.toFixed(1)}%`
+                          : "Noch offen"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {data.rivalryStory.recentForm.length > 0 ? (
+                    data.rivalryStory.recentForm.map((entry, index) => (
+                      <div
+                        key={`${entry}-${index}`}
+                        className={`flex h-10 w-10 items-center justify-center rounded-2xl border text-sm font-semibold ${
+                          entry === "W"
+                            ? "border-emerald-300/25 bg-emerald-400/12 text-emerald-100"
+                            : "border-rose-300/25 bg-rose-400/12 text-rose-100"
+                        }`}
+                      >
+                        {entry}
+                      </div>
+                    ))
+                  ) : (
+                    <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 px-3 py-2 text-sm text-stone-400">
+                      Noch keine Formdaten.
+                    </div>
+                  )}
+                </div>
+              </section>
+            ) : null}
+
             <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
               <div className="rounded-[1.25rem] border border-white/10 bg-white/5 p-4">
                 <p className="text-[10px] uppercase tracking-[0.18em] text-stone-400">Matches</p>
@@ -201,6 +284,57 @@ export default function OpponentDetailPage() {
                 </div>
               </div>
             </section>
+
+            {data.modeBreakdown.length > 0 || (data.rivalryStory?.closestMatches.length ?? 0) > 0 ? (
+              <section className="grid gap-4 lg:grid-cols-2">
+                <div className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4">
+                  <h2 className="text-lg font-semibold text-white">Modusvergleich</h2>
+                  <div className="mt-3 space-y-2">
+                    {data.modeBreakdown.map((entry) => (
+                      <div key={entry.mode} className="rounded-[1.25rem] border border-white/10 bg-black/20 p-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-sm font-semibold text-white">{entry.mode}</p>
+                          <p className="text-sm text-stone-300">{entry.winRate.toFixed(1)}%</p>
+                        </div>
+                        <p className="mt-1 text-xs text-stone-400">
+                          {entry.wins}/{entry.matches} Siege · Avg {entry.myAverage.toFixed(1)} : {entry.opponentAverage.toFixed(1)}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4">
+                  <h2 className="text-lg font-semibold text-white">Engste Duelle</h2>
+                  <div className="mt-3 space-y-2">
+                    {data.rivalryStory?.closestMatches.length ? (
+                      data.rivalryStory.closestMatches.map((match) => (
+                        <div key={match.id} className="rounded-[1.25rem] border border-white/10 bg-black/20 p-3">
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-semibold text-white">
+                                {match.didWin ? "Knapp gewonnen" : "Knapp verloren"}
+                              </p>
+                              <p className="text-xs text-stone-400">Sets {match.sets} · Legs {match.legs}</p>
+                            </div>
+                            <Link
+                              href={`/profile/matches/${match.id}`}
+                              className="rounded-full border border-emerald-300/25 bg-emerald-400/12 px-3 py-1.5 text-sm font-semibold text-emerald-100"
+                            >
+                              Match
+                            </Link>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-3 text-sm text-stone-400">
+                        Noch keine knappen Matches gespeichert.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </section>
+            ) : null}
 
             <section className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4">
               <h2 className="text-lg font-semibold text-white">Direkte Duelle</h2>
