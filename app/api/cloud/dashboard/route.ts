@@ -380,16 +380,47 @@ export async function GET(request: Request) {
     averageScore: entry.sessions > 0 ? Number((entry.totalScore / entry.sessions).toFixed(1)) : 0,
   }));
   const modeBreakdown = Object.values(
-    allMatchesWithDetails.reduce<Record<string, { mode: string; matches: number; wins: number }>>((acc, match) => {
+    allMatchesWithDetails.reduce<
+      Record<string, { mode: string; matches: number; wins: number; averageTotal: number; averageCount: number; bestVisit: number }>
+    >((acc, match) => {
       if (!acc[match.mode]) {
-        acc[match.mode] = { mode: match.mode, matches: 0, wins: 0 };
+        acc[match.mode] = { mode: match.mode, matches: 0, wins: 0, averageTotal: 0, averageCount: 0, bestVisit: 0 };
       }
 
       acc[match.mode].matches += 1;
       acc[match.mode].wins += match.did_win ? 1 : 0;
+      acc[match.mode].bestVisit = Math.max(acc[match.mode].bestVisit, match.player_best_visit);
+      if (match.player_average > 0) {
+        acc[match.mode].averageTotal += match.player_average;
+        acc[match.mode].averageCount += 1;
+      }
       return acc;
-      }, {}),
-  );
+    }, {}),
+  ).map((entry) => ({
+    mode: entry.mode,
+    matches: entry.matches,
+    wins: entry.wins,
+    average: entry.averageCount > 0 ? Number((entry.averageTotal / entry.averageCount).toFixed(1)) : 0,
+    bestVisit: entry.bestVisit,
+  }));
+  const weeklyActivity = Array.from({ length: 12 }, (_, index) => {
+    const weekStart = new Date(now);
+    weekStart.setDate(weekStart.getDate() - (11 - index) * 7);
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 7);
+    const period = `${weekStart.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" })}`;
+    return {
+      period,
+      matches: allMatchesWithDetails.filter((match) => {
+        const playedAt = new Date(match.played_at).getTime();
+        return playedAt >= weekStart.getTime() && playedAt < weekEnd.getTime();
+      }).length,
+      training: trainingRows.filter((entry) => {
+        const playedAt = new Date(entry.played_at).getTime();
+        return playedAt >= weekStart.getTime() && playedAt < weekEnd.getTime();
+      }).length,
+    };
+  });
   const opponentBreakdown = Object.values(
     matchRows.reduce<
       Record<
@@ -480,6 +511,28 @@ export async function GET(request: Request) {
         return acc;
       }, {}),
   );
+  const visitBuckets = [
+    {
+      label: "0-45",
+      count: matchVisitScores.filter((visit) => visit.score >= 0 && visit.score <= 45).length,
+    },
+    {
+      label: "46-99",
+      count: matchVisitScores.filter((visit) => visit.score >= 46 && visit.score <= 99).length,
+    },
+    {
+      label: "100+",
+      count: matchVisitScores.filter((visit) => visit.score >= 100).length,
+    },
+    {
+      label: "140+",
+      count: matchVisitScores.filter((visit) => visit.score >= 140).length,
+    },
+    {
+      label: "180",
+      count: matchVisitScores.filter((visit) => visit.score === 180).length,
+    },
+  ];
   const monthlyVisitScores = matchVisitScores.filter((visit) =>
     visit.playedAt ? new Date(visit.playedAt).getTime() >= thirtyDaysAgo : true,
   );
@@ -869,6 +922,8 @@ export async function GET(request: Request) {
       monthlyMatches,
       monthlyTraining,
       modeBreakdown,
+      visitBuckets,
+      weeklyActivity,
       opponentBreakdown,
       checkoutInsights,
       rivalryInsights,

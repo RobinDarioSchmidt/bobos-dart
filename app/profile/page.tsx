@@ -119,7 +119,11 @@ type ProfileResponse = {
       mode: string;
       matches: number;
       wins: number;
+      average: number;
+      bestVisit: number;
     }>;
+    visitBuckets: Array<{ label: string; count: number }>;
+    weeklyActivity: Array<{ period: string; matches: number; training: number }>;
     opponentBreakdown: Array<{
       name: string;
       matches: number;
@@ -249,7 +253,7 @@ export default function ProfilePage() {
 
       const accessToken = freshSession?.access_token ?? sessionData.session.access_token;
       if (!accessToken) {
-        setMessage("Kein gueltiger Cloud-Token gefunden.");
+        setMessage("Kein gültiger Cloud-Token gefunden.");
         setLoading(false);
         return;
       }
@@ -312,7 +316,9 @@ export default function ProfilePage() {
         filteredTraining: [] as RecentTrainingEntry[],
         monthlyMatches: [] as Array<{ period: string; matches: number; wins: number; average: number }>,
         monthlyTraining: [] as Array<{ period: string; sessions: number; averageScore: number }>,
-        modeBreakdown: [] as Array<{ mode: string; matches: number; wins: number }>,
+        modeBreakdown: [] as Array<{ mode: string; matches: number; wins: number; average: number; bestVisit: number }>,
+        visitBuckets: [] as Array<{ label: string; count: number }>,
+        weeklyActivity: [] as Array<{ period: string; matches: number; training: number }>,
         opponentBreakdown: [] as Array<{
           name: string;
           matches: number;
@@ -400,15 +406,28 @@ export default function ProfilePage() {
     }));
 
     const modeBreakdown = Object.values(
-      filteredMatches.reduce<Record<string, { mode: string; matches: number; wins: number }>>((acc, match) => {
+      filteredMatches.reduce<
+        Record<string, { mode: string; matches: number; wins: number; averageTotal: number; averageCount: number; bestVisit: number }>
+      >((acc, match) => {
         if (!acc[match.mode]) {
-          acc[match.mode] = { mode: match.mode, matches: 0, wins: 0 };
+          acc[match.mode] = { mode: match.mode, matches: 0, wins: 0, averageTotal: 0, averageCount: 0, bestVisit: 0 };
         }
         acc[match.mode].matches += 1;
         acc[match.mode].wins += match.did_win ? 1 : 0;
+        acc[match.mode].bestVisit = Math.max(acc[match.mode].bestVisit, match.player_best_visit);
+        if (match.player_average > 0) {
+          acc[match.mode].averageTotal += match.player_average;
+          acc[match.mode].averageCount += 1;
+        }
         return acc;
       }, {}),
-    );
+    ).map((entry) => ({
+      mode: entry.mode,
+      matches: entry.matches,
+      wins: entry.wins,
+      average: entry.averageCount > 0 ? Number((entry.averageTotal / entry.averageCount).toFixed(1)) : 0,
+      bestVisit: entry.bestVisit,
+    }));
 
     const opponentBreakdown = Object.entries(
       filteredMatches.reduce<Record<string, { matches: number; wins: number; averageTotal: number; averageCount: number; bestVisit: number; legsFor: number; legsAgainst: number; lastPlayed: string }>>((acc, match) => {
@@ -506,6 +525,8 @@ export default function ProfilePage() {
       monthlyMatches,
       monthlyTraining,
       modeBreakdown,
+      visitBuckets: data.insights.visitBuckets,
+      weeklyActivity: data.insights.weeklyActivity,
       opponentBreakdown,
       averageTrend,
       bestVisitTrend,
@@ -532,7 +553,7 @@ export default function ProfilePage() {
             <h1 className="mt-1 text-2xl font-semibold text-white sm:text-3xl">Langzeitstatistiken</h1>
           </div>
           <Link href="/" className="rounded-2xl border border-white/10 bg-black/20 px-3 py-2 text-sm font-semibold">
-            Zurueck
+            Zur?ck
           </Link>
         </div>
 
@@ -699,7 +720,7 @@ export default function ProfilePage() {
                 <div className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4">
                   <h2 className="text-lg font-semibold text-white">Wurfmuster</h2>
                   <div className="mt-3 grid grid-cols-2 gap-2">
-                    <StatPill label="Alle Wuerfe" value={String(data.insights.throwStats.totalThrows)} />
+                    <StatPill label="Alle W?rfe" value={String(data.insights.throwStats.totalThrows)} />
                     <StatPill label="Board-Treffer" value={String(data.insights.throwStats.boardThrows)} />
                     <StatPill label="Triples" value={String(data.insights.throwStats.triplesHit)} />
                     <StatPill label="Doubles" value={String(data.insights.throwStats.doublesHit)} />

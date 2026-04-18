@@ -22,7 +22,9 @@ type AnalyticsShape = {
   filteredTraining: Array<unknown>;
   monthlyMatches: Array<{ period: string; matches: number; wins: number; average: number }>;
   monthlyTraining: Array<{ period: string; sessions: number; averageScore: number }>;
-  modeBreakdown: Array<{ mode: string; matches: number; wins: number }>;
+  modeBreakdown: Array<{ mode: string; matches: number; wins: number; average: number; bestVisit: number }>;
+  visitBuckets: Array<{ label: string; count: number }>;
+  weeklyActivity: Array<{ period: string; matches: number; training: number }>;
   opponentBreakdown: Array<{
     name: string;
     matches: number;
@@ -177,21 +179,28 @@ export function ProfileAnalyticsPanel({
         <div className="grid gap-4 lg:grid-cols-2">
           <div className="rounded-[1.25rem] border border-white/10 bg-black/20 p-4">
             <div className="flex items-center justify-between gap-3">
-              <h3 className="text-sm font-semibold text-white">Average-Trend</h3>
-              <p className="text-xs text-stone-400">monatlich</p>
+              <h3 className="text-sm font-semibold text-white">Scoring-Profil</h3>
+              <p className="text-xs text-stone-400">Visit-Klassen</p>
             </div>
-            <div className="mt-4">
-              <LineChart data={analytics.averageTrend} valueKey="average" stroke="#34d399" />
-            </div>
+            {analytics.visitBuckets.length > 0 ? (
+              <div className="mt-4">
+                <SimpleBarChart data={analytics.visitBuckets} valueKey="count" colorClass="bg-fuchsia-400" />
+              </div>
+            ) : (
+              <p className="mt-3 text-sm text-stone-400">Noch keine Visit-Daten in der Cloud.</p>
+            )}
           </div>
 
           <div className="rounded-[1.25rem] border border-white/10 bg-black/20 p-4">
             <div className="flex items-center justify-between gap-3">
-              <h3 className="text-sm font-semibold text-white">Best-Visit-Trend</h3>
-              <p className="text-xs text-stone-400">monatlich</p>
+              <h3 className="text-sm font-semibold text-white">Wochenaktivität</h3>
+              <p className="text-xs text-stone-400">Matches und Training</p>
             </div>
             <div className="mt-4">
-              <LineChart data={analytics.bestVisitTrend} valueKey="bestVisit" stroke="#fbbf24" />
+              <LineChart data={analytics.weeklyActivity} valueKey="matches" stroke="#34d399" />
+            </div>
+            <div className="mt-4">
+              <LineChart data={analytics.weeklyActivity} valueKey="training" stroke="#fbbf24" />
             </div>
           </div>
         </div>
@@ -207,7 +216,9 @@ export function ProfileAnalyticsPanel({
                       <p className="font-semibold text-white">{entry.mode}</p>
                       <p className="text-sm text-stone-300">{entry.matches} Matches</p>
                     </div>
-                    <p className="mt-1 text-xs text-stone-400">{entry.wins} Siege</p>
+                    <p className="mt-1 text-xs text-stone-400">
+                      {entry.wins} Siege · Avg {entry.average.toFixed(1)} · Best Visit {entry.bestVisit}
+                    </p>
                   </div>
                 ))
               ) : (
@@ -246,6 +257,29 @@ export function ProfileAnalyticsPanel({
             </div>
           </div>
         </div>
+
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="rounded-[1.25rem] border border-white/10 bg-black/20 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-sm font-semibold text-white">Average-Trend</h3>
+              <p className="text-xs text-stone-400">monatlich</p>
+            </div>
+            <div className="mt-4">
+              <LineChart data={analytics.averageTrend} valueKey="average" stroke="#34d399" />
+            </div>
+          </div>
+
+          <div className="rounded-[1.25rem] border border-white/10 bg-black/20 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-sm font-semibold text-white">Best-Visit-Trend</h3>
+              <p className="text-xs text-stone-400">monatlich</p>
+            </div>
+            <div className="mt-4">
+              <LineChart data={analytics.bestVisitTrend} valueKey="bestVisit" stroke="#fbbf24" />
+            </div>
+          </div>
+        </div>
+
       </div>
     </details>
   );
@@ -352,7 +386,7 @@ export function ProfileSeasonLeaderboardSection({
             ))
           ) : (
             <div className="rounded-[1.25rem] border border-dashed border-white/10 bg-black/20 p-4 text-sm text-stone-400">
-              Fuer dieses Zeitfenster gibt es noch nicht genug Daten.
+              F?r dieses Zeitfenster gibt es noch nicht genug Daten.
             </div>
           )}
         </div>
@@ -456,13 +490,13 @@ export function ProfileDeepInsightsSection({
 }) {
   const rivalryBlocks = [
     { label: "Engste Duelle", entries: analytics.rivalryInsights.closest, tone: "border-sky-300/25 bg-sky-400/10" },
-    { label: "Haerteste Gegner", entries: analytics.rivalryInsights.toughest, tone: "border-rose-300/25 bg-rose-400/10" },
+    { label: "H?rteste Gegner", entries: analytics.rivalryInsights.toughest, tone: "border-rose-300/25 bg-rose-400/10" },
     { label: "Lieblingsduelle", entries: analytics.rivalryInsights.bestMatchups, tone: "border-emerald-300/25 bg-emerald-400/10" },
   ] as const;
 
   return (
     <details className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4">
-      <summary className="cursor-pointer list-none text-lg font-semibold text-white">Checkout- und Rivalitaetsdaten</summary>
+      <summary className="cursor-pointer list-none text-lg font-semibold text-white">Checkout- und Rivalit?tsdaten</summary>
       <div className="mt-4 space-y-4">
         <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
           <StatPill label="Checkouts" value={String(analytics.checkoutInsights.total)} tone="border-emerald-300/25 bg-emerald-400/12" />

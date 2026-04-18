@@ -165,7 +165,7 @@ export default function OpponentDetailPage() {
             </h1>
           </div>
           <Link href="/profile" className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white">
-            Zurueck
+            Zur?ck
           </Link>
         </div>
 
@@ -181,7 +181,7 @@ export default function OpponentDetailPage() {
               <section className="rounded-[1.5rem] border border-white/10 bg-[linear-gradient(145deg,rgba(59,130,246,0.16),rgba(217,70,239,0.12),rgba(15,23,42,0.82))] p-4">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                   <div>
-                    <p className="text-[10px] uppercase tracking-[0.18em] text-stone-200">Rivalitaet</p>
+                    <p className="text-[10px] uppercase tracking-[0.18em] text-stone-200">Rivalit?t</p>
                     <h2 className="mt-2 text-2xl font-semibold text-white">{data.rivalryStory.rivalryTone}</h2>
                     <p className="mt-2 text-sm text-stone-300">
                       {data.summary.wins} Siege zu {data.summary.losses} Niederlagen bei {data.summary.matches} direkten Duellen.

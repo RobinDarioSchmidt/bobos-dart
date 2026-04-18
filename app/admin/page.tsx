@@ -114,7 +114,7 @@ export default function AdminPage() {
     const accessToken = freshSession?.access_token;
     if (!accessToken) {
       setLoading(false);
-      setMessage("Kein gueltiges Login gefunden.");
+      setMessage("Kein g?ltiges Login gefunden.");
       return;
     }
 
@@ -165,7 +165,7 @@ export default function AdminPage() {
 
   async function handleCreateUser() {
     if (!email || !password || !displayName) {
-      setMessage("Bitte alle Felder ausfuellen.");
+      setMessage("Bitte alle Felder ausf?llen.");
       return;
     }
 
@@ -202,7 +202,7 @@ export default function AdminPage() {
             <h1 className="mt-2 text-4xl font-semibold text-white">Nutzer manuell anlegen</h1>
           </div>
           <Link href="/" className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm font-semibold">
-            Zurueck zur App
+            Zur?ck zur App
           </Link>
         </div>
 
@@ -215,7 +215,7 @@ export default function AdminPage() {
             <p className="text-sm text-stone-400">Bitte zuerst in der App einloggen.</p>
           ) : !isAdmin ? (
             <p className="text-sm text-amber-200">
-              Dieser Bereich ist nur fuer den Admin freigeschaltet. Aktuell eingeloggt: {session.user.email}
+              Dieser Bereich ist nur f?r den Admin freigeschaltet. Aktuell eingeloggt: {session.user.email}
             </p>
           ) : (
             <>

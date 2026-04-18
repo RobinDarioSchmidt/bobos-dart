@@ -273,7 +273,7 @@ export default function MatchDetailPage() {
             <h1 className="mt-1 text-2xl font-semibold text-white sm:text-3xl">Partie im Detail</h1>
           </div>
           <Link href="/profile" className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white">
-            Zurueck
+            Zur?ck
           </Link>
         </div>
 
@@ -306,7 +306,7 @@ export default function MatchDetailPage() {
               </p>
               <div className="mt-4 grid grid-cols-3 gap-2">
                 <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
-                  <p className="text-[10px] uppercase tracking-[0.18em] text-stone-400">Wuerfe</p>
+                  <p className="text-[10px] uppercase tracking-[0.18em] text-stone-400">W?rfe</p>
                   <p className="mt-1 text-lg font-semibold text-white">{data.throwSummary.totalThrows}</p>
                 </div>
                 <div className="rounded-2xl border border-white/10 bg-black/20 p-3">

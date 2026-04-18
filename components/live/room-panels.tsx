@@ -91,7 +91,7 @@ export function LiveRoomCreatePanel({
                 : "border-white/10 bg-black/20 text-stone-300"
             }`}
           >
-            {bullOffEnabled ? "Bull-Out aktiv fuer den Startspieler" : "Startspieler normal festlegen"}
+            {bullOffEnabled ? "Bull-Out aktiv f?r den Startspieler" : "Startspieler normal festlegen"}
           </button>
           <div className="grid gap-3 sm:grid-cols-2">
             <select

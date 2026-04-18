@@ -452,7 +452,7 @@ export async function POST(request: Request) {
     } catch {
       stateToStore = normalizeLiveState({
         ...stateToStore,
-        statusText: `${stateToStore.statusText} Cloud-Sync wird beim naechsten Kontakt erneut versucht.`,
+        statusText: `${stateToStore.statusText} Cloud-Sync wird beim n?chsten Kontakt erneut versucht.`,
       });
     }
 
