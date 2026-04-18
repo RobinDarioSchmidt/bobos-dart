@@ -1064,9 +1064,15 @@ export default function ProfilePage() {
                           <div key={entry.name} className="rounded-2xl border border-white/10 bg-white/5 p-3">
                             <div className="flex items-center justify-between gap-3">
                               <p className="font-semibold text-white">{entry.name}</p>
-                              <p className="text-sm text-stone-300">{entry.winRate.toFixed(1)}%</p>
+                              <Link
+                                href={`/profile/opponents/${encodeURIComponent(entry.name)}`}
+                                className="rounded-full border border-emerald-300/25 bg-emerald-400/12 px-2.5 py-1 text-xs font-semibold text-emerald-100"
+                              >
+                                Duell
+                              </Link>
                             </div>
                             <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-stone-400">
+                              <p>Winrate {entry.winRate.toFixed(1)}%</p>
                               <p>{entry.wins} Siege aus {entry.matches} Matches</p>
                               <p>Average {entry.average.toFixed(1)}</p>
                               <p>Best Visit {entry.bestVisit}</p>

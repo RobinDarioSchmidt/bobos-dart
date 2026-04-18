@@ -42,6 +42,57 @@ type MatchDetailResponse = {
   };
 };
 
+function CompareBars({
+  label,
+  leftLabel,
+  leftValue,
+  rightLabel,
+  rightValue,
+  leftColor,
+  rightColor,
+}: {
+  label: string;
+  leftLabel: string;
+  leftValue: number;
+  rightLabel: string;
+  rightValue: number;
+  leftColor: string;
+  rightColor: string;
+}) {
+  const max = Math.max(1, leftValue, rightValue);
+
+  return (
+    <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-[10px] uppercase tracking-[0.18em] text-stone-400">{label}</p>
+        <p className="text-xs text-stone-400">
+          {leftValue} : {rightValue}
+        </p>
+      </div>
+      <div className="mt-3 space-y-3">
+        <div>
+          <div className="mb-1 flex items-center justify-between gap-3 text-xs text-stone-300">
+            <span>{leftLabel}</span>
+            <span>{leftValue}</span>
+          </div>
+          <div className="h-2 overflow-hidden rounded-full bg-white/10">
+            <div className={`h-full rounded-full ${leftColor}`} style={{ width: `${Math.max(8, (leftValue / max) * 100)}%` }} />
+          </div>
+        </div>
+        <div>
+          <div className="mb-1 flex items-center justify-between gap-3 text-xs text-stone-300">
+            <span>{rightLabel}</span>
+            <span>{rightValue}</span>
+          </div>
+          <div className="h-2 overflow-hidden rounded-full bg-white/10">
+            <div className={`h-full rounded-full ${rightColor}`} style={{ width: `${Math.max(8, (rightValue / max) * 100)}%` }} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function formatOutLabel(doubleOut: boolean, mode: string) {
   if (mode.toLowerCase().includes("master")) {
     return "Masters Out";
@@ -57,6 +108,33 @@ export default function MatchDetailPage() {
   const [data, setData] = useState<MatchDetailResponse | null>(null);
   const [loading, setLoading] = useState(canLoad);
   const [message, setMessage] = useState("");
+
+  const comparisons =
+    data && data.players.length >= 2
+      ? [
+          {
+            label: "Average",
+            leftLabel: data.players[0].name,
+            leftValue: Number(data.players[0].average ?? 0),
+            rightLabel: data.players[1].name,
+            rightValue: Number(data.players[1].average ?? 0),
+          },
+          {
+            label: "Best Visit",
+            leftLabel: data.players[0].name,
+            leftValue: data.players[0].best_visit ?? 0,
+            rightLabel: data.players[1].name,
+            rightValue: data.players[1].best_visit ?? 0,
+          },
+          {
+            label: "Treffer",
+            leftLabel: data.players[0].name,
+            leftValue: data.players[0].hits,
+            rightLabel: data.players[1].name,
+            rightValue: data.players[1].hits,
+          },
+        ]
+      : [];
 
   useEffect(() => {
     if (!canLoad || !supabase || !params?.matchId) {
@@ -149,6 +227,23 @@ export default function MatchDetailPage() {
             </section>
 
             <section className="grid gap-3">
+              {comparisons.length > 0 ? (
+                <div className="grid gap-3 lg:grid-cols-3">
+                  {comparisons.map((comparison) => (
+                    <CompareBars
+                      key={comparison.label}
+                      label={comparison.label}
+                      leftLabel={comparison.leftLabel}
+                      leftValue={comparison.leftValue}
+                      rightLabel={comparison.rightLabel}
+                      rightValue={comparison.rightValue}
+                      leftColor="bg-emerald-400"
+                      rightColor="bg-amber-300"
+                    />
+                  ))}
+                </div>
+              ) : null}
+
               {data.players.map((player) => (
                 <div key={`${player.seat_index}-${player.name}`} className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4">
                   <div className="flex items-start justify-between gap-3">
