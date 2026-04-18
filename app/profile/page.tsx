@@ -4,9 +4,21 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { MobileAppNav } from "@/components/mobile-app-nav";
+import {
+  HeatmapBoard,
+  MeterCard,
+  StatPill,
+  scoreTone,
+} from "@/components/profile/shared";
+import {
+  ProfileAchievementsSection,
+  ProfileAnalyticsPanel,
+  ProfileMatchArchiveSection,
+  ProfileRecordsSection,
+  ProfileSeasonLeaderboardSection,
+} from "@/components/profile/sections";
+import { formatOutLabel } from "@/lib/darts-display";
 import { supabase, supabaseEnabled } from "@/lib/supabase";
-
-const BOARD_ORDER = [20, 1, 18, 4, 13, 6, 10, 15, 2, 17, 3, 19, 7, 16, 8, 11, 14, 9, 12, 5];
 
 type ProfileStats = {
   matchesPlayed: number;
@@ -154,272 +166,34 @@ type ProfileResponse = {
       unit: string;
       tone: string;
     }>;
+    seasonalLeaderboards: {
+      year: ProfileLeaderboardCategory;
+      month: ProfileLeaderboardCategory;
+      last30: ProfileLeaderboardCategory;
+    };
   };
 };
 
+type ProfileLeaderboardEntry = {
+  profileId: string;
+  name: string;
+  matches: number;
+  wins: number;
+  winRate: number;
+  average: number;
+  bestVisit: number;
+  isCurrentUser: boolean;
+};
+
+type ProfileLeaderboardCategory = {
+  wins: ProfileLeaderboardEntry[];
+  winRate: ProfileLeaderboardEntry[];
+  average: ProfileLeaderboardEntry[];
+};
+
 type AnalyticsWindow = "30" | "90" | "all";
-
-function polarToCartesian(radius: number, angleDeg: number) {
-  const angle = ((angleDeg - 90) * Math.PI) / 180;
-  return {
-    x: 120 + radius * Math.cos(angle),
-    y: 120 + radius * Math.sin(angle),
-  };
-}
-
-function describeSlice(innerRadius: number, outerRadius: number, startAngle: number, endAngle: number) {
-  const startOuter = polarToCartesian(outerRadius, startAngle);
-  const endOuter = polarToCartesian(outerRadius, endAngle);
-  const startInner = polarToCartesian(innerRadius, startAngle);
-  const endInner = polarToCartesian(innerRadius, endAngle);
-  const largeArcFlag = endAngle - startAngle > 180 ? 1 : 0;
-
-  return [
-    `M ${startOuter.x} ${startOuter.y}`,
-    `A ${outerRadius} ${outerRadius} 0 ${largeArcFlag} 1 ${endOuter.x} ${endOuter.y}`,
-    `L ${endInner.x} ${endInner.y}`,
-    `A ${innerRadius} ${innerRadius} 0 ${largeArcFlag} 0 ${startInner.x} ${startInner.y}`,
-    "Z",
-  ].join(" ");
-}
-
-function heatColor(count: number, max: number) {
-  if (!count || max <= 0) {
-    return "#111827";
-  }
-
-  const intensity = count / max;
-  if (intensity >= 0.8) {
-    return "#f59e0b";
-  }
-
-  if (intensity >= 0.55) {
-    return "#f97316";
-  }
-
-  if (intensity >= 0.3) {
-    return "#fb7185";
-  }
-
-  return "#374151";
-}
-
-function formatOutLabel(doubleOut: boolean, mode: string) {
-  if (mode.toLowerCase().includes("master")) {
-    return "Masters Out";
-  }
-
-  return doubleOut ? "Double Out" : "Single Out";
-}
-
-function scoreTone(value: number) {
-  if (value >= 75) {
-    return "border-emerald-300/25 bg-emerald-400/12 text-emerald-100";
-  }
-
-  if (value >= 55) {
-    return "border-amber-300/25 bg-amber-300/12 text-amber-100";
-  }
-
-  return "border-white/10 bg-black/20 text-stone-200";
-}
-
-function StatPill({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: string;
-  tone?: string;
-}) {
-  return (
-    <div className={`rounded-2xl border p-3 ${tone ?? "border-white/10 bg-black/20"}`}>
-      <p className="text-[10px] uppercase tracking-[0.18em] text-stone-400">{label}</p>
-      <p className="mt-1 text-lg font-semibold text-white">{value}</p>
-    </div>
-  );
-}
-
-function MeterCard({
-  label,
-  value,
-  hint,
-  colorClass,
-}: {
-  label: string;
-  value: number;
-  hint: string;
-  colorClass: string;
-}) {
-  return (
-    <div className="rounded-[1.25rem] border border-white/10 bg-black/20 p-4">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-[10px] uppercase tracking-[0.18em] text-stone-400">{label}</p>
-        <p className="text-lg font-semibold text-white">{value}</p>
-      </div>
-      <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10">
-        <div className={`h-full rounded-full ${colorClass}`} style={{ width: `${Math.max(8, value)}%` }} />
-      </div>
-      <p className="mt-2 text-xs text-stone-400">{hint}</p>
-    </div>
-  );
-}
-
-function HeatmapBoard({ numbers, max }: { numbers: Record<string, number>; max: number }) {
-  return (
-    <div className="rounded-[1.25rem] border border-white/10 bg-black/20 p-4">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-[10px] uppercase tracking-[0.18em] text-stone-400">Board Heat</p>
-        <p className="text-xs text-stone-400">je heller, desto haeufiger</p>
-      </div>
-      <svg viewBox="0 0 240 240" className="mx-auto mt-3 w-full max-w-[17rem]">
-        <circle cx="120" cy="120" r="113" fill="#0b1120" />
-        {BOARD_ORDER.map((value, index) => {
-          const startAngle = -9 + index * 18;
-          const endAngle = startAngle + 18;
-          const midAngle = startAngle + 9;
-          const labelPoint = polarToCartesian(110, midAngle);
-          const count = numbers[String(value)] ?? 0;
-          return (
-            <g key={value}>
-              <path
-                d={describeSlice(34, 103, startAngle, endAngle)}
-                fill={heatColor(count, max)}
-                stroke="#09090b"
-                strokeWidth="1.5"
-              />
-              <text
-                x={labelPoint.x}
-                y={labelPoint.y}
-                fill="#e7e5e4"
-                fontSize="10"
-                fontWeight="700"
-                textAnchor="middle"
-                dominantBaseline="middle"
-              >
-                {value}
-              </text>
-            </g>
-          );
-        })}
-        <circle cx="120" cy="120" r="18" fill={heatColor(numbers["Bull"] ?? 0, max)} stroke="#09090b" strokeWidth="2" />
-        <circle cx="120" cy="120" r="33" fill={heatColor(numbers["Outer Bull"] ?? 0, max)} stroke="#09090b" strokeWidth="2" />
-      </svg>
-      <div className="mt-3 grid grid-cols-2 gap-2">
-        <StatPill label="Bull" value={String(numbers["Bull"] ?? 0)} />
-        <StatPill label="Outer Bull" value={String(numbers["Outer Bull"] ?? 0)} />
-      </div>
-    </div>
-  );
-}
-
-function SimpleBarChart({
-  data,
-  valueKey,
-  colorClass,
-}: {
-  data: Array<Record<string, string | number>>;
-  valueKey: string;
-  colorClass: string;
-}) {
-  const max = Math.max(1, ...data.map((entry) => Number(entry[valueKey] ?? 0)));
-
-  return (
-    <div className="flex items-end gap-2 overflow-x-auto pb-1">
-      {data.map((entry) => {
-        const value = Number(entry[valueKey] ?? 0);
-        const height = Math.max(14, Math.round((value / max) * 120));
-        return (
-          <div key={String(entry.period ?? entry.label ?? value)} className="flex min-w-[3.5rem] flex-col items-center gap-2">
-            <div className="flex h-32 items-end">
-              <div className={`w-9 rounded-t-xl ${colorClass}`} style={{ height }} />
-            </div>
-            <p className="text-center text-[11px] text-stone-400">{String(entry.period ?? entry.label ?? "")}</p>
-            <p className="text-xs font-semibold text-white">{value}</p>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function LineChart({
-  data,
-  valueKey,
-  stroke,
-}: {
-  data: Array<Record<string, string | number>>;
-  valueKey: string;
-  stroke: string;
-}) {
-  if (data.length === 0) {
-    return <p className="text-sm text-stone-400">Keine Daten im aktuellen Filter.</p>;
-  }
-
-  const values = data.map((entry) => Number(entry[valueKey] ?? 0));
-  const max = Math.max(1, ...values);
-  const min = Math.min(...values);
-  const points = data.map((entry, index) => {
-    const x = data.length === 1 ? 150 : 16 + (index / (data.length - 1)) * 288;
-    const raw = Number(entry[valueKey] ?? 0);
-    const normalized = max === min ? 0.5 : (raw - min) / (max - min);
-    const y = 124 - normalized * 92;
-    return `${x},${y}`;
-  });
-
-  return (
-    <div className="space-y-3">
-      <svg viewBox="0 0 320 140" className="w-full overflow-visible">
-        <path d="M16 124 H304" stroke="#44403c" strokeWidth="1" strokeDasharray="4 4" />
-        <polyline
-          fill="none"
-          stroke={stroke}
-          strokeWidth="3"
-          strokeLinejoin="round"
-          strokeLinecap="round"
-          points={points.join(" ")}
-        />
-        {data.map((entry, index) => {
-          const [x, y] = points[index].split(",").map(Number);
-          return <circle key={`${entry.period ?? index}`} cx={x} cy={y} r="4" fill={stroke} />;
-        })}
-      </svg>
-      <div className="flex flex-wrap gap-2">
-        {data.map((entry) => (
-          <div key={String(entry.period ?? entry.label ?? "")} className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-stone-300">
-            {String(entry.period ?? entry.label ?? "")}: {Number(entry[valueKey] ?? 0)}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function toneClasses(tone: string) {
-  if (tone === "amber") {
-    return {
-      badge: "border-amber-300/25 bg-amber-300/10 text-amber-100",
-      bar: "bg-amber-300",
-    };
-  }
-  if (tone === "rose") {
-    return {
-      badge: "border-rose-300/25 bg-rose-400/12 text-rose-100",
-      bar: "bg-rose-400",
-    };
-  }
-  if (tone === "fuchsia") {
-    return {
-      badge: "border-fuchsia-300/25 bg-fuchsia-400/12 text-fuchsia-100",
-      bar: "bg-fuchsia-400",
-    };
-  }
-  return {
-    badge: "border-emerald-300/25 bg-emerald-400/12 text-emerald-100",
-    bar: "bg-emerald-400",
-  };
-}
+type SeasonWindow = "year" | "month" | "last30";
+type SeasonMetric = "wins" | "winRate" | "average";
 
 export default function ProfilePage() {
   const [session, setSession] = useState<Session | null>(null);
@@ -429,6 +203,8 @@ export default function ProfilePage() {
   const [analyticsNow] = useState(() => Date.now());
   const [analyticsWindow, setAnalyticsWindow] = useState<AnalyticsWindow>("90");
   const [modeFilter, setModeFilter] = useState<"all" | "301" | "501">("all");
+  const [seasonWindow, setSeasonWindow] = useState<SeasonWindow>("year");
+  const [seasonMetric, setSeasonMetric] = useState<SeasonMetric>("wins");
 
   useEffect(() => {
     if (!supabase) {
@@ -703,6 +479,8 @@ export default function ProfilePage() {
       achievements: data.insights.achievements,
     };
   }, [analyticsNow, analyticsWindow, data, modeFilter]);
+
+  const seasonBoard = data?.insights.seasonalLeaderboards[seasonWindow][seasonMetric] ?? [];
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top,_#1f2937,_#09090b_55%)] px-3 py-4 pb-28 text-stone-100 sm:px-4 sm:py-6 sm:pb-8">
@@ -998,276 +776,27 @@ export default function ProfilePage() {
               </div>
             </section>
 
-            <details className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4" open>
-              <summary className="cursor-pointer list-none text-lg font-semibold text-white">
-                Analyse-Dropdown
-              </summary>
-              <div className="mt-4 space-y-4">
-                <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-                  <StatPill label="Winrate im Filter" value={`${analytics.filteredWinRate.toFixed(1)}%`} tone={scoreTone(analytics.filteredWinRate)} />
-                  <StatPill label="Average im Filter" value={analytics.filteredAverage.toFixed(1)} tone={scoreTone(analytics.filteredAverage)} />
-                  <StatPill label="Best Visit" value={String(analytics.filteredBestVisit)} tone={scoreTone(Math.min(100, analytics.filteredBestVisit / 1.8))} />
-                  <StatPill label="Trainingsscore" value={analytics.filteredTrainingScore.toFixed(1)} tone={scoreTone(analytics.filteredTrainingScore / 1.2)} />
-                </div>
+            <ProfileAnalyticsPanel
+              analytics={analytics}
+              analyticsWindow={analyticsWindow}
+              modeFilter={modeFilter}
+              onAnalyticsWindowChange={setAnalyticsWindow}
+              onModeFilterChange={setModeFilter}
+            />
 
-                <div className="flex flex-wrap gap-2">
-                  {([
-                    ["30", "30 Tage"],
-                    ["90", "90 Tage"],
-                    ["all", "Alle Daten"],
-                  ] as const).map(([value, label]) => (
-                    <button
-                      key={value}
-                      onClick={() => setAnalyticsWindow(value)}
-                      className={`rounded-full px-3 py-2 text-sm font-semibold ${
-                        analyticsWindow === value
-                          ? "bg-emerald-400 text-black"
-                          : "border border-white/10 bg-black/20 text-white"
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                  {([
-                    ["all", "Alle Modi"],
-                    ["301", "301"],
-                    ["501", "501"],
-                  ] as const).map(([value, label]) => (
-                    <button
-                      key={value}
-                      onClick={() => setModeFilter(value)}
-                      className={`rounded-full px-3 py-2 text-sm font-semibold ${
-                        modeFilter === value
-                          ? "bg-amber-300 text-black"
-                          : "border border-white/10 bg-black/20 text-white"
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
+            <ProfileMatchArchiveSection matches={analytics.filteredMatches} />
 
-                <div className="grid gap-4 lg:grid-cols-2">
-                  <div className="rounded-[1.25rem] border border-white/10 bg-black/20 p-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <h3 className="text-sm font-semibold text-white">Match-Verlauf</h3>
-                      <p className="text-xs text-stone-400">{analytics.filteredMatches.length} Matches</p>
-                    </div>
-                    {analytics.monthlyMatches.length > 0 ? (
-                      <div className="mt-4">
-                        <SimpleBarChart data={analytics.monthlyMatches} valueKey="matches" colorClass="bg-emerald-400" />
-                      </div>
-                    ) : (
-                      <p className="mt-3 text-sm text-stone-400">Keine Match-Daten im Filter.</p>
-                    )}
-                  </div>
+            <ProfileSeasonLeaderboardSection
+              seasonWindow={seasonWindow}
+              seasonMetric={seasonMetric}
+              onSeasonWindowChange={setSeasonWindow}
+              onSeasonMetricChange={setSeasonMetric}
+              seasonBoard={seasonBoard}
+            />
 
-                  <div className="rounded-[1.25rem] border border-white/10 bg-black/20 p-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <h3 className="text-sm font-semibold text-white">Training-Verlauf</h3>
-                      <p className="text-xs text-stone-400">{analytics.filteredTraining.length} Sessions</p>
-                    </div>
-                    {analytics.monthlyTraining.length > 0 ? (
-                      <div className="mt-4">
-                        <SimpleBarChart data={analytics.monthlyTraining} valueKey="sessions" colorClass="bg-amber-300" />
-                      </div>
-                    ) : (
-                      <p className="mt-3 text-sm text-stone-400">Keine Trainingsdaten im Filter.</p>
-                    )}
-                  </div>
-                </div>
+            <ProfileRecordsSection records={data.insights.records} />
 
-                <div className="grid gap-4 lg:grid-cols-2">
-                  <div className="rounded-[1.25rem] border border-white/10 bg-black/20 p-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <h3 className="text-sm font-semibold text-white">Average-Trend</h3>
-                      <p className="text-xs text-stone-400">monatlich</p>
-                    </div>
-                    <div className="mt-4">
-                      <LineChart data={analytics.averageTrend} valueKey="average" stroke="#34d399" />
-                    </div>
-                  </div>
-
-                  <div className="rounded-[1.25rem] border border-white/10 bg-black/20 p-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <h3 className="text-sm font-semibold text-white">Best-Visit-Trend</h3>
-                      <p className="text-xs text-stone-400">monatlich</p>
-                    </div>
-                    <div className="mt-4">
-                      <LineChart data={analytics.bestVisitTrend} valueKey="bestVisit" stroke="#fbbf24" />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
-                  <div className="rounded-[1.25rem] border border-white/10 bg-black/20 p-4">
-                    <h3 className="text-sm font-semibold text-white">Modi im Vergleich</h3>
-                    <div className="mt-3 space-y-2">
-                      {analytics.modeBreakdown.length > 0 ? (
-                        analytics.modeBreakdown.map((entry) => (
-                          <div key={entry.mode} className="rounded-2xl border border-white/10 bg-white/5 p-3">
-                            <div className="flex items-center justify-between gap-3">
-                              <p className="font-semibold text-white">{entry.mode}</p>
-                              <p className="text-sm text-stone-300">{entry.matches} Matches</p>
-                            </div>
-                            <p className="mt-1 text-xs text-stone-400">{entry.wins} Siege</p>
-                          </div>
-                        ))
-                      ) : (
-                        <p className="text-sm text-stone-400">Keine Modus-Daten im Filter.</p>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="rounded-[1.25rem] border border-white/10 bg-black/20 p-4">
-                    <h3 className="text-sm font-semibold text-white">Gegnerbilanz</h3>
-                    <div className="mt-3 space-y-2">
-                      {analytics.opponentBreakdown.length > 0 ? (
-                        analytics.opponentBreakdown.map((entry) => (
-                          <div key={entry.name} className="rounded-2xl border border-white/10 bg-white/5 p-3">
-                            <div className="flex items-center justify-between gap-3">
-                              <p className="font-semibold text-white">{entry.name}</p>
-                              <Link
-                                href={`/profile/opponents/${encodeURIComponent(entry.name)}`}
-                                className="rounded-full border border-emerald-300/25 bg-emerald-400/12 px-2.5 py-1 text-xs font-semibold text-emerald-100"
-                              >
-                                Duell
-                              </Link>
-                            </div>
-                            <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-stone-400">
-                              <p>Winrate {entry.winRate.toFixed(1)}%</p>
-                              <p>{entry.wins} Siege aus {entry.matches} Matches</p>
-                              <p>Average {entry.average.toFixed(1)}</p>
-                              <p>Best Visit {entry.bestVisit}</p>
-                              <p>Zuletzt {new Date(entry.lastPlayed).toLocaleDateString("de-DE")}</p>
-                            </div>
-                          </div>
-                        ))
-                      ) : (
-                        <p className="text-sm text-stone-400">Keine Gegnerdaten im Filter.</p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </details>
-
-            <details className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4">
-              <summary className="cursor-pointer list-none text-lg font-semibold text-white">
-                Match-Archiv
-              </summary>
-              <div className="mt-4 space-y-2">
-                {analytics.filteredMatches.length > 0 ? (
-                  analytics.filteredMatches.slice(0, 18).map((match) => (
-                    <div key={`archive-${match.id}`} className="rounded-[1.25rem] border border-white/10 bg-black/20 p-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span
-                              className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${
-                                match.did_win
-                                  ? "border-emerald-300/25 bg-emerald-400/12 text-emerald-100"
-                                  : "border-rose-300/25 bg-rose-400/12 text-rose-100"
-                              }`}
-                            >
-                              {match.did_win ? "Sieg" : "Niederlage"}
-                            </span>
-                            <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-stone-200">
-                              {match.mode}
-                            </span>
-                          </div>
-                          <p className="mt-2 text-sm font-semibold text-white">{match.winner} gewinnt</p>
-                          <p className="text-xs text-stone-400">gegen {match.opponents}</p>
-                        </div>
-                        <Link
-                          href={`/profile/matches/${match.id}`}
-                          className="rounded-full border border-emerald-300/25 bg-emerald-400/12 px-3 py-1.5 text-sm font-semibold text-emerald-100"
-                        >
-                          Oeffnen
-                        </Link>
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="rounded-[1.25rem] border border-dashed border-white/10 bg-black/20 p-4 text-sm text-stone-400">
-                    Keine Matches im aktuellen Filter.
-                  </div>
-                )}
-              </div>
-            </details>
-
-            <details className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4">
-              <summary className="cursor-pointer list-none text-lg font-semibold text-white">
-                Rekorde & Spitzenwerte
-              </summary>
-              <div className="mt-4 grid gap-4 lg:grid-cols-3">
-                {([
-                  ["Woche", data.insights.records.weekly],
-                  ["30 Tage", data.insights.records.monthly],
-                  ["Karriere", data.insights.records.lifetime],
-                ] as const).map(([label, record]) => (
-                  <div key={label} className="rounded-[1.25rem] border border-white/10 bg-black/20 p-4">
-                    <h3 className="text-sm font-semibold text-white">{label}</h3>
-                    <div className="mt-3 grid grid-cols-2 gap-2">
-                      <StatPill label="Matches" value={String(record.matches)} />
-                      <StatPill label="Siege" value={String(record.wins)} />
-                      <StatPill label="Best Avg" value={record.bestAverage.toFixed(1)} />
-                      <StatPill label="Best Visit" value={String(record.bestVisit)} />
-                      <StatPill label="Training" value={String(record.bestTrainingScore)} />
-                      <StatPill label="Top Visit" value={String(record.topVisitScore)} />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </details>
-
-            <details className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4">
-              <summary className="cursor-pointer list-none text-lg font-semibold text-white">
-                Badges & Meilensteine
-              </summary>
-              <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {analytics.badges.length > 0 ? (
-                  analytics.badges.map((badge) => (
-                    <div
-                      key={badge}
-                      className="rounded-[1.25rem] border border-amber-300/25 bg-amber-300/10 p-4"
-                    >
-                      <p className="text-[10px] uppercase tracking-[0.18em] text-amber-100">Freigeschaltet</p>
-                      <p className="mt-2 text-lg font-semibold text-white">{badge}</p>
-                    </div>
-                  ))
-                ) : (
-                  <div className="rounded-[1.25rem] border border-white/10 bg-black/20 p-4 text-sm text-stone-400">
-                    Noch keine Badges freigeschaltet.
-                  </div>
-                )}
-              </div>
-              <div className="mt-4 grid gap-3 lg:grid-cols-2">
-                {analytics.achievements.map((achievement) => {
-                  const tone = toneClasses(achievement.tone);
-                  const progressWidth = achievement.target > 0 ? Math.max(6, (achievement.progress / achievement.target) * 100) : 0;
-                  return (
-                    <div key={achievement.key} className="rounded-[1.25rem] border border-white/10 bg-black/20 p-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="text-base font-semibold text-white">{achievement.title}</p>
-                          <p className="mt-1 text-sm text-stone-400">{achievement.description}</p>
-                        </div>
-                        <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${tone.badge}`}>
-                          {achievement.unlocked ? "Frei" : `${achievement.progress}/${achievement.target}`}
-                        </span>
-                      </div>
-                      <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/10">
-                        <div className={`h-full rounded-full ${tone.bar}`} style={{ width: `${Math.min(100, progressWidth)}%` }} />
-                      </div>
-                      <p className="mt-2 text-xs text-stone-400">
-                        Fortschritt: {achievement.progress} / {achievement.target} {achievement.unit}
-                      </p>
-                    </div>
-                  );
-                })}
-              </div>
-            </details>
+            <ProfileAchievementsSection badges={analytics.badges} achievements={analytics.achievements} />
           </>
         )}
       </div>

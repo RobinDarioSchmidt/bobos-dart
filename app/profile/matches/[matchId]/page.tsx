@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import type { Session } from "@supabase/supabase-js";
 import { MobileAppNav } from "@/components/mobile-app-nav";
+import { formatOutLabel } from "@/lib/darts-display";
 import { supabase } from "@/lib/supabase";
 
 type MatchDetailResponse = {
@@ -149,14 +150,6 @@ function ProgressLine({
       </div>
     </div>
   );
-}
-
-function formatOutLabel(doubleOut: boolean, mode: string) {
-  if (mode.toLowerCase().includes("master")) {
-    return "Masters Out";
-  }
-
-  return doubleOut ? "Double Out" : "Single Out";
 }
 
 export default function MatchDetailPage() {

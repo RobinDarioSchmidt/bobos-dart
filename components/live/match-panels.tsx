@@ -1,0 +1,254 @@
+"use client";
+
+import type { LiveMatchState } from "@/lib/live-match";
+
+type LivePlayerStat = {
+  name: string;
+  visits: number;
+  dartsThrown: number;
+  scoredPoints: number;
+  bestVisit: number;
+  average: number;
+  busts: number;
+  checkouts: number;
+};
+
+function resultStyles(result: LiveMatchState["history"][number]["result"]) {
+  if (result === "bust") {
+    return "border-red-400/30 bg-red-400/10 text-red-100";
+  }
+
+  if (result === "leg-win") {
+    return "border-emerald-300/40 bg-emerald-300/15 text-emerald-50";
+  }
+
+  return "border-emerald-400/20 bg-emerald-400/10 text-emerald-50";
+}
+
+export function LiveScoreboardPanel({
+  liveState,
+  currentPlayerIndex,
+  currentUserId,
+  connectionState,
+  connectedNames,
+  isCurrentUsersTurn,
+  turnStatus,
+  onRefresh,
+}: {
+  liveState: LiveMatchState;
+  currentPlayerIndex: number;
+  currentUserId: string;
+  connectionState: "online" | "offline" | "connecting";
+  connectedNames: string[];
+  isCurrentUsersTurn: boolean;
+  turnStatus: string;
+  onRefresh: () => void;
+}) {
+  return (
+    <section className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-semibold text-white">Synchronisierter Spielstand</h2>
+          <p className="mt-1 text-sm text-stone-400">{liveState.statusText}</p>
+        </div>
+        <button
+          onClick={onRefresh}
+          className="rounded-2xl border border-white/10 bg-black/20 px-3 py-2 text-sm font-semibold"
+        >
+          Refresh
+        </button>
+      </div>
+
+      <div className="mt-4 grid grid-cols-2 gap-3 xl:grid-cols-4">
+        {liveState.players.map((player, index) => {
+          const isActive = currentPlayerIndex === index && liveState.matchWinner === null;
+          const isMe = player.profileId === currentUserId;
+
+          return (
+            <div
+              key={`${player.name}-${index}`}
+              className={`rounded-[1.25rem] border p-3 ${
+                isActive ? "border-emerald-300/40 bg-emerald-300/10" : "border-white/10 bg-black/20"
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-semibold text-white">{player.name}</p>
+                {isMe ? (
+                  <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[10px] uppercase tracking-[0.18em] text-stone-300">
+                    Du
+                  </span>
+                ) : null}
+              </div>
+              <p className="mt-2 text-4xl font-semibold leading-none text-white">{player.joined ? player.score : "—"}</p>
+              <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                <div className="rounded-2xl bg-white/5 p-2">
+                  <p className="text-stone-400">Sets</p>
+                  <p className="mt-1 text-lg font-semibold text-white">{player.sets}</p>
+                </div>
+                <div className="rounded-2xl bg-white/5 p-2">
+                  <p className="text-stone-400">Legs</p>
+                  <p className="mt-1 text-lg font-semibold text-white">{player.legs}</p>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-3">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-[11px] uppercase tracking-[0.22em] text-stone-400">Live-Verbindung</p>
+          <span
+            className={`rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${
+              connectionState === "online"
+                ? "bg-emerald-400/20 text-emerald-200"
+                : connectionState === "connecting"
+                  ? "bg-amber-300/20 text-amber-100"
+                  : "bg-red-400/20 text-red-100"
+            }`}
+          >
+            {connectionState === "online" ? "Verbunden" : connectionState === "connecting" ? "Verbindet..." : "Offline"}
+          </span>
+        </div>
+        <div className="mt-3 grid gap-2 sm:grid-cols-[1.2fr_0.8fr]">
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+            <p className="text-[10px] uppercase tracking-[0.18em] text-stone-400">Gerade online im Raum</p>
+            <p className="mt-2 text-sm text-white">
+              {connectedNames.length > 0 ? connectedNames.join(", ") : "Noch keine aktiven Verbindungen"}
+            </p>
+          </div>
+          <div
+            className={`rounded-2xl border p-3 ${
+              isCurrentUsersTurn ? "border-emerald-300/30 bg-emerald-400/10" : "border-white/10 bg-white/5"
+            }`}
+          >
+            <p className="text-[10px] uppercase tracking-[0.18em] text-stone-400">Dein Status</p>
+            <p className={`mt-2 text-sm font-semibold ${isCurrentUsersTurn ? "text-emerald-100" : "text-white"}`}>{turnStatus}</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+export function LiveStatsPanel({
+  currentLiveStats,
+  livePlayerStats,
+  currentPlayerName,
+}: {
+  currentLiveStats: LivePlayerStat | null;
+  livePlayerStats: LivePlayerStat[];
+  currentPlayerName: string | null;
+}) {
+  return (
+    <section className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-[11px] uppercase tracking-[0.22em] text-stone-400">Live-Stats</p>
+          <p className="text-xs text-stone-400">{currentLiveStats ? `${currentLiveStats.name} im Fokus` : "Noch keine Statline"}</p>
+        </div>
+      </div>
+      {currentLiveStats ? (
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <div className="rounded-2xl bg-white/5 p-2">
+            <p className="text-stone-400">Average</p>
+            <p className="mt-1 text-lg font-semibold text-white">{currentLiveStats.average.toFixed(1)}</p>
+          </div>
+          <div className="rounded-2xl bg-white/5 p-2">
+            <p className="text-stone-400">Best Visit</p>
+            <p className="mt-1 text-lg font-semibold text-white">{currentLiveStats.bestVisit}</p>
+          </div>
+          <div className="rounded-2xl bg-white/5 p-2">
+            <p className="text-stone-400">Busts</p>
+            <p className="mt-1 text-lg font-semibold text-white">{currentLiveStats.busts}</p>
+          </div>
+          <div className="rounded-2xl bg-white/5 p-2">
+            <p className="text-stone-400">Checkouts</p>
+            <p className="mt-1 text-lg font-semibold text-white">{currentLiveStats.checkouts}</p>
+          </div>
+        </div>
+      ) : (
+        <p className="mt-3 text-sm text-stone-400">Noch keine Live-Stats verfuegbar.</p>
+      )}
+
+      <div className="mt-3 space-y-2">
+        {livePlayerStats.map((entry) => (
+          <div
+            key={`live-stat-${entry.name}`}
+            className={`rounded-2xl border p-3 ${
+              currentPlayerName === entry.name ? "border-emerald-300/25 bg-emerald-400/12" : "border-white/10 bg-white/5"
+            }`}
+          >
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm font-semibold text-white">{entry.name}</p>
+              <p className="text-sm text-stone-300">{entry.average.toFixed(1)} Avg</p>
+            </div>
+            <div className="mt-2 grid grid-cols-4 gap-2 text-center text-xs">
+              <div>
+                <p className="text-stone-400">Visits</p>
+                <p className="mt-1 font-semibold text-white">{entry.visits}</p>
+              </div>
+              <div>
+                <p className="text-stone-400">Punkte</p>
+                <p className="mt-1 font-semibold text-white">{entry.scoredPoints}</p>
+              </div>
+              <div>
+                <p className="text-stone-400">Best</p>
+                <p className="mt-1 font-semibold text-white">{entry.bestVisit}</p>
+              </div>
+              <div>
+                <p className="text-stone-400">Busts</p>
+                <p className="mt-1 font-semibold text-white">{entry.busts}</p>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+export function LiveHistoryPanel({
+  heading,
+  historyOpen,
+  history,
+  onToggle,
+}: {
+  heading: string;
+  historyOpen: boolean;
+  history: LiveMatchState["history"];
+  onToggle: () => void;
+}) {
+  return (
+    <section className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur">
+      <button onClick={onToggle} className="flex w-full items-center justify-between gap-3 text-left">
+        <h2 className="text-lg font-semibold text-white">{heading}</h2>
+        <span className="text-sm text-stone-400">{historyOpen ? "Einklappen" : "Ausklappen"}</span>
+      </button>
+      {historyOpen ? (
+        <div className="mt-4 space-y-2">
+          {history.length > 0 ? (
+            history.map((visit, index) => (
+              <div key={`${visit.createdAt}-${index}`} className={`rounded-2xl border p-3 text-sm ${resultStyles(visit.result)}`}>
+                <div className="flex items-start justify-between gap-3">
+                  <p className="font-semibold">{visit.playerName}</p>
+                  <p className="text-xs opacity-70">
+                    {new Date(visit.createdAt).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}
+                  </p>
+                </div>
+                <p className="mt-1 text-xs opacity-85">{visit.note} · {visit.darts.join(", ") || "Ohne Dartdaten"}</p>
+                <p className="mt-2 text-xs opacity-90">
+                  {visit.total} Punkte · {visit.scoreBefore} → {visit.scoreAfter}
+                </p>
+              </div>
+            ))
+          ) : (
+            <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-4 text-sm text-stone-400">
+              Noch keine Besuche im Raum.
+            </div>
+          )}
+        </div>
+      ) : null}
+    </section>
+  );
+}

@@ -1,50 +1,13 @@
 import { NextResponse } from "next/server";
-import { getSupabaseAdminClients, supabaseAdminEnabled } from "@/lib/supabase-admin";
+import { getSupabaseAdminClients } from "@/lib/supabase-admin";
 import { LEGACY_TEST_EMAILS, TEST_USERS } from "@/lib/test-users";
+import { authorizeAdminEmailRequest } from "@/lib/server/request-auth";
 
 type CreateUserPayload = {
   email: string;
   password: string;
   displayName: string;
 };
-
-async function authorizeRequest(request: Request) {
-  const adminEmail = process.env.ADMIN_EMAIL;
-  const authHeader = request.headers.get("authorization");
-
-  if (!supabaseAdminEnabled) {
-    return { ok: false as const, reason: "missing_service_role_or_supabase_config" };
-  }
-
-  if (!adminEmail) {
-    return { ok: false as const, reason: "missing_admin_email" };
-  }
-
-  if (!authHeader?.startsWith("Bearer ")) {
-    return { ok: false as const, reason: "missing_bearer_token" };
-  }
-
-  const token = authHeader.replace("Bearer ", "");
-  const { authClient } = getSupabaseAdminClients();
-  const {
-    data: { user },
-    error,
-  } = await authClient.auth.getUser(token);
-
-  if (error) {
-    return { ok: false as const, reason: `invalid_token:${error.message}` };
-  }
-
-  if (!user?.email) {
-    return { ok: false as const, reason: "missing_user_email" };
-  }
-
-  if (user.email !== adminEmail) {
-    return { ok: false as const, reason: `admin_email_mismatch:${user.email}` };
-  }
-
-  return { ok: true as const };
-}
 
 async function createOneUser(payload: CreateUserPayload) {
   const { adminClient } = getSupabaseAdminClients();
@@ -113,7 +76,7 @@ async function deleteUsersByEmails(emails: string[]) {
 }
 
 export async function POST(request: Request) {
-  const authResult = await authorizeRequest(request);
+  const authResult = await authorizeAdminEmailRequest(request);
   if (!authResult.ok) {
     return NextResponse.json({ error: authResult.reason }, { status: 403 });
   }

@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
-import { getSupabaseAdminClients, supabaseAdminEnabled } from "@/lib/supabase-admin";
+import { getSupabaseAdminClients } from "@/lib/supabase-admin";
+import { authorizeSupabaseRequest } from "@/lib/server/request-auth";
 
 type ProfileRow = {
+  id?: string;
   display_name: string;
   username: string | null;
   app_settings: Record<string, unknown> | null;
@@ -9,6 +11,7 @@ type ProfileRow = {
 };
 
 type MatchPlayerRow = {
+  profile_id?: string | null;
   match_id?: string;
   sets_won: number;
   legs_won: number;
@@ -62,37 +65,8 @@ type DartEventRow = {
   created_at?: string;
 };
 
-async function authorizeRequest(request: Request) {
-  const authHeader = request.headers.get("authorization");
-
-  if (!supabaseAdminEnabled) {
-    return { ok: false as const, reason: "missing_service_role_or_supabase_config" };
-  }
-
-  if (!authHeader?.startsWith("Bearer ")) {
-    return { ok: false as const, reason: "missing_bearer_token" };
-  }
-
-  const token = authHeader.replace("Bearer ", "");
-  const { authClient } = getSupabaseAdminClients();
-  const {
-    data: { user },
-    error,
-  } = await authClient.auth.getUser(token);
-
-  if (error) {
-    return { ok: false as const, reason: `invalid_token:${error.message}` };
-  }
-
-  if (!user) {
-    return { ok: false as const, reason: "missing_user" };
-  }
-
-  return { ok: true as const, user };
-}
-
 export async function GET(request: Request) {
-  const authResult = await authorizeRequest(request);
+  const authResult = await authorizeSupabaseRequest(request);
   if (!authResult.ok) {
     return NextResponse.json({ error: authResult.reason }, { status: 403 });
   }
@@ -106,15 +80,18 @@ export async function GET(request: Request) {
     { data: trainings, error: trainingsError },
     { data: allMatches, error: allMatchesError },
     { data: dartEvents, error: dartEventsError },
+    { data: allProfiles, error: allProfilesError },
+    { data: allPlayerResults, error: allPlayerResultsError },
+    { data: allSystemMatches, error: allSystemMatchesError },
   ] = await Promise.all([
     adminClient
       .from("profiles")
-      .select("display_name, username, app_settings, created_at")
+      .select("id, display_name, username, app_settings, created_at")
       .eq("id", user.id)
       .single(),
     adminClient
       .from("match_players")
-      .select("match_id, sets_won, legs_won, average, best_visit, is_winner")
+      .select("profile_id, match_id, sets_won, legs_won, average, best_visit, is_winner")
       .eq("profile_id", user.id),
     adminClient
       .from("training_sessions")
@@ -132,6 +109,12 @@ export async function GET(request: Request) {
       .from("dart_events")
       .select("match_id, player_name, player_seat_index, visit_index, dart_index, segment_label, base_value, multiplier, ring, score, is_hit, is_checkout_dart, target_label, source_type, created_at")
       .eq("owner_id", user.id),
+    adminClient.from("profiles").select("id, display_name"),
+    adminClient
+      .from("match_players")
+      .select("profile_id, match_id, sets_won, legs_won, average, best_visit, is_winner")
+      .not("profile_id", "is", null),
+    adminClient.from("matches").select("id, played_at"),
   ]);
 
   if (profileError) {
@@ -148,6 +131,15 @@ export async function GET(request: Request) {
 
   if (allMatchesError) {
     return NextResponse.json({ error: allMatchesError.message }, { status: 400 });
+  }
+  if (allProfilesError) {
+    return NextResponse.json({ error: allProfilesError.message }, { status: 400 });
+  }
+  if (allPlayerResultsError) {
+    return NextResponse.json({ error: allPlayerResultsError.message }, { status: 400 });
+  }
+  if (allSystemMatchesError) {
+    return NextResponse.json({ error: allSystemMatchesError.message }, { status: 400 });
   }
 
   const profileRow = profile as ProfileRow;
@@ -593,8 +585,91 @@ export async function GET(request: Request) {
       : stats.trainingHitRate >= 55
         ? "Deine Trainingsdaten zeigen saubere Wiederholbarkeit."
         : stats.bestAverage >= 60
-          ? "Dein bestes Average zeigt echtes Scoring-Potenzial."
+        ? "Dein bestes Average zeigt echtes Scoring-Potenzial."
           : "Du baust dir gerade eine stabile Match-Basis auf.";
+  const profileNameMap = new Map(
+    ((allProfiles ?? []) as Array<{ id: string; display_name: string }>).map((entry) => [entry.id, entry.display_name]),
+  );
+  const systemMatchMap = new Map(
+    ((allSystemMatches ?? []) as Array<{ id: string; played_at: string }>).map((entry) => [entry.id, entry.played_at]),
+  );
+  const seasonWindows = {
+    year: new Date(new Date().getFullYear(), 0, 1).getTime(),
+    month: new Date(new Date().getFullYear(), new Date().getMonth(), 1).getTime(),
+    last30: thirtyDaysAgo,
+  };
+  const seasonalLeaderboards = Object.fromEntries(
+    Object.entries(seasonWindows).map(([key, cutoff]) => {
+      const filtered = ((allPlayerResults ?? []) as MatchPlayerRow[]).filter((row) => {
+        const playedAt = row.match_id ? systemMatchMap.get(row.match_id) : null;
+        return row.profile_id && playedAt ? new Date(playedAt).getTime() >= cutoff : false;
+      });
+      const byPlayer = Object.values(
+        filtered.reduce<
+          Record<
+            string,
+            {
+              profileId: string;
+              name: string;
+              matches: number;
+              wins: number;
+              averageTotal: number;
+              averageCount: number;
+              bestVisit: number;
+            }
+          >
+        >((acc, row) => {
+          const profileId = row.profile_id ?? "";
+          if (!profileId) {
+            return acc;
+          }
+          if (!acc[profileId]) {
+            acc[profileId] = {
+              profileId,
+              name: profileNameMap.get(profileId) ?? "Spieler",
+              matches: 0,
+              wins: 0,
+              averageTotal: 0,
+              averageCount: 0,
+              bestVisit: 0,
+            };
+          }
+          acc[profileId].matches += 1;
+          acc[profileId].wins += row.is_winner ? 1 : 0;
+          if ((row.average ?? 0) > 0) {
+            acc[profileId].averageTotal += Number(row.average ?? 0);
+            acc[profileId].averageCount += 1;
+          }
+          acc[profileId].bestVisit = Math.max(acc[profileId].bestVisit, row.best_visit ?? 0);
+          return acc;
+        }, {}),
+      ).map((entry) => ({
+        profileId: entry.profileId,
+        name: entry.name,
+        matches: entry.matches,
+        wins: entry.wins,
+        winRate: entry.matches > 0 ? Number(((entry.wins / entry.matches) * 100).toFixed(1)) : 0,
+        average: entry.averageCount > 0 ? Number((entry.averageTotal / entry.averageCount).toFixed(1)) : 0,
+        bestVisit: entry.bestVisit,
+        isCurrentUser: entry.profileId === user.id,
+      }));
+
+      return [
+        key,
+        {
+          wins: [...byPlayer].sort((left, right) => right.wins - left.wins || right.matches - left.matches).slice(0, 8),
+          winRate: [...byPlayer]
+            .filter((entry) => entry.matches >= 3)
+            .sort((left, right) => right.winRate - left.winRate || right.matches - left.matches)
+            .slice(0, 8),
+          average: [...byPlayer]
+            .filter((entry) => entry.average > 0)
+            .sort((left, right) => right.average - left.average || right.matches - left.matches)
+            .slice(0, 8),
+        },
+      ];
+    }),
+  );
 
   return NextResponse.json({
     profile: profileRow,
@@ -628,6 +703,7 @@ export async function GET(request: Request) {
       opponentBreakdown,
       records,
       achievements,
+      seasonalLeaderboards,
     },
   });
 }
