@@ -118,6 +118,42 @@ type ProfileResponse = {
       legsAgainst: number;
       lastPlayed: string;
     }>;
+    records: {
+      weekly: {
+        matches: number;
+        wins: number;
+        bestAverage: number;
+        bestVisit: number;
+        bestTrainingScore: number;
+        topVisitScore: number;
+      };
+      monthly: {
+        matches: number;
+        wins: number;
+        bestAverage: number;
+        bestVisit: number;
+        bestTrainingScore: number;
+        topVisitScore: number;
+      };
+      lifetime: {
+        matches: number;
+        wins: number;
+        bestAverage: number;
+        bestVisit: number;
+        bestTrainingScore: number;
+        topVisitScore: number;
+      };
+    };
+    achievements: Array<{
+      key: string;
+      title: string;
+      description: string;
+      unlocked: boolean;
+      progress: number;
+      target: number;
+      unit: string;
+      tone: string;
+    }>;
   };
 };
 
@@ -360,6 +396,31 @@ function LineChart({
   );
 }
 
+function toneClasses(tone: string) {
+  if (tone === "amber") {
+    return {
+      badge: "border-amber-300/25 bg-amber-300/10 text-amber-100",
+      bar: "bg-amber-300",
+    };
+  }
+  if (tone === "rose") {
+    return {
+      badge: "border-rose-300/25 bg-rose-400/12 text-rose-100",
+      bar: "bg-rose-400",
+    };
+  }
+  if (tone === "fuchsia") {
+    return {
+      badge: "border-fuchsia-300/25 bg-fuchsia-400/12 text-fuchsia-100",
+      bar: "bg-fuchsia-400",
+    };
+  }
+  return {
+    badge: "border-emerald-300/25 bg-emerald-400/12 text-emerald-100",
+    bar: "bg-emerald-400",
+  };
+}
+
 export default function ProfilePage() {
   const [session, setSession] = useState<Session | null>(null);
   const [data, setData] = useState<ProfileResponse | null>(null);
@@ -471,6 +532,7 @@ export default function ProfilePage() {
         filteredBestVisit: 0,
         filteredTrainingScore: 0,
         badges: [] as string[],
+        achievements: [] as ProfileResponse["insights"]["achievements"],
       };
     }
 
@@ -638,6 +700,7 @@ export default function ProfilePage() {
       filteredBestVisit,
       filteredTrainingScore,
       badges,
+      achievements: data.insights.achievements,
     };
   }, [analyticsNow, analyticsWindow, data, modeFilter]);
 
@@ -1135,6 +1198,31 @@ export default function ProfilePage() {
 
             <details className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4">
               <summary className="cursor-pointer list-none text-lg font-semibold text-white">
+                Rekorde & Spitzenwerte
+              </summary>
+              <div className="mt-4 grid gap-4 lg:grid-cols-3">
+                {([
+                  ["Woche", data.insights.records.weekly],
+                  ["30 Tage", data.insights.records.monthly],
+                  ["Karriere", data.insights.records.lifetime],
+                ] as const).map(([label, record]) => (
+                  <div key={label} className="rounded-[1.25rem] border border-white/10 bg-black/20 p-4">
+                    <h3 className="text-sm font-semibold text-white">{label}</h3>
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      <StatPill label="Matches" value={String(record.matches)} />
+                      <StatPill label="Siege" value={String(record.wins)} />
+                      <StatPill label="Best Avg" value={record.bestAverage.toFixed(1)} />
+                      <StatPill label="Best Visit" value={String(record.bestVisit)} />
+                      <StatPill label="Training" value={String(record.bestTrainingScore)} />
+                      <StatPill label="Top Visit" value={String(record.topVisitScore)} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </details>
+
+            <details className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4">
+              <summary className="cursor-pointer list-none text-lg font-semibold text-white">
                 Badges & Meilensteine
               </summary>
               <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -1153,6 +1241,31 @@ export default function ProfilePage() {
                     Noch keine Badges freigeschaltet.
                   </div>
                 )}
+              </div>
+              <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                {analytics.achievements.map((achievement) => {
+                  const tone = toneClasses(achievement.tone);
+                  const progressWidth = achievement.target > 0 ? Math.max(6, (achievement.progress / achievement.target) * 100) : 0;
+                  return (
+                    <div key={achievement.key} className="rounded-[1.25rem] border border-white/10 bg-black/20 p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-base font-semibold text-white">{achievement.title}</p>
+                          <p className="mt-1 text-sm text-stone-400">{achievement.description}</p>
+                        </div>
+                        <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${tone.badge}`}>
+                          {achievement.unlocked ? "Frei" : `${achievement.progress}/${achievement.target}`}
+                        </span>
+                      </div>
+                      <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/10">
+                        <div className={`h-full rounded-full ${tone.bar}`} style={{ width: `${Math.min(100, progressWidth)}%` }} />
+                      </div>
+                      <p className="mt-2 text-xs text-stone-400">
+                        Fortschritt: {achievement.progress} / {achievement.target} {achievement.unit}
+                      </p>
+                    </div>
+                  );
+                })}
               </div>
             </details>
           </>

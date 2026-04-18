@@ -45,6 +45,11 @@ type MatchDetailRow = {
 };
 
 type DartEventRow = {
+  match_id?: string | null;
+  player_name?: string;
+  player_seat_index?: number;
+  visit_index?: number;
+  dart_index?: number;
   segment_label: string;
   base_value: number;
   multiplier: number;
@@ -54,6 +59,7 @@ type DartEventRow = {
   is_checkout_dart: boolean;
   target_label: string | null;
   source_type: "match" | "training";
+  created_at?: string;
 };
 
 async function authorizeRequest(request: Request) {
@@ -124,7 +130,7 @@ export async function GET(request: Request) {
       ,
     adminClient
       .from("dart_events")
-      .select("segment_label, base_value, multiplier, ring, score, is_hit, is_checkout_dart, target_label, source_type")
+      .select("match_id, player_name, player_seat_index, visit_index, dart_index, segment_label, base_value, multiplier, ring, score, is_hit, is_checkout_dart, target_label, source_type, created_at")
       .eq("owner_id", user.id),
   ]);
 
@@ -449,6 +455,130 @@ export async function GET(request: Request) {
     }))
     .sort((left, right) => right.matches - left.matches)
     .slice(0, 8);
+  const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
+  const monthlyMatchesWindow = allMatchesWithDetails.filter((match) => new Date(match.played_at).getTime() >= thirtyDaysAgo);
+  const weeklyMatchesWindow = allMatchesWithDetails.filter((match) => new Date(match.played_at).getTime() >= sevenDaysAgo);
+  const monthlyTrainingWindow = trainingRows.filter((training) => new Date(training.played_at).getTime() >= thirtyDaysAgo);
+  const weeklyTrainingWindow = trainingRows.filter((training) => new Date(training.played_at).getTime() >= sevenDaysAgo);
+  const matchVisitScores = Object.values(
+    dartRows
+      .filter((row) => row.source_type === "match" && typeof row.match_id === "string")
+      .reduce<Record<string, { score: number; playedAt: string }>>((acc, row) => {
+        const key = `${row.match_id ?? "match"}:${row.player_seat_index ?? 0}:${row.visit_index ?? 0}`;
+        if (!acc[key]) {
+          acc[key] = { score: 0, playedAt: row.created_at ?? "" };
+        }
+        acc[key].score += row.score;
+        if (!acc[key].playedAt && row.created_at) {
+          acc[key].playedAt = row.created_at;
+        }
+        return acc;
+      }, {}),
+  );
+  const monthlyVisitScores = matchVisitScores.filter((visit) =>
+    visit.playedAt ? new Date(visit.playedAt).getTime() >= thirtyDaysAgo : true,
+  );
+  const weeklyVisitScores = matchVisitScores.filter((visit) =>
+    visit.playedAt ? new Date(visit.playedAt).getTime() >= sevenDaysAgo : true,
+  );
+  const records = {
+    weekly: {
+      matches: weeklyMatchesWindow.length,
+      wins: weeklyMatchesWindow.filter((match) => match.did_win).length,
+      bestAverage: weeklyMatchesWindow.reduce((best, match) => Math.max(best, match.player_average), 0),
+      bestVisit: weeklyMatchesWindow.reduce((best, match) => Math.max(best, match.player_best_visit), 0),
+      bestTrainingScore: weeklyTrainingWindow.reduce((best, training) => Math.max(best, training.score), 0),
+      topVisitScore: weeklyVisitScores.reduce((best, visit) => Math.max(best, visit.score), 0),
+    },
+    monthly: {
+      matches: monthlyMatchesWindow.length,
+      wins: monthlyMatchesWindow.filter((match) => match.did_win).length,
+      bestAverage: monthlyMatchesWindow.reduce((best, match) => Math.max(best, match.player_average), 0),
+      bestVisit: monthlyMatchesWindow.reduce((best, match) => Math.max(best, match.player_best_visit), 0),
+      bestTrainingScore: monthlyTrainingWindow.reduce((best, training) => Math.max(best, training.score), 0),
+      topVisitScore: monthlyVisitScores.reduce((best, visit) => Math.max(best, visit.score), 0),
+    },
+    lifetime: {
+      matches: allMatchesWithDetails.length,
+      wins: allMatchesWithDetails.filter((match) => match.did_win).length,
+      bestAverage: stats.bestAverage,
+      bestVisit: stats.bestVisit,
+      bestTrainingScore: stats.bestTrainingScore,
+      topVisitScore: matchVisitScores.reduce((best, visit) => Math.max(best, visit.score), 0),
+    },
+  };
+  const achievements = [
+    {
+      key: "first_win",
+      title: "Erster Sieg",
+      description: "Hole dir deinen ersten Matchsieg in der Cloud.",
+      unlocked: stats.matchesWon >= 1,
+      progress: Math.min(stats.matchesWon, 1),
+      target: 1,
+      unit: "Siege",
+      tone: "emerald",
+    },
+    {
+      key: "ten_wins",
+      title: "Win Collector",
+      description: "Gewinne 10 Matches.",
+      unlocked: stats.matchesWon >= 10,
+      progress: Math.min(stats.matchesWon, 10),
+      target: 10,
+      unit: "Siege",
+      tone: "emerald",
+    },
+    {
+      key: "checkout_master",
+      title: "Checkout Master",
+      description: "Triff 25 Checkout-Darts.",
+      unlocked: throwStats.checkoutsHit >= 25,
+      progress: Math.min(throwStats.checkoutsHit, 25),
+      target: 25,
+      unit: "Checkouts",
+      tone: "amber",
+    },
+    {
+      key: "bull_hunter",
+      title: "Bull Hunter",
+      description: "Triff 50 Bulls oder Outer Bulls.",
+      unlocked: throwStats.bullsHit >= 50,
+      progress: Math.min(throwStats.bullsHit, 50),
+      target: 50,
+      unit: "Bulls",
+      tone: "rose",
+    },
+    {
+      key: "training_grinder",
+      title: "Training Grinder",
+      description: "Spiele 40 Trainingssessions.",
+      unlocked: stats.trainingSessions >= 40,
+      progress: Math.min(stats.trainingSessions, 40),
+      target: 40,
+      unit: "Sessions",
+      tone: "fuchsia",
+    },
+    {
+      key: "maximum_pressure",
+      title: "Maximum Pressure",
+      description: "Schaffe einen Best Visit von 140 oder mehr.",
+      unlocked: stats.bestVisit >= 140,
+      progress: Math.min(stats.bestVisit, 140),
+      target: 140,
+      unit: "Punkte",
+      tone: "emerald",
+    },
+    {
+      key: "hot_month",
+      title: "Heisser Monat",
+      description: "Gewinne 8 Matches innerhalb von 30 Tagen.",
+      unlocked: records.monthly.wins >= 8,
+      progress: Math.min(records.monthly.wins, 8),
+      target: 8,
+      unit: "Siege",
+      tone: "amber",
+    },
+  ];
   const highlightTitle =
     stats.winRate >= 65
       ? "Match Closer"
@@ -496,6 +626,8 @@ export async function GET(request: Request) {
       monthlyTraining,
       modeBreakdown,
       opponentBreakdown,
+      records,
+      achievements,
     },
   });
 }

@@ -40,6 +40,22 @@ type MatchDetailResponse = {
     checkoutDarts: number;
     misses: number;
   };
+  visitTimeline: Array<{
+    playerName: string;
+    playerSeatIndex: number;
+    visitIndex: number;
+    score: number;
+    darts: string[];
+    createdAt: string;
+  }>;
+  scoringProgress: Array<{
+    name: string;
+    points: Array<{
+      label: string;
+      visitScore: number;
+      cumulative: number;
+    }>;
+  }>;
 };
 
 function CompareBars({
@@ -88,6 +104,48 @@ function CompareBars({
             <div className={`h-full rounded-full ${rightColor}`} style={{ width: `${Math.max(8, (rightValue / max) * 100)}%` }} />
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function ProgressLine({
+  series,
+  stroke,
+}: {
+  series: Array<{ label: string; visitScore: number; cumulative: number }>;
+  stroke: string;
+}) {
+  if (series.length === 0) {
+    return <p className="text-sm text-stone-400">Keine Verlaufsdaten.</p>;
+  }
+
+  const values = series.map((entry) => entry.cumulative);
+  const max = Math.max(1, ...values);
+  const min = Math.min(...values);
+  const points = series.map((entry, index) => {
+    const x = series.length === 1 ? 150 : 14 + (index / (series.length - 1)) * 292;
+    const normalized = max === min ? 0.5 : (entry.cumulative - min) / (max - min);
+    const y = 124 - normalized * 96;
+    return `${x},${y}`;
+  });
+
+  return (
+    <div className="space-y-3">
+      <svg viewBox="0 0 320 140" className="w-full">
+        <path d="M14 124 H306" stroke="#44403c" strokeWidth="1" strokeDasharray="4 4" />
+        <polyline fill="none" stroke={stroke} strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" points={points.join(" ")} />
+        {points.map((point, index) => {
+          const [x, y] = point.split(",").map(Number);
+          return <circle key={`${point}-${index}`} cx={x} cy={y} r="4" fill={stroke} />;
+        })}
+      </svg>
+      <div className="flex flex-wrap gap-2">
+        {series.map((entry) => (
+          <span key={`${entry.label}-${entry.cumulative}`} className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-stone-300">
+            {entry.label}: +{entry.visitScore} / {entry.cumulative}
+          </span>
+        ))}
       </div>
     </div>
   );
@@ -241,6 +299,43 @@ export default function MatchDetailPage() {
                       rightColor="bg-amber-300"
                     />
                   ))}
+                </div>
+              ) : null}
+
+              {data.scoringProgress.length > 0 ? (
+                <div className="grid gap-3 lg:grid-cols-2">
+                  {data.scoringProgress.map((series, index) => (
+                    <div key={series.name} className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <h2 className="text-lg font-semibold text-white">{series.name} - Scoring-Verlauf</h2>
+                        <p className="text-xs text-stone-400">{series.points.length} Visits</p>
+                      </div>
+                      <div className="mt-4">
+                        <ProgressLine series={series.points} stroke={index % 2 === 0 ? "#34d399" : "#fbbf24"} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+
+              {data.visitTimeline.length > 0 ? (
+                <div className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4">
+                  <h2 className="text-lg font-semibold text-white">Visit-Timeline</h2>
+                  <div className="mt-3 space-y-2">
+                    {data.visitTimeline.map((visit) => (
+                      <div key={`${visit.playerSeatIndex}-${visit.visitIndex}`} className="rounded-[1.25rem] border border-white/10 bg-black/20 p-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-semibold text-white">
+                              {visit.playerName} - Visit {visit.visitIndex + 1}
+                            </p>
+                            <p className="text-xs text-stone-400">{visit.darts.filter(Boolean).join(", ") || "Miss"}</p>
+                          </div>
+                          <p className="text-lg font-semibold text-white">+{visit.score}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               ) : null}
 

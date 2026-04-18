@@ -62,7 +62,7 @@ export async function GET(
       .order("seat_index", { ascending: true }),
     adminClient
       .from("dart_events")
-      .select("player_name, player_seat_index, segment_label, ring, score, is_hit, is_checkout_dart")
+      .select("player_name, player_seat_index, visit_index, dart_index, segment_label, ring, score, is_hit, is_checkout_dart, created_at")
       .eq("owner_id", user.id)
       .eq("source_type", "match")
       .eq("match_id", matchId),
@@ -99,6 +99,58 @@ export async function GET(
       topSegments,
     };
   });
+  const visitTimeline = Object.values(
+    (dartEvents ?? []).reduce<
+      Record<
+        string,
+        {
+          playerName: string;
+          playerSeatIndex: number;
+          visitIndex: number;
+          score: number;
+          darts: string[];
+          createdAt: string;
+        }
+      >
+    >((acc, event) => {
+      const key = `${event.player_seat_index ?? 0}:${event.visit_index ?? 0}`;
+      if (!acc[key]) {
+        acc[key] = {
+          playerName: event.player_name ?? `Seat ${(event.player_seat_index ?? 0) + 1}`,
+          playerSeatIndex: event.player_seat_index ?? 0,
+          visitIndex: event.visit_index ?? 0,
+          score: 0,
+          darts: [],
+          createdAt: event.created_at ?? "",
+        };
+      }
+      acc[key].score += event.score;
+      acc[key].darts[event.dart_index ?? acc[key].darts.length] = event.segment_label;
+      if (!acc[key].createdAt && event.created_at) {
+        acc[key].createdAt = event.created_at;
+      }
+      return acc;
+    }, {}),
+  ).sort((left, right) => {
+    const leftTime = left.createdAt ? new Date(left.createdAt).getTime() : left.visitIndex;
+    const rightTime = right.createdAt ? new Date(right.createdAt).getTime() : right.visitIndex;
+    return leftTime - rightTime;
+  });
+  const scoringProgress = playerSummaries.map((player) => {
+    const visits = visitTimeline.filter((entry) => entry.playerSeatIndex === player.seat_index);
+    let cumulative = 0;
+    return {
+      name: player.name,
+      points: visits.map((visit) => {
+        cumulative += visit.score;
+        return {
+          label: `V${visit.visitIndex + 1}`,
+          visitScore: visit.score,
+          cumulative,
+        };
+      }),
+    };
+  });
 
   return NextResponse.json({
     match,
@@ -108,5 +160,7 @@ export async function GET(
       checkoutDarts: (dartEvents ?? []).filter((event) => event.is_checkout_dart).length,
       misses: (dartEvents ?? []).filter((event) => !event.is_hit || event.score === 0).length,
     },
+    visitTimeline,
+    scoringProgress,
   });
 }
