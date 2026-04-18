@@ -1,10 +1,18 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { Session } from "@supabase/supabase-js";
 import { supabase, supabaseEnabled } from "@/lib/supabase";
 import { TEST_USERS } from "@/lib/test-users";
+
+type ManagedUser = {
+  id: string;
+  email: string;
+  displayName: string;
+  username: string | null;
+  createdAt: string;
+};
 
 export default function AdminPage() {
   const [session, setSession] = useState<Session | null>(null);
@@ -13,6 +21,9 @@ export default function AdminPage() {
   const [displayName, setDisplayName] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [managedUsers, setManagedUsers] = useState<ManagedUser[]>([]);
+  const [displayNameDrafts, setDisplayNameDrafts] = useState<Record<string, string>>({});
+  const [passwordDrafts, setPasswordDrafts] = useState<Record<string, string>>({});
   const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL ?? "";
   const isAdmin = useMemo(
     () => Boolean(session?.user.email && adminEmail && session.user.email === adminEmail),
@@ -38,6 +49,54 @@ export default function AdminPage() {
       subscription.unsubscribe();
     };
   }, []);
+
+  const getAccessToken = useCallback(async () => {
+    if (!supabase) {
+      return null;
+    }
+
+    const {
+      data: { session: freshSession },
+    } = await supabase.auth.getSession();
+
+    return freshSession?.access_token ?? null;
+  }, []);
+
+  const loadManagedUsers = useCallback(async () => {
+    const accessToken = await getAccessToken();
+    if (!accessToken) {
+      return;
+    }
+
+    const response = await fetch("/api/admin/users", {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    const result = (await response.json()) as { users?: ManagedUser[]; error?: string };
+    if (!response.ok || !result.users) {
+      setMessage(result.error ?? "Nutzerliste konnte nicht geladen werden.");
+      return;
+    }
+
+    setManagedUsers(result.users);
+    setDisplayNameDrafts(
+      Object.fromEntries(result.users.map((user) => [user.id, user.displayName])),
+    );
+  }, [getAccessToken]);
+
+  useEffect(() => {
+    if (!supabase || !session || !isAdmin) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      void loadManagedUsers();
+    }, 0);
+
+    return () => window.clearTimeout(timeout);
+  }, [isAdmin, loadManagedUsers, session]);
 
   async function callAdminApi(body: object) {
     if (!supabase || !session) {
@@ -97,10 +156,11 @@ export default function AdminPage() {
       return;
     }
 
-    setMessage(`Nutzer ${result.email} wurde erfolgreich erstellt.`);
+    setMessage(result.email ? `Nutzer ${result.email} wurde erfolgreich erstellt.` : "Nutzer erfolgreich aktualisiert.");
     setEmail("");
     setPassword("");
     setDisplayName("");
+    await loadManagedUsers();
   }
 
   async function handleCreateUser() {
@@ -119,6 +179,18 @@ export default function AdminPage() {
 
   async function handleSeedUsers() {
     await callAdminApi({ action: "reset-seed" });
+    await loadManagedUsers();
+  }
+
+  async function handleUpdateUser(userId: string) {
+    await callAdminApi({
+      action: "update",
+      userId,
+      displayName: displayNameDrafts[userId] ?? "",
+      password: passwordDrafts[userId] ?? "",
+    });
+    setPasswordDrafts((prev) => ({ ...prev, [userId]: "" }));
+    await loadManagedUsers();
   }
 
   return (
@@ -146,6 +218,7 @@ export default function AdminPage() {
               Dieser Bereich ist nur fuer den Admin freigeschaltet. Aktuell eingeloggt: {session.user.email}
             </p>
           ) : (
+            <>
             <div className="grid gap-6 lg:grid-cols-[1fr_1fr]">
               <div className="space-y-4 rounded-2xl border border-white/10 bg-black/20 p-5">
                 <h2 className="text-2xl font-semibold text-white">Einzelnen Nutzer anlegen</h2>
@@ -177,7 +250,7 @@ export default function AdminPage() {
               </div>
 
               <div className="space-y-4 rounded-2xl border border-white/10 bg-black/20 p-5">
-                <h2 className="text-2xl font-semibold text-white">5 Test-Accounts anlegen</h2>
+                <h2 className="text-2xl font-semibold text-white">Test-Accounts pflegen</h2>
                 <p className="text-sm text-stone-400">
                   Diese Zugangsdaten werden direkt in Supabase angelegt und sind danach sofort nutzbar.
                 </p>
@@ -199,6 +272,65 @@ export default function AdminPage() {
                 </button>
               </div>
             </div>
+
+            <div className="mt-6 rounded-2xl border border-white/10 bg-black/20 p-5">
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="text-2xl font-semibold text-white">Freunde verwalten</h2>
+                <button
+                  onClick={() => void loadManagedUsers()}
+                  className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white"
+                >
+                  Neu laden
+                </button>
+              </div>
+              <div className="mt-4 space-y-3">
+                {managedUsers.length > 0 ? (
+                  managedUsers.map((user) => (
+                    <div key={user.id} className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-white">{user.email}</p>
+                          <p className="text-xs text-stone-400">
+                            Seit {new Date(user.createdAt).toLocaleDateString("de-DE")}
+                          </p>
+                        </div>
+                        <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs text-stone-300">
+                          {user.email === adminEmail ? "Admin" : "Freund"}
+                        </span>
+                      </div>
+                      <div className="mt-3 grid gap-3 lg:grid-cols-[1fr_1fr_auto]">
+                        <input
+                          value={displayNameDrafts[user.id] ?? user.displayName}
+                          onChange={(event) =>
+                            setDisplayNameDrafts((prev) => ({ ...prev, [user.id]: event.target.value }))
+                          }
+                          placeholder="Anzeigename"
+                          className="h-11 rounded-2xl border border-white/10 bg-black/20 px-4 text-white outline-none placeholder:text-stone-500"
+                        />
+                        <input
+                          value={passwordDrafts[user.id] ?? ""}
+                          onChange={(event) =>
+                            setPasswordDrafts((prev) => ({ ...prev, [user.id]: event.target.value }))
+                          }
+                          placeholder="Neues Passwort (optional)"
+                          className="h-11 rounded-2xl border border-white/10 bg-black/20 px-4 text-white outline-none placeholder:text-stone-500"
+                        />
+                        <button
+                          onClick={() => void handleUpdateUser(user.id)}
+                          disabled={loading}
+                          className="rounded-2xl bg-emerald-400 px-4 py-3 text-sm font-semibold text-black disabled:opacity-50"
+                        >
+                          Speichern
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-stone-400">Noch keine Nutzer gefunden.</p>
+                )}
+              </div>
+            </div>
+            </>
           )}
 
           {message ? <p className="mt-4 text-sm text-stone-300">{message}</p> : null}

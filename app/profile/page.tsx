@@ -655,6 +655,22 @@ export default function ProfilePage() {
                     />
                   </div>
                 </div>
+
+                <div className="rounded-[1.25rem] border border-white/10 bg-white/5 p-4 sm:col-span-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-[10px] uppercase tracking-[0.18em] text-stone-400">Spielstil Snapshot</p>
+                    <p className="text-xs text-stone-400">kurz und knackig</p>
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    <StatPill label="Lieblings-Finish" value={data.insights.checkoutInsights.favoriteFinish} />
+                    <StatPill
+                      label="Engstes Duell"
+                      value={data.insights.rivalryInsights.closest[0]?.name ?? "Noch offen"}
+                    />
+                    <StatPill label="Lieblings-Route" value={data.insights.checkoutInsights.favoriteRoute} />
+                    <StatPill label="Lieblingsmodus" value={data.insights.favoriteMode} />
+                  </div>
+                </div>
               </div>
             </section>
 

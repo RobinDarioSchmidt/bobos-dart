@@ -11,7 +11,7 @@ import { supabase, supabaseEnabled } from "@/lib/supabase";
 type AppMode = "match" | "training";
 type SelectedFlow = "overview" | "local" | "training";
 type GameMode = 301 | 501;
-type TrainingMode = "around-the-clock" | "bull-drill";
+type TrainingMode = "around-the-clock" | "bull-drill" | "shanghai" | "doubles-around";
 type SegmentRing = "single" | "double" | "triple" | "outer-bull" | "bull" | "miss" | "unknown";
 
 type Visit = {
@@ -70,6 +70,7 @@ type TrainingSession = {
   message: string;
   history: string[];
   throws: StoredThrow[];
+  currentGoalHits: Array<"S" | "D" | "T">;
 };
 
 type Segment = {
@@ -141,6 +142,11 @@ type CloudAppSettings = {
   trainingMode: TrainingMode;
 };
 
+type BeforeInstallPromptEvent = Event & {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
+};
+
 type LocalStoredState = CloudAppSettings & {
   stats: StoredStats;
   localMatchHistory: MatchHistoryEntry[];
@@ -155,6 +161,7 @@ const LEGS_OPTIONS = [2, 3, 5];
 const SETS_OPTIONS = [1, 2, 3];
 const PLAYER_COUNT_OPTIONS = [2, 3, 4];
 const TRAINING_TARGETS = [...Array.from({ length: 20 }, (_, index) => index + 1), 25];
+const SHANGHAI_TARGETS = Array.from({ length: 20 }, (_, index) => index + 1);
 const BOARD_START_ANGLE = -9;
 const BOARD_SLICE_ANGLE = 18;
 const BOARD_RADIUS = {
@@ -198,6 +205,37 @@ function createTrainingSession(mode: TrainingMode): TrainingSession {
       message: "Bull Drill gestartet. Triff 10 Darts lang Bull oder Outer Bull.",
       history: [],
       throws: [],
+      currentGoalHits: [],
+    };
+  }
+
+  if (mode === "shanghai") {
+    return {
+      mode,
+      targetIndex: 0,
+      dartsThrown: 0,
+      hits: 0,
+      score: 0,
+      finished: false,
+      message: "Shanghai gestartet. Triff Single, Double und Triple auf dasselbe Ziel.",
+      history: [],
+      throws: [],
+      currentGoalHits: [],
+    };
+  }
+
+  if (mode === "doubles-around") {
+    return {
+      mode,
+      targetIndex: 0,
+      dartsThrown: 0,
+      hits: 0,
+      score: 0,
+      finished: false,
+      message: "Doubles Around gestartet. Arbeite dich ueber Doubles bis Bull.",
+      history: [],
+      throws: [],
+      currentGoalHits: [],
     };
   }
 
@@ -211,7 +249,29 @@ function createTrainingSession(mode: TrainingMode): TrainingSession {
     message: "Around the Clock gestartet. Ziel ist die 1.",
     history: [],
     throws: [],
+    currentGoalHits: [],
   };
+}
+
+function getTrainingTargets(mode: TrainingMode) {
+  if (mode === "shanghai") {
+    return SHANGHAI_TARGETS;
+  }
+
+  return TRAINING_TARGETS;
+}
+
+function getTrainingModeLabel(mode: TrainingMode) {
+  if (mode === "bull-drill") {
+    return "Bull Drill";
+  }
+  if (mode === "shanghai") {
+    return "Shanghai";
+  }
+  if (mode === "doubles-around") {
+    return "Doubles Around";
+  }
+  return "Around the Clock";
 }
 
 function clonePlayers(players: Player[]) {
@@ -371,7 +431,12 @@ function getCurrentTrainingTarget(session: TrainingSession) {
     return "Bull";
   }
 
-  const target = TRAINING_TARGETS[session.targetIndex];
+  if (session.mode === "doubles-around") {
+    const target = TRAINING_TARGETS[session.targetIndex];
+    return target === 25 ? "Bull" : `D${target}`;
+  }
+
+  const target = getTrainingTargets(session.mode)[session.targetIndex];
   return target === 25 ? "Bull" : `${target}`;
 }
 
@@ -667,6 +732,8 @@ export default function Page() {
   const [trainingSession, setTrainingSession] = useState<TrainingSession>(() =>
     createTrainingSession("around-the-clock"),
   );
+  const [installPromptEvent, setInstallPromptEvent] = useState<BeforeInstallPromptEvent | null>(null);
+  const [installBusy, setInstallBusy] = useState(false);
   const [hydrated, setHydrated] = useState(false);
   const [cloudSettingsReady, setCloudSettingsReady] = useState(false);
   const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL ?? "";
@@ -722,9 +789,38 @@ export default function Page() {
       setLocalMatchHistory(parsed.localMatchHistory.slice(0, 8));
     }
 
-    if (parsed.trainingMode === "bull-drill" || parsed.trainingMode === "around-the-clock") {
+    if (
+      parsed.trainingMode === "bull-drill" ||
+      parsed.trainingMode === "around-the-clock" ||
+      parsed.trainingMode === "shanghai" ||
+      parsed.trainingMode === "doubles-around"
+    ) {
       setTrainingSession(createTrainingSession(parsed.trainingMode));
     }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const handleBeforeInstallPrompt = (event: Event) => {
+      event.preventDefault();
+      setInstallPromptEvent(event as BeforeInstallPromptEvent);
+    };
+
+    const handleAppInstalled = () => {
+      setInstallPromptEvent(null);
+      setInstallBusy(false);
+    };
+
+    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+    window.addEventListener("appinstalled", handleAppInstalled);
+
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+      window.removeEventListener("appinstalled", handleAppInstalled);
+    };
   }, []);
 
   useEffect(() => {
@@ -1533,16 +1629,32 @@ export default function Page() {
     setTrainingSession(createTrainingSession(nextMode));
   }
 
+  async function installApp() {
+    if (!installPromptEvent) {
+      return;
+    }
+
+    setInstallBusy(true);
+    await installPromptEvent.prompt();
+    const choice = await installPromptEvent.userChoice;
+    if (choice.outcome !== "accepted") {
+      setInstallBusy(false);
+    }
+    setInstallPromptEvent(null);
+  }
+
   function registerTrainingThrow(segment: Segment) {
     if (trainingSession.finished) {
       return;
     }
 
+    const targetPool = getTrainingTargets(trainingSession.mode);
+    const currentTargetValue = targetPool[trainingSession.targetIndex];
     const targetLabel = trainingSession.mode === "bull-drill"
       ? "Bull"
-      : TRAINING_TARGETS[trainingSession.targetIndex] === 25
+      : currentTargetValue === 25
         ? "Bull"
-        : `${TRAINING_TARGETS[trainingSession.targetIndex]}`;
+        : `${currentTargetValue}`;
     const storedThrow = segmentToStoredThrow(segment, targetLabel);
 
     if (trainingSession.mode === "bull-drill") {
@@ -1589,14 +1701,129 @@ export default function Page() {
       return;
     }
 
-    const target = TRAINING_TARGETS[trainingSession.targetIndex];
+    if (trainingSession.mode === "doubles-around") {
+      const target = TRAINING_TARGETS[trainingSession.targetIndex];
+      const hit = segment.number === target && (segment.multiplier === 2 || (target === 25 && segment.number === 25));
+      const nextIndex = hit ? trainingSession.targetIndex + 1 : trainingSession.targetIndex;
+      const finished = nextIndex >= TRAINING_TARGETS.length;
+      const hits = trainingSession.hits + (hit ? 1 : 0);
+      const dartsThrown = trainingSession.dartsThrown + 1;
+      const gained = hit ? (target === 25 ? 50 : target * 2) : 0;
+      const score = trainingSession.score + gained;
+      const nextTarget = finished ? "fertig" : TRAINING_TARGETS[nextIndex] === 25 ? "Bull" : `D${TRAINING_TARGETS[nextIndex]}`;
+      const historyEntry = `${segment.label} auf ${target === 25 ? "Bull" : `D${target}`}: ${hit ? "Treffer" : "Fehlwurf"}`;
+      const message = finished
+        ? `Doubles Around beendet in ${dartsThrown} Darts.`
+        : hit
+          ? `Double getroffen. Naechstes Ziel: ${nextTarget}.`
+          : `Noch nicht drin. Ziel bleibt ${target === 25 ? "Bull" : `D${target}`}.`;
+
+      setTrainingSession((prev) => ({
+        ...prev,
+        targetIndex: nextIndex,
+        dartsThrown,
+        hits,
+        score,
+        finished,
+        message,
+        history: [historyEntry, ...prev.history].slice(0, 12),
+        throws: [...prev.throws, storedThrow],
+        currentGoalHits: [],
+      }));
+
+      if (finished) {
+        setStats((prev) => ({
+          ...prev,
+          trainingSessions: prev.trainingSessions + 1,
+          bestTrainingScore: Math.max(prev.bestTrainingScore, score),
+        }));
+        void saveTrainingSessionToCloud({
+          ...trainingSession,
+          targetIndex: nextIndex,
+          dartsThrown,
+          hits,
+          score,
+          finished,
+          message,
+          history: [historyEntry, ...trainingSession.history].slice(0, 12),
+          throws: [...trainingSession.throws, storedThrow],
+          currentGoalHits: [],
+        });
+      }
+      return;
+    }
+
+    if (trainingSession.mode === "shanghai") {
+      const target = SHANGHAI_TARGETS[trainingSession.targetIndex];
+      const hitType =
+        segment.number === target
+          ? segment.multiplier === 3
+            ? "T"
+            : segment.multiplier === 2
+              ? "D"
+              : "S"
+          : null;
+      const alreadyHit = hitType ? trainingSession.currentGoalHits.includes(hitType) : false;
+      const nextGoalHits: Array<"S" | "D" | "T"> =
+        hitType && !alreadyHit ? [...trainingSession.currentGoalHits, hitType] : trainingSession.currentGoalHits;
+      const clearedTarget = nextGoalHits.length === 3;
+      const nextIndex = clearedTarget ? trainingSession.targetIndex + 1 : trainingSession.targetIndex;
+      const finished = nextIndex >= SHANGHAI_TARGETS.length;
+      const hits = trainingSession.hits + (hitType && !alreadyHit ? 1 : 0);
+      const dartsThrown = trainingSession.dartsThrown + 1;
+      const score = trainingSession.score + (hitType && !alreadyHit ? segment.score : 0);
+      const nextTarget = finished ? "fertig" : `${SHANGHAI_TARGETS[nextIndex]}`;
+      const progressText = nextGoalHits.length > 0 ? nextGoalHits.join("/") : "noch offen";
+      const historyEntry = `${segment.label} auf ${target}: ${hitType && !alreadyHit ? `${hitType} gesammelt` : "kein neuer Treffer"}`;
+      const message = finished
+        ? `Shanghai beendet in ${dartsThrown} Darts.`
+        : clearedTarget
+          ? `Shanghai auf ${target} komplett. Naechstes Ziel: ${nextTarget}.`
+          : `Shanghai ${target}: ${progressText}.`;
+
+      setTrainingSession((prev) => ({
+        ...prev,
+        targetIndex: nextIndex,
+        dartsThrown,
+        hits,
+        score,
+        finished,
+        message,
+        history: [historyEntry, ...prev.history].slice(0, 12),
+        throws: [...prev.throws, storedThrow],
+        currentGoalHits: clearedTarget ? [] : nextGoalHits,
+      }));
+
+      if (finished) {
+        setStats((prev) => ({
+          ...prev,
+          trainingSessions: prev.trainingSessions + 1,
+          bestTrainingScore: Math.max(prev.bestTrainingScore, score),
+        }));
+        void saveTrainingSessionToCloud({
+          ...trainingSession,
+          targetIndex: nextIndex,
+          dartsThrown,
+          hits,
+          score,
+          finished,
+          message,
+          history: [historyEntry, ...trainingSession.history].slice(0, 12),
+          throws: [...trainingSession.throws, storedThrow],
+          currentGoalHits: [],
+        });
+      }
+      return;
+    }
+
+    const target = currentTargetValue;
     const hit = segment.number === target;
     const nextIndex = hit ? trainingSession.targetIndex + 1 : trainingSession.targetIndex;
-    const finished = nextIndex >= TRAINING_TARGETS.length;
+    const finished = nextIndex >= targetPool.length;
     const hits = trainingSession.hits + (hit ? 1 : 0);
     const dartsThrown = trainingSession.dartsThrown + 1;
     const score = hit ? trainingSession.score + 10 : trainingSession.score;
-    const nextTarget = finished ? "fertig" : TRAINING_TARGETS[nextIndex] === 25 ? "Bull" : `${TRAINING_TARGETS[nextIndex]}`;
+    const nextTarget = finished ? "fertig" : targetPool[nextIndex] === 25 ? "Bull" : `${targetPool[nextIndex]}`;
     const historyEntry = `${segment.label} auf ${target === 25 ? "Bull" : target}: ${hit ? "Treffer" : "Fehlwurf"}`;
     const message = finished
       ? `Around the Clock beendet in ${dartsThrown} Darts.`
@@ -1614,6 +1841,7 @@ export default function Page() {
       message,
       history: [historyEntry, ...prev.history].slice(0, 12),
       throws: [...prev.throws, storedThrow],
+      currentGoalHits: [],
     }));
 
     if (finished) {
@@ -1632,6 +1860,7 @@ export default function Page() {
         message,
         history: [historyEntry, ...trainingSession.history].slice(0, 12),
         throws: [...trainingSession.throws, storedThrow],
+        currentGoalHits: [],
       });
     }
   }
@@ -1685,6 +1914,9 @@ export default function Page() {
             onLoadCloudDashboard={() => void loadCloudDashboard(session)}
             onLoadCloudMatches={() => void loadCloudMatches(session)}
             onLogout={() => void handleSignOut()}
+            canInstallApp={Boolean(installPromptEvent)}
+            installBusy={installBusy}
+            onInstallApp={() => void installApp()}
           />
         ) : (
           <>
@@ -1805,7 +2037,7 @@ export default function Page() {
                     <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
                       <p className="text-xs uppercase tracking-[0.2em] text-stone-400">Modus</p>
                       <p className="mt-2 text-2xl font-semibold text-white">
-                        {trainingSession.mode === "around-the-clock" ? "Around the Clock" : "Bull Drill"}
+                        {getTrainingModeLabel(trainingSession.mode)}
                       </p>
                     </div>
                     <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
@@ -2408,7 +2640,7 @@ export default function Page() {
                   Waehle einen Modus und trage danach jeden Dart ueber das Segment Board ein.
                 </p>
 
-                <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                   <button
                     onClick={() => switchTrainingMode("around-the-clock")}
                     className={`rounded-2xl px-5 py-4 text-left transition ${
@@ -2431,6 +2663,28 @@ export default function Page() {
                     <span className="block text-xs uppercase tracking-[0.22em]">Training</span>
                     <span className="text-xl font-semibold">Bull Drill</span>
                   </button>
+                  <button
+                    onClick={() => switchTrainingMode("shanghai")}
+                    className={`rounded-2xl px-5 py-4 text-left transition ${
+                      trainingSession.mode === "shanghai"
+                        ? "bg-emerald-400 text-black"
+                        : "border border-white/10 bg-black/20 text-white hover:bg-white/10"
+                    }`}
+                  >
+                    <span className="block text-xs uppercase tracking-[0.22em]">Training</span>
+                    <span className="text-xl font-semibold">Shanghai</span>
+                  </button>
+                  <button
+                    onClick={() => switchTrainingMode("doubles-around")}
+                    className={`rounded-2xl px-5 py-4 text-left transition ${
+                      trainingSession.mode === "doubles-around"
+                        ? "bg-fuchsia-400 text-black"
+                        : "border border-white/10 bg-black/20 text-white hover:bg-white/10"
+                    }`}
+                  >
+                    <span className="block text-xs uppercase tracking-[0.22em]">Training</span>
+                    <span className="text-xl font-semibold">Doubles Around</span>
+                  </button>
                 </div>
 
                 <div className="mt-5 flex flex-wrap gap-3">
@@ -2446,6 +2700,20 @@ export default function Page() {
                   <div className="rounded-2xl border border-white/10 bg-black/20 px-5 py-3 text-sm text-stone-300">
                     Darts: {trainingSession.dartsThrown}
                   </div>
+                  {trainingSession.mode === "shanghai" ? (
+                    <div className="rounded-2xl border border-white/10 bg-black/20 px-5 py-3 text-sm text-stone-300">
+                      Shanghai: {trainingSession.currentGoalHits.length > 0 ? trainingSession.currentGoalHits.join("/") : "noch offen"}
+                    </div>
+                  ) : null}
+                </div>
+                <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-stone-300">
+                  {trainingSession.mode === "shanghai"
+                    ? "Treffe auf jedem Ziel Single, Double und Triple, bevor du weiterrueckst."
+                    : trainingSession.mode === "doubles-around"
+                      ? "Nur Doubles zaehlen. Arbeite dich ueber D1 bis Bull."
+                      : trainingSession.mode === "bull-drill"
+                        ? "Zehn Darts auf Bull und Outer Bull, jeder Treffer zaehlt sofort."
+                        : "Treffe die Ziele der Reihe nach von 1 bis Bull."}
                 </div>
               </section>
 

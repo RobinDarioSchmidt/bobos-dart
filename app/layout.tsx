@@ -1,9 +1,20 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Bobo's Dart",
-  description: "Offline Dart Counter fuer 301 und 501 mit Average, Undo und Checkout-Hinweisen.",
+  description: "Dart Hub fuer lokales Spiel, Online-Matches, Training und Langzeitstatistiken.",
+  applicationName: "Bobo's Dart",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Bobo's Dart",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#111827",
 };
 
 export default function RootLayout({

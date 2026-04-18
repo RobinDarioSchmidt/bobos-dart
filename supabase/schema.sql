@@ -42,7 +42,7 @@ create table if not exists public.match_players (
 create table if not exists public.training_sessions (
   id uuid primary key default gen_random_uuid(),
   owner_id uuid not null references public.profiles(id) on delete cascade,
-  mode text not null check (mode in ('around-the-clock', 'bull-drill')),
+  mode text not null check (mode in ('around-the-clock', 'bull-drill', 'shanghai', 'doubles-around')),
   score int not null default 0,
   hits int not null default 0,
   darts_thrown int not null default 0,
