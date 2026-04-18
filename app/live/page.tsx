@@ -4,7 +4,12 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { LiveBoardPanel, type LiveBoardSegment } from "@/components/live/board-panel";
-import { LiveHistoryPanel, LiveScoreboardPanel, LiveStatsPanel } from "@/components/live/match-panels";
+import {
+  LiveHistoryPanel,
+  LiveMatchSummaryPanel,
+  LiveScoreboardPanel,
+  LiveStatsPanel,
+} from "@/components/live/match-panels";
 import { LiveRoomCreatePanel, LiveRoomJoinPanel } from "@/components/live/room-panels";
 import { MobileAppNav } from "@/components/mobile-app-nav";
 import {
@@ -14,6 +19,7 @@ import {
   getPreferredDisplayName,
   normalizeLiveState,
   removePendingDart,
+  startRematchLiveMatch,
   startNextLiveLeg,
   type LiveBoardMarker,
   type LiveDart,
@@ -503,6 +509,13 @@ export default function LivePage() {
       currentUserSeat >= 0 &&
       (liveState.legWinner === currentUserSeat || liveState.players[0]?.profileId === session.user.id),
   );
+  const canControlRematch = Boolean(
+    liveState &&
+      session &&
+      liveState.matchWinner !== null &&
+      currentUserSeat >= 0 &&
+      (liveState.matchWinner === currentUserSeat || liveState.players[0]?.profileId === session.user.id),
+  );
 
   const pendingVisit = liveState?.pendingVisit;
   const pendingLabels = pendingVisit?.darts.map((dart) => dart.label) ?? [];
@@ -625,6 +638,19 @@ export default function LivePage() {
     await pushRoomState(nextState, "next_leg");
   }
 
+  async function handleRematch() {
+    if (!liveState) {
+      return;
+    }
+
+    if (loading) {
+      return;
+    }
+
+    const nextState = startRematchLiveMatch(liveState);
+    await pushRoomState(nextState, "rematch");
+  }
+
   const historyHeading = liveState?.bullOff.enabled && !liveState.bullOff.completed
     ? `Live Historie - ${currentPlayer?.name ?? "Niemand"} wirft Bull-Off`
     : `Live Historie - ${currentPlayer?.name ?? "Niemand"} ist dran!`;
@@ -735,6 +761,16 @@ export default function LivePage() {
                     onFinishVisit={() => void handleFinishVisit()}
                     onNextLeg={() => void handleNextLeg()}
                   />
+
+                  {liveState.matchWinner !== null ? (
+                    <LiveMatchSummaryPanel
+                      liveState={liveState}
+                      playerStats={livePlayerStats}
+                      canControlRematch={canControlRematch}
+                      loading={loading}
+                      onRematch={() => void handleRematch()}
+                    />
+                  ) : null}
 
                 </div>
 

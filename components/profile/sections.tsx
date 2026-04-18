@@ -49,6 +49,28 @@ type AnalyticsShape = {
     unit: string;
     tone: string;
   }>;
+  checkoutInsights: {
+    total: number;
+    bestCheckout: number;
+    averageCheckout: number;
+    favoriteRoute: string;
+    favoriteFinish: string;
+    byRange: Array<{ label: string; count: number }>;
+    recent: Array<{ route: string; total: number; finishLabel: string; playedAt: string }>;
+  };
+  rivalryInsights: {
+    closest: Array<{ name: string; matches: number; winRate: number; legDiff: number; lastPlayed: string }>;
+    toughest: Array<{ name: string; matches: number; winRate: number; legDiff: number; lastPlayed: string }>;
+    bestMatchups: Array<{ name: string; matches: number; winRate: number; legDiff: number; lastPlayed: string }>;
+  };
+  throwPatternTimeline: Array<{
+    period: string;
+    triples: number;
+    doubles: number;
+    bulls: number;
+    checkouts: number;
+    misses: number;
+  }>;
 };
 
 type SeasonEntry = {
@@ -422,6 +444,126 @@ export function ProfileAchievementsSection({
             </div>
           );
         })}
+      </div>
+    </details>
+  );
+}
+
+export function ProfileDeepInsightsSection({
+  analytics,
+}: {
+  analytics: AnalyticsShape;
+}) {
+  const rivalryBlocks = [
+    { label: "Engste Duelle", entries: analytics.rivalryInsights.closest, tone: "border-sky-300/25 bg-sky-400/10" },
+    { label: "Haerteste Gegner", entries: analytics.rivalryInsights.toughest, tone: "border-rose-300/25 bg-rose-400/10" },
+    { label: "Lieblingsduelle", entries: analytics.rivalryInsights.bestMatchups, tone: "border-emerald-300/25 bg-emerald-400/10" },
+  ] as const;
+
+  return (
+    <details className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4">
+      <summary className="cursor-pointer list-none text-lg font-semibold text-white">Checkout- und Rivalitaetsdaten</summary>
+      <div className="mt-4 space-y-4">
+        <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+          <StatPill label="Checkouts" value={String(analytics.checkoutInsights.total)} tone="border-emerald-300/25 bg-emerald-400/12" />
+          <StatPill label="Bestes Finish" value={String(analytics.checkoutInsights.bestCheckout)} tone="border-amber-300/25 bg-amber-300/12" />
+          <StatPill label="Checkout-Schnitt" value={analytics.checkoutInsights.averageCheckout.toFixed(1)} tone="border-sky-300/25 bg-sky-400/12" />
+          <StatPill label="Lieblings-Finish" value={analytics.checkoutInsights.favoriteFinish} tone="border-fuchsia-300/25 bg-fuchsia-400/12" />
+        </div>
+
+        <div className="grid gap-4 lg:grid-cols-[0.95fr_1.05fr]">
+          <div className="rounded-[1.25rem] border border-white/10 bg-black/20 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-sm font-semibold text-white">Checkout-Bereiche</h3>
+              <p className="text-xs text-stone-400">{analytics.checkoutInsights.favoriteRoute}</p>
+            </div>
+            <div className="mt-4">
+              <SimpleBarChart data={analytics.checkoutInsights.byRange} valueKey="count" colorClass="bg-emerald-400" />
+            </div>
+          </div>
+
+          <div className="rounded-[1.25rem] border border-white/10 bg-black/20 p-4">
+            <h3 className="text-sm font-semibold text-white">Letzte Checkouts</h3>
+            <div className="mt-3 space-y-2">
+              {analytics.checkoutInsights.recent.length > 0 ? (
+                analytics.checkoutInsights.recent.map((entry) => (
+                  <div key={`${entry.playedAt}-${entry.route}`} className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-white">{entry.route}</p>
+                        <p className="mt-1 text-xs text-stone-400">
+                          {entry.total} Punkte · Finish auf {entry.finishLabel}
+                        </p>
+                      </div>
+                      <p className="text-[11px] text-stone-400">
+                        {new Date(entry.playedAt).toLocaleDateString("de-DE")}
+                      </p>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-stone-400">Noch keine Checkout-Routen in der Cloud.</p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="grid gap-4 lg:grid-cols-3">
+          {rivalryBlocks.map((block) => (
+            <div key={block.label} className="rounded-[1.25rem] border border-white/10 bg-black/20 p-4">
+              <h3 className="text-sm font-semibold text-white">{block.label}</h3>
+              <div className="mt-3 space-y-2">
+                {block.entries.length > 0 ? (
+                  block.entries.map((entry) => (
+                    <div key={`${block.label}-${entry.name}`} className={`rounded-2xl border p-3 ${block.tone}`}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-white">{entry.name}</p>
+                          <p className="mt-1 text-xs text-stone-200">
+                            {entry.matches} Matches · Winrate {entry.winRate.toFixed(1)}%
+                          </p>
+                        </div>
+                        <p className="text-sm font-semibold text-white">
+                          {entry.legDiff > 0 ? "+" : ""}{entry.legDiff} Legs
+                        </p>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-stone-400">Noch nicht genug direkte Duelle.</p>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="rounded-[1.25rem] border border-white/10 bg-black/20 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-sm font-semibold text-white">Triple- und Double-Trend</h3>
+              <p className="text-xs text-stone-400">monatlich</p>
+            </div>
+            <div className="mt-4">
+              <LineChart data={analytics.throwPatternTimeline} valueKey="triples" stroke="#34d399" />
+            </div>
+            <div className="mt-4">
+              <LineChart data={analytics.throwPatternTimeline} valueKey="doubles" stroke="#fbbf24" />
+            </div>
+          </div>
+
+          <div className="rounded-[1.25rem] border border-white/10 bg-black/20 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-sm font-semibold text-white">Bulls, Checkouts und Misses</h3>
+              <p className="text-xs text-stone-400">monatlich</p>
+            </div>
+            <div className="mt-4">
+              <SimpleBarChart data={analytics.throwPatternTimeline} valueKey="bulls" colorClass="bg-rose-400" />
+            </div>
+            <div className="mt-4">
+              <SimpleBarChart data={analytics.throwPatternTimeline} valueKey="checkouts" colorClass="bg-emerald-400" />
+            </div>
+          </div>
+        </div>
       </div>
     </details>
   );

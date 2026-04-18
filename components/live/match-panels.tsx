@@ -252,3 +252,124 @@ export function LiveHistoryPanel({
     </section>
   );
 }
+
+export function LiveMatchSummaryPanel({
+  liveState,
+  playerStats,
+  canControlRematch,
+  loading,
+  onRematch,
+}: {
+  liveState: LiveMatchState;
+  playerStats: LivePlayerStat[];
+  canControlRematch: boolean;
+  loading: boolean;
+  onRematch: () => void;
+}) {
+  const winnerIndex = liveState.matchWinner ?? 0;
+  const winner = liveState.players[winnerIndex];
+  const sortedPlayers = [...liveState.players]
+    .filter((player) => player.joined)
+    .sort((left, right) => {
+      const leftLegWins = liveState.history.filter((entry) => entry.result === "leg-win" && entry.playerName === left.name).length;
+      const rightLegWins = liveState.history.filter((entry) => entry.result === "leg-win" && entry.playerName === right.name).length;
+      if (right.sets !== left.sets) {
+        return right.sets - left.sets;
+      }
+      if (rightLegWins !== leftLegWins) {
+        return rightLegWins - leftLegWins;
+      }
+      const rightStats = playerStats.find((entry) => entry.name === right.name);
+      const leftStats = playerStats.find((entry) => entry.name === left.name);
+      return (rightStats?.average ?? 0) - (leftStats?.average ?? 0);
+    });
+
+  return (
+    <section className="rounded-[1.5rem] border border-emerald-300/20 bg-[linear-gradient(145deg,rgba(16,185,129,0.18),rgba(8,47,73,0.4),rgba(9,9,11,0.95))] p-4 backdrop-blur">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="text-[11px] uppercase tracking-[0.22em] text-emerald-100">Match beendet</p>
+          <h2 className="mt-1 text-2xl font-semibold text-white">{winner?.name ?? "Spieler"} gewinnt das Match</h2>
+          <p className="mt-1 text-sm text-stone-200">{liveState.statusText}</p>
+        </div>
+        <button
+          onClick={onRematch}
+          disabled={!canControlRematch || loading}
+          className="rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-black disabled:opacity-40"
+        >
+          Rematch starten
+        </button>
+      </div>
+
+      <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <div className="rounded-2xl border border-white/10 bg-black/25 p-3">
+          <p className="text-[10px] uppercase tracking-[0.18em] text-stone-400">Sieger</p>
+          <p className="mt-1 text-lg font-semibold text-white">{winner?.name ?? "-"}</p>
+        </div>
+        <div className="rounded-2xl border border-white/10 bg-black/25 p-3">
+          <p className="text-[10px] uppercase tracking-[0.18em] text-stone-400">Format</p>
+          <p className="mt-1 text-lg font-semibold text-white">
+            Best of {liveState.legsToWin} Legs / {liveState.setsToWin} Sets
+          </p>
+        </div>
+        <div className="rounded-2xl border border-white/10 bg-black/25 p-3">
+          <p className="text-[10px] uppercase tracking-[0.18em] text-stone-400">Finishes</p>
+          <p className="mt-1 text-lg font-semibold text-white">
+            {playerStats.reduce((sum, entry) => sum + entry.checkouts, 0)}
+          </p>
+        </div>
+        <div className="rounded-2xl border border-white/10 bg-black/25 p-3">
+          <p className="text-[10px] uppercase tracking-[0.18em] text-stone-400">Best Visit</p>
+          <p className="mt-1 text-lg font-semibold text-white">
+            {playerStats.reduce((best, entry) => Math.max(best, entry.bestVisit), 0)}
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-4 space-y-2">
+        {sortedPlayers.map((player, index) => {
+          const stats = playerStats.find((entry) => entry.name === player.name);
+          const legWins = liveState.history.filter((entry) => entry.result === "leg-win" && entry.playerName === player.name).length;
+          return (
+            <div
+              key={`${player.name}-${index}`}
+              className={`rounded-[1.25rem] border p-3 ${
+                winner?.name === player.name ? "border-emerald-300/25 bg-emerald-400/12" : "border-white/10 bg-black/20"
+              }`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                      <p className="text-sm font-semibold text-white">
+                    #{index + 1} {player.name}
+                  </p>
+                  <p className="mt-1 text-xs text-stone-400">
+                    {player.sets} Sets · {legWins} Legs · {stats?.visits ?? 0} Visits
+                  </p>
+                </div>
+                <p className="text-lg font-semibold text-white">{stats?.average.toFixed(1) ?? "0.0"} Avg</p>
+              </div>
+              <div className="mt-3 grid grid-cols-4 gap-2 text-center text-xs">
+                <div>
+                  <p className="text-stone-400">Best</p>
+                  <p className="mt-1 font-semibold text-white">{stats?.bestVisit ?? 0}</p>
+                </div>
+                <div>
+                  <p className="text-stone-400">Checkouts</p>
+                  <p className="mt-1 font-semibold text-white">{stats?.checkouts ?? 0}</p>
+                </div>
+                <div>
+                  <p className="text-stone-400">Busts</p>
+                  <p className="mt-1 font-semibold text-white">{stats?.busts ?? 0}</p>
+                </div>
+                <div>
+                  <p className="text-stone-400">Punkte</p>
+                  <p className="mt-1 font-semibold text-white">{stats?.scoredPoints ?? 0}</p>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}

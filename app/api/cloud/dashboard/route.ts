@@ -162,6 +162,19 @@ export async function GET(request: Request) {
   }
 
   const matchDetailRows = (allMatchPlayers ?? []) as MatchDetailRow[];
+  const userSeatByMatchId = new Map(
+    matchDetailRows
+      .filter((row) => row.profile_id === user.id)
+      .map((row) => [row.match_id, row.seat_index] as const),
+  );
+  const selfMatchDartRows = dartRows.filter(
+    (row) =>
+      row.source_type === "match" &&
+      typeof row.match_id === "string" &&
+      userSeatByMatchId.get(row.match_id) === row.player_seat_index,
+  );
+  const selfTrainingDartRows = dartRows.filter((row) => row.source_type === "training");
+  const selfDartRows = [...selfMatchDartRows, ...selfTrainingDartRows];
   const totalTrainingDarts = trainingRows.reduce((sum, row) => sum + row.darts_thrown, 0);
   const totalTrainingHits = trainingRows.reduce((sum, row) => sum + row.hits, 0);
   const stats = {
@@ -264,7 +277,7 @@ export async function GET(request: Request) {
     trainingRows.length > 0
       ? Number((trainingRows.reduce((sum, row) => sum + row.score, 0) / trainingRows.length).toFixed(1))
       : 0;
-  const countedBoardThrows = dartRows.filter((row) => row.ring !== "unknown");
+  const countedBoardThrows = selfDartRows.filter((row) => row.ring !== "unknown");
   const favoriteSegments = Object.entries(
     countedBoardThrows.reduce<Record<string, number>>((acc, row) => {
       acc[row.segment_label] = (acc[row.segment_label] ?? 0) + 1;
@@ -297,13 +310,13 @@ export async function GET(request: Request) {
   }, {});
   const heatmapMax = Math.max(0, ...Object.values(heatmapNumbers));
   const throwStats = {
-    totalThrows: dartRows.length,
+    totalThrows: selfDartRows.length,
     boardThrows: countedBoardThrows.length,
     bullsHit: countedBoardThrows.filter((row) => row.ring === "bull" || row.ring === "outer-bull").length,
     doublesHit: countedBoardThrows.filter((row) => row.ring === "double" || row.ring === "bull").length,
     triplesHit: countedBoardThrows.filter((row) => row.ring === "triple").length,
-    misses: dartRows.filter((row) => row.ring === "miss" || row.score === 0).length,
-    checkoutsHit: dartRows.filter((row) => row.is_checkout_dart).length,
+    misses: selfDartRows.filter((row) => row.ring === "miss" || row.score === 0).length,
+    checkoutsHit: selfDartRows.filter((row) => row.is_checkout_dart).length,
     favoriteSegment: favoriteSegments[0]?.label ?? "Noch offen",
     favoriteDouble: favoriteDoubles[0]?.label ?? "Noch offen",
   };
@@ -453,8 +466,8 @@ export async function GET(request: Request) {
   const monthlyTrainingWindow = trainingRows.filter((training) => new Date(training.played_at).getTime() >= thirtyDaysAgo);
   const weeklyTrainingWindow = trainingRows.filter((training) => new Date(training.played_at).getTime() >= sevenDaysAgo);
   const matchVisitScores = Object.values(
-    dartRows
-      .filter((row) => row.source_type === "match" && typeof row.match_id === "string")
+    selfMatchDartRows
+      .filter((row) => typeof row.match_id === "string")
       .reduce<Record<string, { score: number; playedAt: string }>>((acc, row) => {
         const key = `${row.match_id ?? "match"}:${row.player_seat_index ?? 0}:${row.visit_index ?? 0}`;
         if (!acc[key]) {
@@ -670,6 +683,162 @@ export async function GET(request: Request) {
       ];
     }),
   );
+  const checkoutVisits = Object.values(
+    selfMatchDartRows.reduce<
+      Record<
+        string,
+        {
+          matchId: string;
+          visitIndex: number;
+          playedAt: string;
+          route: string[];
+          total: number;
+          isCheckout: boolean;
+          finishLabel: string | null;
+        }
+      >
+    >((acc, row) => {
+      if (!row.match_id) {
+        return acc;
+      }
+      const key = `${row.match_id}:${row.visit_index ?? 0}`;
+      if (!acc[key]) {
+        acc[key] = {
+          matchId: row.match_id,
+          visitIndex: row.visit_index ?? 0,
+          playedAt: row.created_at ?? "",
+          route: [],
+          total: 0,
+          isCheckout: false,
+          finishLabel: null,
+        };
+      }
+      acc[key].route[row.dart_index ?? acc[key].route.length] = row.segment_label;
+      acc[key].total += row.score;
+      if (row.created_at && !acc[key].playedAt) {
+        acc[key].playedAt = row.created_at;
+      }
+      if (row.is_checkout_dart) {
+        acc[key].isCheckout = true;
+        acc[key].finishLabel = row.segment_label;
+      }
+      return acc;
+    }, {}),
+  )
+    .map((entry) => ({
+      ...entry,
+      route: entry.route.filter(Boolean),
+    }))
+    .filter((entry) => entry.isCheckout);
+  const favoriteCheckoutRouteEntry = Object.entries(
+    checkoutVisits.reduce<Record<string, number>>((acc, entry) => {
+      const key = entry.route.join(" - ");
+      if (!key) {
+        return acc;
+      }
+      acc[key] = (acc[key] ?? 0) + 1;
+      return acc;
+    }, {}),
+  ).sort((left, right) => right[1] - left[1])[0];
+  const favoriteCheckoutFinishEntry = Object.entries(
+    checkoutVisits.reduce<Record<string, number>>((acc, entry) => {
+      const key = entry.finishLabel ?? "Unbekannt";
+      acc[key] = (acc[key] ?? 0) + 1;
+      return acc;
+    }, {}),
+  ).sort((left, right) => right[1] - left[1])[0];
+  const checkoutInsights = {
+    total: checkoutVisits.length,
+    bestCheckout: checkoutVisits.reduce((best, entry) => Math.max(best, entry.total), 0),
+    averageCheckout:
+      checkoutVisits.length > 0
+        ? Number((checkoutVisits.reduce((sum, entry) => sum + entry.total, 0) / checkoutVisits.length).toFixed(1))
+        : 0,
+    favoriteRoute: favoriteCheckoutRouteEntry?.[0] ?? "Noch kein Checkout",
+    favoriteFinish: favoriteCheckoutFinishEntry?.[0] ?? "Noch offen",
+    byRange: [
+      { label: "1-40", count: checkoutVisits.filter((entry) => entry.total <= 40).length },
+      { label: "41-80", count: checkoutVisits.filter((entry) => entry.total >= 41 && entry.total <= 80).length },
+      { label: "81-120", count: checkoutVisits.filter((entry) => entry.total >= 81 && entry.total <= 120).length },
+      { label: "121+", count: checkoutVisits.filter((entry) => entry.total >= 121).length },
+    ],
+    recent: checkoutVisits
+      .sort((left, right) => new Date(right.playedAt).getTime() - new Date(left.playedAt).getTime())
+      .slice(0, 6)
+      .map((entry) => ({
+        route: entry.route.join(" - "),
+        total: entry.total,
+        finishLabel: entry.finishLabel ?? "Unbekannt",
+        playedAt: entry.playedAt,
+      })),
+  };
+  const rivalryInsights = {
+    closest: [...opponentBreakdown]
+      .filter((entry) => entry.matches >= 2)
+      .sort(
+        (left, right) =>
+          Math.abs(left.legsFor - left.legsAgainst) - Math.abs(right.legsFor - right.legsAgainst) ||
+          right.matches - left.matches,
+      )
+      .slice(0, 5)
+      .map((entry) => ({
+        ...entry,
+        legDiff: entry.legsFor - entry.legsAgainst,
+      })),
+    toughest: [...opponentBreakdown]
+      .filter((entry) => entry.matches >= 2)
+      .sort((left, right) => left.winRate - right.winRate || right.matches - left.matches)
+      .slice(0, 5)
+      .map((entry) => ({
+        ...entry,
+        legDiff: entry.legsFor - entry.legsAgainst,
+      })),
+    bestMatchups: [...opponentBreakdown]
+      .filter((entry) => entry.matches >= 2)
+      .sort((left, right) => right.winRate - left.winRate || right.matches - left.matches)
+      .slice(0, 5)
+      .map((entry) => ({
+        ...entry,
+        legDiff: entry.legsFor - entry.legsAgainst,
+      })),
+  };
+  const throwPatternTimeline = Object.values(
+    selfDartRows.reduce<
+      Record<
+        string,
+        {
+          period: string;
+          triples: number;
+          doubles: number;
+          bulls: number;
+          checkouts: number;
+          misses: number;
+        }
+      >
+    >((acc, row) => {
+      const stamp = row.created_at ? new Date(row.created_at) : null;
+      const period = stamp ? stamp.toLocaleDateString("de-DE", { month: "short", year: "2-digit" }) : "Unbekannt";
+      if (!acc[period]) {
+        acc[period] = { period, triples: 0, doubles: 0, bulls: 0, checkouts: 0, misses: 0 };
+      }
+      if (row.ring === "triple") {
+        acc[period].triples += 1;
+      }
+      if (row.ring === "double") {
+        acc[period].doubles += 1;
+      }
+      if (row.ring === "bull" || row.ring === "outer-bull") {
+        acc[period].bulls += 1;
+      }
+      if (row.ring === "miss" || row.score === 0) {
+        acc[period].misses += 1;
+      }
+      if (row.is_checkout_dart) {
+        acc[period].checkouts += 1;
+      }
+      return acc;
+    }, {}),
+  );
 
   return NextResponse.json({
     profile: profileRow,
@@ -701,6 +870,9 @@ export async function GET(request: Request) {
       monthlyTraining,
       modeBreakdown,
       opponentBreakdown,
+      checkoutInsights,
+      rivalryInsights,
+      throwPatternTimeline,
       records,
       achievements,
       seasonalLeaderboards,

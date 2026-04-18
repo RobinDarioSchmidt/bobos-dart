@@ -13,6 +13,7 @@ import {
 import {
   ProfileAchievementsSection,
   ProfileAnalyticsPanel,
+  ProfileDeepInsightsSection,
   ProfileMatchArchiveSection,
   ProfileRecordsSection,
   ProfileSeasonLeaderboardSection,
@@ -156,6 +157,28 @@ type ProfileResponse = {
         topVisitScore: number;
       };
     };
+    checkoutInsights: {
+      total: number;
+      bestCheckout: number;
+      averageCheckout: number;
+      favoriteRoute: string;
+      favoriteFinish: string;
+      byRange: Array<{ label: string; count: number }>;
+      recent: Array<{ route: string; total: number; finishLabel: string; playedAt: string }>;
+    };
+    rivalryInsights: {
+      closest: Array<{ name: string; matches: number; winRate: number; legDiff: number; lastPlayed: string }>;
+      toughest: Array<{ name: string; matches: number; winRate: number; legDiff: number; lastPlayed: string }>;
+      bestMatchups: Array<{ name: string; matches: number; winRate: number; legDiff: number; lastPlayed: string }>;
+    };
+    throwPatternTimeline: Array<{
+      period: string;
+      triples: number;
+      doubles: number;
+      bulls: number;
+      checkouts: number;
+      misses: number;
+    }>;
     achievements: Array<{
       key: string;
       title: string;
@@ -309,6 +332,21 @@ export default function ProfilePage() {
         filteredTrainingScore: 0,
         badges: [] as string[],
         achievements: [] as ProfileResponse["insights"]["achievements"],
+        checkoutInsights: {
+          total: 0,
+          bestCheckout: 0,
+          averageCheckout: 0,
+          favoriteRoute: "Noch kein Checkout",
+          favoriteFinish: "Noch offen",
+          byRange: [],
+          recent: [],
+        },
+        rivalryInsights: {
+          closest: [],
+          toughest: [],
+          bestMatchups: [],
+        },
+        throwPatternTimeline: [],
       };
     }
 
@@ -477,6 +515,9 @@ export default function ProfilePage() {
       filteredTrainingScore,
       badges,
       achievements: data.insights.achievements,
+      checkoutInsights: data.insights.checkoutInsights,
+      rivalryInsights: data.insights.rivalryInsights,
+      throwPatternTimeline: data.insights.throwPatternTimeline,
     };
   }, [analyticsNow, analyticsWindow, data, modeFilter]);
 
@@ -795,6 +836,8 @@ export default function ProfilePage() {
             />
 
             <ProfileRecordsSection records={data.insights.records} />
+
+            <ProfileDeepInsightsSection analytics={analytics} />
 
             <ProfileAchievementsSection badges={analytics.badges} achievements={analytics.achievements} />
           </>

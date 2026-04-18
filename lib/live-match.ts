@@ -534,6 +534,50 @@ export function startNextLiveLeg(previousState: LiveMatchState) {
   return nextState;
 }
 
+export function startRematchLiveMatch(previousState: LiveMatchState) {
+  const nextState = normalizeLiveState(previousState);
+  const firstJoined = getJoinedPlayerIndexes(nextState)[0] ?? 0;
+  const rematchStarter =
+    nextState.bullOff.enabled
+      ? firstJoined
+      : nextState.matchWinner ?? nextState.legWinner ?? firstJoined;
+
+  nextState.players = nextState.players.map((player) => ({
+    ...player,
+    score: nextState.mode,
+    legs: 0,
+    sets: 0,
+  }));
+  nextState.history = [];
+  nextState.pendingVisit = null;
+  nextState.legWinner = null;
+  nextState.matchWinner = null;
+
+  if (nextState.bullOff.enabled) {
+    nextState.bullOff = {
+      enabled: true,
+      completed: false,
+      currentPlayerIndex: firstJoined,
+      winnerIndex: null,
+      attempts: [],
+    };
+    nextState.activePlayer = firstJoined;
+    nextState.statusText = `${nextState.players[firstJoined].name} startet das Bull-Off fuer das Rematch.`;
+    return nextState;
+  }
+
+  nextState.bullOff = {
+    enabled: false,
+    completed: true,
+    currentPlayerIndex: null,
+    winnerIndex: null,
+    attempts: [],
+  };
+  nextState.activePlayer = rematchStarter;
+  nextState.statusText = `${nextState.players[rematchStarter].name} beginnt das Rematch.`;
+  return nextState;
+}
+
 export function generateRoomCode() {
   return Math.random().toString(36).slice(2, 8).toUpperCase();
 }
