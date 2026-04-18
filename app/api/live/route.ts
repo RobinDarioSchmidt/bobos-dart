@@ -14,6 +14,7 @@ import { authorizeSupabaseRequest } from "@/lib/server/request-auth";
 
 type LiveMatchRow = {
   id: string;
+  owner_id: string;
   room_code: string;
   state: LiveMatchState;
 };
@@ -270,7 +271,7 @@ export async function GET(request: Request) {
   const { adminClient } = getSupabaseAdminClients();
   const { data, error } = await adminClient
     .from("live_matches")
-    .select("id, room_code, state")
+    .select("id, owner_id, room_code, state")
     .eq("room_code", roomCode.toUpperCase())
     .single();
 
@@ -331,6 +332,14 @@ export async function POST(request: Request) {
         action: "update";
         roomCode: string;
         state: LiveMatchState;
+      }
+    | {
+        action: "leave";
+        roomCode: string;
+      }
+    | {
+        action: "close";
+        roomCode: string;
       };
 
   const { adminClient } = getSupabaseAdminClients();
@@ -357,7 +366,7 @@ export async function POST(request: Request) {
         room_code: roomCode,
         state,
       })
-      .select("id, room_code, state")
+      .select("id, owner_id, room_code, state")
       .single();
 
     if (error || !data) {
@@ -371,7 +380,7 @@ export async function POST(request: Request) {
     const displayName = getPreferredDisplayName(authResult.user.email, body.displayName, adminEmail);
     const { data, error } = await adminClient
       .from("live_matches")
-      .select("id, room_code, state")
+      .select("id, owner_id, room_code, state")
       .eq("room_code", body.roomCode.toUpperCase())
       .single();
 
@@ -407,7 +416,7 @@ export async function POST(request: Request) {
         updated_at: new Date().toISOString(),
       })
       .eq("id", match.id)
-      .select("id, room_code, state")
+      .select("id, owner_id, room_code, state")
       .single();
 
     if (updateError || !updated) {
@@ -420,7 +429,7 @@ export async function POST(request: Request) {
   if (body.action === "update") {
     const { data, error } = await adminClient
       .from("live_matches")
-      .select("id, room_code, state")
+      .select("id, owner_id, room_code, state")
       .eq("room_code", body.roomCode.toUpperCase())
       .single();
 
@@ -465,7 +474,7 @@ export async function POST(request: Request) {
         updated_at: new Date().toISOString(),
       })
       .eq("id", match.id)
-      .select("id, room_code, state")
+      .select("id, owner_id, room_code, state")
       .single();
 
     if (updateError || !updated) {
@@ -473,6 +482,113 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ match: updated });
+  }
+
+  if (body.action === "leave" || body.action === "close") {
+    const { data, error } = await adminClient
+      .from("live_matches")
+      .select("id, owner_id, room_code, state")
+      .eq("room_code", body.roomCode.toUpperCase())
+      .single();
+
+    if (error || !data) {
+      return NextResponse.json({ error: error?.message ?? "match_not_found" }, { status: 404 });
+    }
+
+    const match = data as LiveMatchRow;
+    const currentState = normalizeLiveState(match.state);
+    const participantIndex = currentState.players.findIndex(
+      (player) => player.joined && player.profileId === authResult.user.id,
+    );
+
+    if (body.action === "close") {
+      if (match.owner_id !== authResult.user.id) {
+        return NextResponse.json({ error: "only_host_can_close_room" }, { status: 403 });
+      }
+
+      const { error: deleteError } = await adminClient.from("live_matches").delete().eq("id", match.id);
+      if (deleteError) {
+        return NextResponse.json({ error: deleteError.message ?? "close_failed" }, { status: 400 });
+      }
+
+      return NextResponse.json({ closed: true });
+    }
+
+    if (participantIndex < 0) {
+      return NextResponse.json({ error: "not_a_participant" }, { status: 403 });
+    }
+
+    const leavingPlayer = currentState.players[participantIndex];
+    currentState.players[participantIndex] = {
+      ...currentState.players[participantIndex],
+      joined: false,
+      profileId: null,
+      score: currentState.mode,
+      legs: 0,
+      sets: 0,
+      name: `Spieler ${participantIndex + 1}`,
+    };
+
+    if (currentState.pendingVisit?.playerIndex === participantIndex) {
+      currentState.pendingVisit = null;
+    }
+
+    const remainingJoined = currentState.players
+      .map((player, index) => ({ player, index }))
+      .filter((entry) => entry.player.joined);
+
+    if (remainingJoined.length === 0) {
+      const { error: deleteError } = await adminClient.from("live_matches").delete().eq("id", match.id);
+      if (deleteError) {
+        return NextResponse.json({ error: deleteError.message ?? "leave_failed" }, { status: 400 });
+      }
+
+      return NextResponse.json({ closed: true });
+    }
+
+    let nextOwnerId = match.owner_id;
+    if (match.owner_id === authResult.user.id) {
+      nextOwnerId = remainingJoined[0].player.profileId ?? match.owner_id;
+    }
+
+    if (currentState.activePlayer === participantIndex) {
+      currentState.activePlayer = remainingJoined[0].index;
+    }
+
+    if (currentState.legWinner === participantIndex) {
+      currentState.legWinner = null;
+    }
+
+    if (currentState.matchWinner === participantIndex) {
+      currentState.matchWinner = null;
+    }
+
+    if (currentState.bullOff.enabled && !currentState.bullOff.completed) {
+      currentState.bullOff.attempts = currentState.bullOff.attempts.filter(
+        (attempt) => attempt.playerIndex !== participantIndex,
+      );
+      currentState.bullOff.currentPlayerIndex = remainingJoined[0].index;
+      currentState.statusText = `${leavingPlayer.name} hat den Raum verlassen. ${remainingJoined[0].player.name} ist wieder dran.`;
+    } else {
+      currentState.statusText = `${leavingPlayer.name} hat den Raum verlassen. ${remainingJoined[0].player.name} fuehrt den Raum weiter.`;
+    }
+
+    const { data: updated, error: updateError } = await adminClient
+      .from("live_matches")
+      .update({
+        owner_id: nextOwnerId,
+        state: currentState,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", match.id)
+      .select("id, owner_id, room_code, state")
+      .single();
+
+    if (updateError || !updated) {
+      return NextResponse.json({ error: updateError?.message ?? "leave_failed" }, { status: 400 });
+    }
+
+    return NextResponse.json({ match: updated, left: true });
   }
 
   return NextResponse.json({ error: "invalid_action" }, { status: 400 });

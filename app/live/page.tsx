@@ -36,6 +36,7 @@ import { supabase, supabaseEnabled } from "@/lib/supabase";
 
 type LiveMatchResponse = {
   match: {
+    owner_id: string;
     room_code: string;
     state: LiveMatchState;
   };
@@ -58,6 +59,8 @@ function formatLiveError(error: string) {
       return "Du bist aktuell nicht mehr Teil dieses Raums.";
     case "invalid_action":
       return "Diese Aktion wird gerade nicht unterstuetzt.";
+    case "only_host_can_close_room":
+      return "Nur der Host kann den Raum schliessen.";
     case "missing_service_role_or_supabase_config":
         return "Der Online-Modus ist noch nicht komplett konfiguriert.";
     default:
@@ -124,6 +127,7 @@ export default function LivePage() {
     return new URLSearchParams(window.location.search).get("room")?.toUpperCase() ?? "";
   });
   const [liveRoomCode, setLiveRoomCode] = useState("");
+  const [roomOwnerId, setRoomOwnerId] = useState("");
   const [liveState, setLiveState] = useState<LiveMatchState | null>(null);
   const [mode, setMode] = useState<301 | 501>(501);
   const [finishMode, setFinishMode] = useState<LiveFinishMode>("double");
@@ -254,12 +258,14 @@ export default function LivePage() {
       setMessage(formatLiveError(nextError));
       if (nextError === "match_not_found") {
         setLiveRoomCode("");
+        setRoomOwnerId("");
         setLiveState(null);
       }
       return;
     }
 
     setLiveRoomCode(result.match.room_code);
+    setRoomOwnerId(result.match.owner_id);
     setLiveState(normalizeLiveState(result.match.state));
     setConnectionState("online");
   }, []);
@@ -384,9 +390,21 @@ export default function LivePage() {
         body: JSON.stringify(body),
       });
 
-      const result = (await response.json()) as LiveMatchResponse | { error: string };
+      const result = (await response.json()) as LiveMatchResponse | { error: string } | { closed: true };
 
       if (!response.ok || !("match" in result)) {
+        if ("closed" in result && result.closed) {
+          setLiveRoomCode("");
+          setRoomOwnerId("");
+          setLiveState(null);
+          setConnectedNames([]);
+          if (typeof window !== "undefined") {
+            window.localStorage.removeItem(LIVE_ROOM_STORAGE_KEY);
+          }
+          setMessage("Der Raum ist beendet.");
+          setConnectionState("online");
+          return { closed: true };
+        }
         const nextError = "error" in result && result.error ? result.error : "update_failed";
         setMessage(formatLiveError(nextError));
         setConnectionState("offline");
@@ -395,9 +413,11 @@ export default function LivePage() {
 
       const normalized = normalizeLiveState(result.match.state);
       setLiveRoomCode(result.match.room_code);
+      setRoomOwnerId(result.match.owner_id);
       setLiveState(normalized);
       setConnectionState("online");
       return {
+        owner_id: result.match.owner_id,
         room_code: result.match.room_code,
         state: normalized,
       };
@@ -542,6 +562,8 @@ export default function LivePage() {
       currentUserSeat >= 0 &&
       (liveState.matchWinner === currentUserSeat || liveState.players[0]?.profileId === session.user.id),
   );
+  const isRoomHost = Boolean(session?.user.id && roomOwnerId && session.user.id === roomOwnerId);
+  const joinedPlayerCount = liveState?.players.filter((player) => player.joined).length ?? 0;
 
   const pendingVisit = liveState?.pendingVisit;
   const pendingLabels = pendingVisit?.darts.map((dart) => dart.label) ?? [];
@@ -677,6 +699,36 @@ export default function LivePage() {
     await pushRoomState(nextState, "rematch");
   }
 
+  async function leaveRoom() {
+    if (!liveRoomCode) {
+      return;
+    }
+
+    const result = await callLiveApi({
+      action: "leave",
+      roomCode: liveRoomCode,
+    });
+
+    if (result && "room_code" in result && typeof result.room_code === "string") {
+      await broadcastRefresh(result.room_code, "leave");
+    }
+  }
+
+  async function closeRoom() {
+    if (!liveRoomCode) {
+      return;
+    }
+
+    const result = await callLiveApi({
+      action: "close",
+      roomCode: liveRoomCode,
+    });
+
+    if (result && "closed" in result && result.closed) {
+      setMessage("Der Raum wurde geschlossen.");
+    }
+  }
+
   const historyHeading = liveState?.bullOff.enabled && !liveState.bullOff.completed
     ? `Live Historie - ${currentPlayer?.name ?? "Niemand"} wirft Bull-Off`
     : `Live Historie - ${currentPlayer?.name ?? "Niemand"} ist dran!`;
@@ -766,6 +818,9 @@ export default function LivePage() {
                 joinOpen={joinOpen}
                 roomCodeInput={roomCodeInput}
                 liveRoomCode={liveRoomCode}
+                isRoomHost={isRoomHost}
+                joinedPlayerCount={joinedPlayerCount}
+                maxPlayers={liveState?.maxPlayers ?? maxPlayers}
                 loading={loading}
                 message={message}
                 onToggle={() => setJoinOpen((prev) => !prev)}
@@ -774,6 +829,8 @@ export default function LivePage() {
                 onCopyRoomCode={() => void copyRoomCode()}
                 onCopyRoomLink={() => void copyRoomLink()}
                 onReconnect={() => void reconnectToRoom()}
+                onLeaveRoom={() => void leaveRoom()}
+                onCloseRoom={() => void closeRoom()}
               />
             </section>
 
