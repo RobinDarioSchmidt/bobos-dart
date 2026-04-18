@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -540,7 +540,7 @@ export default function MatchDetailPage() {
                             key={`${player.name}-${route.route}-${route.score}`}
                             className="rounded-full border border-emerald-300/25 bg-emerald-400/12 px-3 py-1.5 text-sm font-semibold text-emerald-100"
                           >
-                            {route.route} · {route.score}
+                            {route.route} - {route.score}
                           </span>
                         ))
                       ) : (

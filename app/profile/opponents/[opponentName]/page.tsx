@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
@@ -202,7 +202,7 @@ export default function OpponentDetailPage() {
                       <p className="text-[10px] uppercase tracking-[0.18em] text-stone-400">Lieblingsmodus</p>
                       <p className="mt-1 text-lg font-semibold text-white">
                         {data.rivalryStory.bestMode
-                          ? `${data.rivalryStory.bestMode.mode} · ${data.rivalryStory.bestMode.winRate.toFixed(1)}%`
+                          ? `${data.rivalryStory.bestMode.mode} - ${data.rivalryStory.bestMode.winRate.toFixed(1)}%`
                           : "Noch offen"}
                       </p>
                     </div>
@@ -297,7 +297,7 @@ export default function OpponentDetailPage() {
                           <p className="text-sm text-stone-300">{entry.winRate.toFixed(1)}%</p>
                         </div>
                         <p className="mt-1 text-xs text-stone-400">
-                          {entry.wins}/{entry.matches} Siege · Avg {entry.myAverage.toFixed(1)} : {entry.opponentAverage.toFixed(1)}
+                          {entry.wins}/{entry.matches} Siege - Avg {entry.myAverage.toFixed(1)} : {entry.opponentAverage.toFixed(1)}
                         </p>
                       </div>
                     ))}
@@ -315,7 +315,7 @@ export default function OpponentDetailPage() {
                               <p className="text-sm font-semibold text-white">
                                 {match.didWin ? "Knapp gewonnen" : "Knapp verloren"}
                               </p>
-                              <p className="text-xs text-stone-400">Sets {match.sets} · Legs {match.legs}</p>
+                              <p className="text-xs text-stone-400">Sets {match.sets} - Legs {match.legs}</p>
                             </div>
                             <Link
                               href={`/profile/matches/${match.id}`}

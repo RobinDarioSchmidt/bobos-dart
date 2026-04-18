@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import type { LiveMatchState } from "@/lib/live-match";
 import type { LiveAudioMode } from "@/lib/live-audio";
@@ -108,7 +108,7 @@ export function LiveScoreboardPanel({
                   </span>
                 ) : null}
               </div>
-              <p className="mt-2 text-4xl font-semibold leading-none text-white">{player.joined ? player.score : "—"}</p>
+              <p className="mt-2 text-4xl font-semibold leading-none text-white">{player.joined ? player.score : "-"}</p>
               <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
                 <div className="rounded-2xl bg-white/5 p-2">
                   <p className="text-stone-400">Sets</p>
@@ -297,9 +297,9 @@ export function LiveHistoryPanel({
                     {new Date(visit.createdAt).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}
                   </p>
                 </div>
-                <p className="mt-1 text-xs opacity-85">{visit.note} · {visit.darts.join(", ") || "Ohne Dartdaten"}</p>
+                <p className="mt-1 text-xs opacity-85">{visit.note} - {visit.darts.join(", ") || "Ohne Dartdaten"}</p>
                 <p className="mt-2 text-xs opacity-90">
-                  {visit.total} Punkte · {visit.scoreBefore} → {visit.scoreAfter}
+                  {`${visit.total} Punkte - ${visit.scoreBefore} -> ${visit.scoreAfter}`}
                 </p>
               </div>
             ))
@@ -440,7 +440,7 @@ export function LiveMatchSummaryPanel({
                     #{index + 1} {player.name}
                   </p>
                   <p className="mt-1 text-xs text-stone-400">
-                    {player.sets} Sets · {legWins} Legs · {stats?.visits ?? 0} Visits
+                    {player.sets} Sets - {legWins} Legs - {stats?.visits ?? 0} Visits
                   </p>
                 </div>
                 <p className="text-lg font-semibold text-white">{stats?.average.toFixed(1) ?? "0.0"} Avg</p>
