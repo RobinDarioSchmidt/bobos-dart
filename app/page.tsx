@@ -2260,9 +2260,9 @@ export default function Page() {
         </section>
 
         {appMode === "match" ? (
-          <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+          <section className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
             <div className="space-y-6">
-              <section className="rounded-[2rem] border border-white/10 bg-white/5 p-6 backdrop-blur">
+              <section className="rounded-[2rem] border border-white/10 bg-white/5 p-5 backdrop-blur sm:p-6">
                 <div className="mb-5 rounded-2xl border border-white/10 bg-white/5 p-4">
                   <p className="text-xs uppercase tracking-[0.22em] text-stone-400">Spieler</p>
                   <div className="mt-3 flex gap-2">
@@ -2345,7 +2345,7 @@ export default function Page() {
                   </div>
 
                   <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                    <p className="text-xs uppercase tracking-[0.22em] text-stone-400">Saetze zum Match</p>
+                    <p className="text-xs uppercase tracking-[0.22em] text-stone-400">SÃ¤tze zum Match</p>
                     <div className="mt-3 flex gap-2">
                       {SETS_OPTIONS.map((option) => (
                         <button
@@ -2365,12 +2365,13 @@ export default function Page() {
                 </div>
               </section>
 
-              <section className="rounded-[2rem] border border-white/10 bg-white/5 p-6 backdrop-blur">
+              <section className="rounded-[2rem] border border-white/10 bg-white/5 p-5 backdrop-blur sm:p-6">
                 <div className="flex items-center justify-between gap-4">
                   <div>
-                    <h2 className="text-2xl font-semibold text-white">Würfe für {currentPlayer.name}</h2>
+                    <p className="text-xs uppercase tracking-[0.22em] text-stone-400">Lokaler Zug</p>
+                    <h2 className="mt-1 text-2xl font-semibold text-white">{currentPlayer.name} ist dran</h2>
                     <p className="mt-1 text-sm text-stone-400">
-                      Segmente antippen, manuell eingeben oder einen Besuch direkt buchen.
+                      Baue den aktuellen Besuch auf oder buche ihn direkt als Gesamtwert.
                     </p>
                   </div>
                   {legWinner !== null ? (
@@ -2435,7 +2436,7 @@ export default function Page() {
                     disabled={finishDisabled}
                     className="rounded-2xl bg-white px-5 py-3 font-semibold text-black transition disabled:cursor-not-allowed disabled:opacity-40"
                   >
-                    Besuch abschliessen
+                    Besuch abschlieÃen
                   </button>
                   <button
                     onClick={undo}
@@ -2460,11 +2461,11 @@ export default function Page() {
                   )}
                 </div>
 
-                <div className="mt-8">
-                  <div className="flex items-center justify-between gap-3">
-                    <h3 className="text-lg font-semibold text-white">Besuch direkt buchen</h3>
-                    <p className="text-sm text-stone-400">Für schnelle Eingaben ohne Einzeldarts</p>
-                  </div>
+                <details className="mt-8 rounded-[1.5rem] border border-white/10 bg-black/20 p-4">
+                  <summary className="cursor-pointer list-none text-lg font-semibold text-white">
+                    Besuch direkt buchen
+                    <span className="ml-2 text-sm font-normal text-stone-400">Für schnelle Eingaben ohne Einzeldarts</span>
+                  </summary>
                   <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto]">
                     <input
                       type="number"
@@ -2499,14 +2500,16 @@ export default function Page() {
                       </button>
                     ))}
                   </div>
-                </div>
+                </details>
               </section>
 
-              <section className="rounded-[2rem] border border-white/10 bg-white/5 p-6 backdrop-blur">
-                <h2 className="text-2xl font-semibold text-white">Leg-Historie</h2>
-                <p className="mt-1 text-sm text-stone-400">
-                  Die bisherigen Besuche des laufenden Legs, getrennt nach Spielern.
-                </p>
+              <details className="rounded-[2rem] border border-white/10 bg-white/5 p-5 backdrop-blur sm:p-6">
+                <summary className="cursor-pointer list-none text-2xl font-semibold text-white">
+                  Leg-Historie
+                  <p className="mt-1 text-sm font-normal text-stone-400">
+                    Die bisherigen Besuche des laufenden Legs, getrennt nach Spielern.
+                  </p>
+                </summary>
 
                 <div className="mt-5 grid gap-4 xl:grid-cols-2">
                   {players.map((player, playerIndex) => (
@@ -2552,15 +2555,23 @@ export default function Page() {
                     </div>
                   ))}
                 </div>
-              </section>
+              </details>
             </div>
 
             <div className="space-y-6">
-              <section className="rounded-[2rem] border border-white/10 bg-white/5 p-6 backdrop-blur">
-                <h2 className="text-2xl font-semibold text-white">Segment Board</h2>
-                <p className="mt-1 text-sm text-stone-400">
-                  Tippe Singles, Doubles, Triples oder Bulls für den laufenden Besuch.
-                </p>
+              <section className="rounded-[2rem] border border-white/10 bg-white/5 p-5 backdrop-blur sm:p-6">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.22em] text-stone-400">Board</p>
+                    <h2 className="mt-1 text-2xl font-semibold text-white">{currentPlayer.name} zielt auf den nächsten Besuch</h2>
+                    <p className="mt-1 text-sm text-stone-400">
+                      Tippe Singles, Doubles, Triples oder Bulls für den laufenden Besuch.
+                    </p>
+                  </div>
+                  <div className="rounded-full border border-white/10 bg-black/20 px-3 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-stone-300">
+                    {doubleOut ? "Double-Out" : "Straight-Out"}
+                  </div>
+                </div>
                 <div className="mt-5">
                   <Dartboard
                     onSegmentSelect={addBoardSegment}
@@ -2650,7 +2661,7 @@ export default function Page() {
                         </p>
                         <p className="mt-1 text-stone-400">
                           {entry.playedAt} · {entry.mode} · {entry.doubleOut ? "Double-Out" : "Straight-Out"} ·
-                          {" "}Saetze {entry.sets}
+                          {" "}SÃ¤tze {entry.sets}
                         </p>
                       </div>
                     ))
@@ -2664,13 +2675,24 @@ export default function Page() {
             </div>
           </section>
         ) : (
-          <section className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
+          <section className="grid gap-6 lg:grid-cols-[0.92fr_1.08fr]">
             <div className="space-y-6">
-              <section className="rounded-[2rem] border border-white/10 bg-white/5 p-6 backdrop-blur">
-                <h2 className="text-2xl font-semibold text-white">Training Setup</h2>
-                <p className="mt-1 text-sm text-stone-400">
-                  Wähle einen Modus und trage danach jeden Dart über das Segment Board ein.
-                </p>
+              <section className="rounded-[2rem] border border-white/10 bg-white/5 p-5 backdrop-blur sm:p-6">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.22em] text-stone-400">Training</p>
+                    <h2 className="mt-1 text-2xl font-semibold text-white">{getTrainingModeLabel(trainingSession.mode)}</h2>
+                    <p className="mt-1 text-sm text-stone-400">
+                      Wähle einen Modus und trage danach jeden Dart über das Segment Board ein.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => resetTraining()}
+                    className="rounded-2xl bg-white px-5 py-3 font-semibold text-black transition hover:bg-stone-200"
+                  >
+                    Session neu starten
+                  </button>
+                </div>
 
                 <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                   <button
@@ -2719,13 +2741,7 @@ export default function Page() {
                   </button>
                 </div>
 
-                <div className="mt-5 flex flex-wrap gap-3">
-                  <button
-                    onClick={() => resetTraining()}
-                    className="rounded-2xl bg-white px-5 py-3 font-semibold text-black transition hover:bg-stone-200"
-                  >
-                    Session neu starten
-                  </button>
+                <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                   <div className="rounded-2xl border border-white/10 bg-black/20 px-5 py-3 text-sm text-stone-300">
                     Ziel: {trainingTarget}
                   </div>
@@ -2738,22 +2754,24 @@ export default function Page() {
                     </div>
                   ) : null}
                 </div>
-                <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-stone-300">
+                <div className="mt-4 rounded-[1.5rem] border border-white/10 bg-black/20 p-4 text-sm text-stone-300">
                   {trainingSession.mode === "shanghai"
-                    ? "Treffe auf jedem Ziel Single, Double und Triple, bevor du weiterrueckst."
+                    ? "Treffe auf jedem Ziel Single, Double und Triple, bevor du weiterrÃ¼ckst."
                     : trainingSession.mode === "doubles-around"
                       ? "Nur Doubles zählen. Arbeite dich über D1 bis Bull."
                       : trainingSession.mode === "bull-drill"
-                        ? "Zehn Darts auf Bull und Outer Bull, jeder Treffer zaehlt sofort."
+                        ? "Zehn Darts auf Bull und Outer Bull, jeder Treffer z?hlt sofort."
                         : "Treffe die Ziele der Reihe nach von 1 bis Bull."}
                 </div>
               </section>
 
-              <section className="rounded-[2rem] border border-white/10 bg-white/5 p-6 backdrop-blur">
-                <h2 className="text-2xl font-semibold text-white">Training Feed</h2>
-                <p className="mt-1 text-sm text-stone-400">
-                  Die letzten Trainingsdarts deiner aktuellen Session.
-                </p>
+              <details className="rounded-[2rem] border border-white/10 bg-white/5 p-5 backdrop-blur sm:p-6">
+                <summary className="cursor-pointer list-none text-2xl font-semibold text-white">
+                  Training Feed
+                  <p className="mt-1 text-sm font-normal text-stone-400">
+                    Die letzten Trainingsdarts deiner aktuellen Session.
+                  </p>
+                </summary>
 
                 <div className="mt-5 space-y-3">
                   {trainingSession.history.length > 0 ? (
@@ -2768,15 +2786,23 @@ export default function Page() {
                     </div>
                   )}
                 </div>
-              </section>
+              </details>
             </div>
 
             <div className="space-y-6">
-              <section className="rounded-[2rem] border border-white/10 bg-white/5 p-6 backdrop-blur">
-                <h2 className="text-2xl font-semibold text-white">Segment Board</h2>
-                <p className="mt-1 text-sm text-stone-400">
-                  Nutze die Segmente wie auf einem echten Board. Im Training wird jeder Dart direkt gewertet.
-                </p>
+              <section className="rounded-[2rem] border border-white/10 bg-white/5 p-5 backdrop-blur sm:p-6">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.22em] text-stone-400">Board</p>
+                    <h2 className="mt-1 text-2xl font-semibold text-white">{getTrainingModeLabel(trainingSession.mode)} live spielen</h2>
+                    <p className="mt-1 text-sm text-stone-400">
+                      Nutze die Segmente wie auf einem echten Board. Im Training wird jeder Dart direkt gewertet.
+                    </p>
+                  </div>
+                  <div className="rounded-full border border-white/10 bg-black/20 px-3 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-stone-300">
+                    Ziel {trainingTarget}
+                  </div>
+                </div>
                 <div className="mt-5">
                   <Dartboard
                     onSegmentSelect={registerTrainingThrow}
@@ -2785,7 +2811,7 @@ export default function Page() {
                 </div>
               </section>
 
-              <section className="rounded-[2rem] border border-white/10 bg-white/5 p-6 backdrop-blur">
+              <section className="rounded-[2rem] border border-white/10 bg-white/5 p-5 backdrop-blur sm:p-6">
                 <h2 className="text-2xl font-semibold text-white">Training Statistik</h2>
                 <div className="mt-5 grid gap-3 sm:grid-cols-2">
                   <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
