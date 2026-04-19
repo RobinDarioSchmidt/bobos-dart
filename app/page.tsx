@@ -53,6 +53,7 @@ type MatchHistoryEntry = {
 type UndoSnapshot = {
   players: Player[];
   activePlayer: number;
+  legStartingPlayer: number;
   legWinner: number | null;
   matchWinner: number | null;
   statusText: string;
@@ -708,6 +709,7 @@ export default function Page() {
   const [setsToWin, setSetsToWin] = useState(1);
   const [players, setPlayers] = useState<Player[]>(() => createPlayers(501));
   const [activePlayer, setActivePlayer] = useState(0);
+  const [legStartingPlayer, setLegStartingPlayer] = useState(0);
   const [currentDarts, setCurrentDarts] = useState<number[]>([]);
   const [currentLabels, setCurrentLabels] = useState<string[]>([]);
   const [manualDart, setManualDart] = useState("");
@@ -754,6 +756,7 @@ export default function Page() {
     setPlayers(createPlayers(parsedMode, names));
     setStatusText(`Match bereit. ${names[0]} beginnt.`);
     setActivePlayer(0);
+    setLegStartingPlayer(0);
     setCurrentDarts([]);
     setCurrentLabels([]);
     setManualDart("");
@@ -923,6 +926,7 @@ export default function Page() {
       {
         players: clonePlayers(players),
         activePlayer,
+        legStartingPlayer,
         legWinner,
         matchWinner,
         statusText,
@@ -1422,6 +1426,7 @@ export default function Page() {
     setMode(nextMode);
     setPlayers(nextPlayers);
     setActivePlayer(0);
+    setLegStartingPlayer(0);
     setCurrentDarts([]);
     setCurrentLabels([]);
     setManualDart("");
@@ -1440,6 +1445,7 @@ export default function Page() {
     const nextPlayers = createPlayers(mode, nextNames);
     setPlayers(nextPlayers);
     setActivePlayer(0);
+    setLegStartingPlayer(0);
     setCurrentDarts([]);
     setCurrentLabels([]);
     setManualDart("");
@@ -1455,9 +1461,10 @@ export default function Page() {
       return;
     }
 
-    const nextStarter = (activePlayer + 1) % players.length;
+    const nextStarter = (legStartingPlayer + 1) % players.length;
     setPlayers((prev) => resetLegBoards(clonePlayers(prev)));
     setActivePlayer(nextStarter);
+    setLegStartingPlayer(nextStarter);
     setCurrentDarts([]);
     setCurrentLabels([]);
     setManualDart("");
@@ -1507,7 +1514,7 @@ export default function Page() {
     addDartValue(value);
   }
 
-  function recordVisit(darts: number[], labels = darts.map(String), allowRouteCheckout = false) {
+  function recordVisit(darts: number[], labels = darts.map(String)) {
     if (legWinner !== null || matchWinner !== null || darts.length === 0) {
       return;
     }
@@ -1522,7 +1529,7 @@ export default function Page() {
     const bust =
       remaining < 0 ||
       (doubleOut && remaining === 1) ||
-      (checkout && doubleOut && !allowRouteCheckout && !isDouble(darts[darts.length - 1]));
+      (checkout && doubleOut && !isDouble(darts[darts.length - 1]));
 
     const visit: Visit = {
       darts,
@@ -1619,10 +1626,7 @@ export default function Page() {
       return;
     }
 
-    const canCheckoutWithRoute =
-      !doubleOut || isDouble(total) || getCheckoutHints(currentPlayer.score, doubleOut).length > 0;
-
-    recordVisit([total], [`Visit ${total}`], canCheckoutWithRoute);
+    recordVisit([total], [`Visit ${total}`]);
   }
 
   function undo() {
@@ -1639,6 +1643,7 @@ export default function Page() {
 
     setPlayers(snapshot.players);
     setActivePlayer(snapshot.activePlayer);
+    setLegStartingPlayer(snapshot.legStartingPlayer);
     setLegWinner(snapshot.legWinner);
     setMatchWinner(snapshot.matchWinner);
     setStatusText(snapshot.statusText);
@@ -1733,7 +1738,10 @@ export default function Page() {
 
     if (trainingSession.mode === "doubles-around") {
       const target = TRAINING_TARGETS[trainingSession.targetIndex];
-      const hit = segment.number === target && (segment.multiplier === 2 || (target === 25 && segment.number === 25));
+      const hit =
+        target === 25
+          ? segment.number === 25 && segment.multiplier === 2
+          : segment.number === target && segment.multiplier === 2;
       const nextIndex = hit ? trainingSession.targetIndex + 1 : trainingSession.targetIndex;
       const finished = nextIndex >= TRAINING_TARGETS.length;
       const hits = trainingSession.hits + (hit ? 1 : 0);
@@ -2491,7 +2499,6 @@ export default function Page() {
                           recordVisit(
                             [preset],
                             [`Visit ${preset}`],
-                            !doubleOut || isDouble(preset) || getCheckoutHints(currentPlayer.score, doubleOut).length > 0,
                           )
                         }
                         className="rounded-2xl border border-white/10 bg-black/20 px-4 py-4 text-lg font-semibold text-white transition hover:border-amber-300/40 hover:bg-amber-300/10"

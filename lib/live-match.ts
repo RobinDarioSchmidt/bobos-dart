@@ -84,6 +84,7 @@ export type LiveMatchState = {
   setsToWin: number;
   maxPlayers: number;
   activePlayer: number;
+  legStartingPlayer: number;
   legWinner: number | null;
   matchWinner: number | null;
   statusText: string;
@@ -155,7 +156,8 @@ export function createEmptyLiveState(params: {
     legsToWin: params.legsToWin,
     setsToWin: params.setsToWin,
     maxPlayers: params.maxPlayers,
-    activePlayer: params.bullOffEnabled ? 0 : 0,
+    activePlayer: 0,
+    legStartingPlayer: 0,
     legWinner: null,
     matchWinner: null,
     statusText: params.bullOffEnabled
@@ -224,6 +226,7 @@ export function normalizeLiveState(state: LiveMatchState | (Record<string, unkno
     setsToWin: nextState.setsToWin ?? 1,
     maxPlayers: nextState.maxPlayers ?? Math.max((nextState.players ?? []).length, 2),
     activePlayer: nextState.activePlayer ?? 0,
+    legStartingPlayer: nextState.legStartingPlayer ?? nextState.activePlayer ?? 0,
     legWinner: nextState.legWinner ?? null,
     matchWinner: nextState.matchWinner ?? null,
     statusText: nextState.statusText ?? "Live-Match bereit.",
@@ -387,6 +390,7 @@ function resolveBullOff(state: LiveMatchState) {
   state.bullOff.currentPlayerIndex = null;
   state.bullOff.winnerIndex = winner?.playerIndex ?? 0;
   state.activePlayer = winner?.playerIndex ?? 0;
+  state.legStartingPlayer = winner?.playerIndex ?? 0;
   state.statusText = winner
     ? `${winner.playerName} gewinnt das Bull-Off und beginnt das Leg.`
     : "Bull-Off beendet.";
@@ -573,6 +577,7 @@ export function finalizePendingVisit(previousState: LiveMatchState) {
 
 export function startNextLiveLeg(previousState: LiveMatchState) {
   const nextState = normalizeLiveState(previousState);
+  const nextStarter = getNextJoinedPlayerIndex(nextState, nextState.legStartingPlayer);
   nextState.players = nextState.players.map((player) => ({
     ...player,
     score: nextState.mode,
@@ -580,23 +585,15 @@ export function startNextLiveLeg(previousState: LiveMatchState) {
   nextState.pendingVisit = null;
   nextState.legWinner = null;
   nextState.lastCallout = null;
-
-  if (nextState.bullOff.enabled) {
-    const firstJoined = getJoinedPlayerIndexes(nextState)[0] ?? 0;
-    nextState.bullOff = {
-      enabled: true,
-      completed: false,
-      currentPlayerIndex: firstJoined,
-      winnerIndex: null,
-      attempts: [],
-    };
-    nextState.activePlayer = firstJoined;
-    nextState.statusText = `${nextState.players[firstJoined].name} startet das Bull-Off fuer das naechste Leg.`;
-    return nextState;
-  }
-
-  nextState.activePlayer = getNextJoinedPlayerIndex(nextState, nextState.activePlayer);
-  nextState.statusText = `${nextState.players[nextState.activePlayer].name} beginnt das naechste Leg.`;
+  nextState.activePlayer = nextStarter;
+  nextState.legStartingPlayer = nextStarter;
+  nextState.bullOff = {
+    ...nextState.bullOff,
+    completed: true,
+    currentPlayerIndex: null,
+    attempts: [],
+  };
+  nextState.statusText = `${nextState.players[nextStarter].name} beginnt das naechste Leg.`;
   return nextState;
 }
 
@@ -619,6 +616,7 @@ export function startRematchLiveMatch(previousState: LiveMatchState) {
   nextState.legWinner = null;
   nextState.matchWinner = null;
   nextState.lastCallout = null;
+  nextState.legStartingPlayer = rematchStarter;
   nextState.cloudSync = {
     sessionKey: generateSessionKey(),
     persistedOwnerIds: [],
@@ -634,6 +632,7 @@ export function startRematchLiveMatch(previousState: LiveMatchState) {
       attempts: [],
     };
     nextState.activePlayer = firstJoined;
+    nextState.legStartingPlayer = firstJoined;
     nextState.statusText = `${nextState.players[firstJoined].name} startet das Bull-Off fuer das Rematch.`;
     return nextState;
   }
@@ -646,6 +645,7 @@ export function startRematchLiveMatch(previousState: LiveMatchState) {
     attempts: [],
   };
   nextState.activePlayer = rematchStarter;
+  nextState.legStartingPlayer = rematchStarter;
   nextState.statusText = `${nextState.players[rematchStarter].name} beginnt das Rematch.`;
   return nextState;
 }
