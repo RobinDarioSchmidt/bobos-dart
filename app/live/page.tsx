@@ -683,6 +683,7 @@ export default function LivePage() {
     }
 
     const nextState = addPendingDart(liveState, toLiveDart(segment));
+    queueVisitAudio(liveState, nextState);
     await pushRoomState(nextState, "dart");
   }
 
@@ -697,6 +698,7 @@ export default function LivePage() {
     }
 
     const nextState = addPendingDart(liveState, missDart());
+    queueVisitAudio(liveState, nextState);
     await pushRoomState(nextState, "miss");
   }
 
@@ -736,6 +738,7 @@ export default function LivePage() {
     }
 
     const nextState = finalizePendingVisit(liveState);
+    queueVisitAudio(liveState, nextState);
     await pushRoomState(nextState, "finalize_visit");
   }
 
@@ -825,6 +828,25 @@ export default function LivePage() {
 
     return [...liveState.history].find((entry) => entry.result !== "leg-win") ?? null;
   }, [liveState]);
+
+  function queueVisitAudio(previousState: LiveMatchState, nextState: LiveMatchState) {
+    const previousVisit = previousState.history.find((entry) => entry.result !== "leg-win") ?? null;
+    const nextVisit = nextState.history.find((entry) => entry.result !== "leg-win") ?? null;
+    if (!nextVisit) {
+      return;
+    }
+
+    const previousKey = previousVisit
+      ? `${previousVisit.createdAt}-${previousVisit.playerIndex}-${previousVisit.total}`
+      : null;
+    const nextKey = `${nextVisit.createdAt}-${nextVisit.playerIndex}-${nextVisit.total}`;
+    if (previousKey === nextKey) {
+      return;
+    }
+
+    lastPlayedVisitRef.current = nextKey;
+    void playLiveVisitCallout(nextVisit.total, audioMode);
+  }
 
   useEffect(() => {
     lastPlayedVisitRef.current = null;
