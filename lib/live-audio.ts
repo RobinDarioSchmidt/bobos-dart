@@ -94,7 +94,12 @@ export async function playLiveCallout(callout: string, mode: LiveAudioMode) {
   }
 
   if (mode === "clips") {
-    return playAudioClip(getLiveCalloutClipPath(callout));
+    const played = await playAudioClip(getLiveCalloutClipPath(callout));
+    if (played) {
+      return true;
+    }
+
+    return speakEnglishCallout(callout);
   }
 
   return speakEnglishCallout(callout);
@@ -106,7 +111,12 @@ export async function playLiveVisitCallout(total: number, mode: LiveAudioMode) {
   }
 
   if (mode === "clips") {
-    return playAudioClip(getLiveVisitClipPath(total));
+    const played = await playAudioClip(getLiveVisitClipPath(total));
+    if (played) {
+      return true;
+    }
+
+    return speakEnglishCallout(String(total));
   }
 
   return speakEnglishCallout(String(total));
