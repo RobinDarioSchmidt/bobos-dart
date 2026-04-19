@@ -28,7 +28,7 @@ import {
 } from "@/lib/live-match";
 import {
   LIVE_AUDIO_MODE_STORAGE_KEY,
-  playLiveCallout,
+  playLiveVisitCallout,
   type LiveAudioMode,
 } from "@/lib/live-audio";
 import { getCheckoutSuggestions } from "@/lib/checkout-hints";
@@ -160,7 +160,7 @@ export default function LivePage() {
   const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL ?? "";
   const liveChannelRef = useRef<ReturnType<NonNullable<typeof supabase>["channel"]> | null>(null);
   const requestInFlightRef = useRef(false);
-  const lastSpokenCalloutRef = useRef<string | null>(null);
+  const lastPlayedVisitRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -818,24 +818,37 @@ export default function LivePage() {
     () => (currentPlayer ? livePlayerStats.find((entry) => entry.name === currentPlayer.name) ?? null : null),
     [currentPlayer, livePlayerStats],
   );
+  const latestScoredVisit = useMemo(() => {
+    if (!liveState) {
+      return null;
+    }
+
+    return [...liveState.history].find((entry) => entry.result !== "leg-win") ?? null;
+  }, [liveState]);
 
   useEffect(() => {
-    if (typeof window === "undefined") {
+    lastPlayedVisitRef.current = null;
+  }, [liveRoomCode]);
+
+  useEffect(() => {
+    if (!latestScoredVisit) {
+      lastPlayedVisitRef.current = null;
       return;
     }
 
-    const callout = liveState?.lastCallout?.trim();
-    if (!callout) {
+    const visitKey = `${latestScoredVisit.createdAt}-${latestScoredVisit.playerIndex}-${latestScoredVisit.total}`;
+    if (lastPlayedVisitRef.current === null) {
+      lastPlayedVisitRef.current = visitKey;
       return;
     }
 
-    if (lastSpokenCalloutRef.current === callout) {
+    if (lastPlayedVisitRef.current === visitKey) {
       return;
     }
 
-    lastSpokenCalloutRef.current = callout;
-    void playLiveCallout(callout, audioMode);
-  }, [audioMode, liveState?.lastCallout]);
+    lastPlayedVisitRef.current = visitKey;
+    void playLiveVisitCallout(latestScoredVisit.total, audioMode);
+  }, [audioMode, latestScoredVisit]);
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top,_#1f2937,_#09090b_55%)] px-3 py-4 pb-28 text-stone-100 sm:px-4 sm:py-6 sm:pb-8">

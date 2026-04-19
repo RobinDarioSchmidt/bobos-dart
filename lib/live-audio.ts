@@ -24,6 +24,10 @@ export function getLiveCalloutClipPath(callout: string) {
   return `${CALL_OUT_DIRECTORY}/${normalizeCalloutToClipKey(callout)}.mp3`;
 }
 
+export function getLiveVisitClipPath(total: number) {
+  return `${CALL_OUT_DIRECTORY}/${total}.mp3`;
+}
+
 function pickEnglishVoice(voices: SpeechSynthesisVoice[]) {
   const preferredLocales = ["en-US", "en-GB", "en-AU", "en-CA"];
 
@@ -94,4 +98,16 @@ export async function playLiveCallout(callout: string, mode: LiveAudioMode) {
   }
 
   return speakEnglishCallout(callout);
+}
+
+export async function playLiveVisitCallout(total: number, mode: LiveAudioMode) {
+  if (!Number.isFinite(total) || total <= 0 || mode === "off") {
+    return false;
+  }
+
+  if (mode === "clips") {
+    return playAudioClip(getLiveVisitClipPath(total));
+  }
+
+  return speakEnglishCallout(String(total));
 }
