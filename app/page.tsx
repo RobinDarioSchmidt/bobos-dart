@@ -2463,7 +2463,7 @@ export default function Page() {
                 <div className="mt-8">
                   <div className="flex items-center justify-between gap-3">
                     <h3 className="text-lg font-semibold text-white">Besuch direkt buchen</h3>
-                    <p className="text-sm text-stone-400">F?r schnelle Eingaben ohne Einzeldarts</p>
+                    <p className="text-sm text-stone-400">Für schnelle Eingaben ohne Einzeldarts</p>
                   </div>
                   <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto]">
                     <input

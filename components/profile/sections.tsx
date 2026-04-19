@@ -490,7 +490,7 @@ export function ProfileDeepInsightsSection({
 }) {
   const rivalryBlocks = [
     { label: "Engste Duelle", entries: analytics.rivalryInsights.closest, tone: "border-sky-300/25 bg-sky-400/10" },
-    { label: "H?rteste Gegner", entries: analytics.rivalryInsights.toughest, tone: "border-rose-300/25 bg-rose-400/10" },
+    { label: "Härteste Gegner", entries: analytics.rivalryInsights.toughest, tone: "border-rose-300/25 bg-rose-400/10" },
     { label: "Lieblingsduelle", entries: analytics.rivalryInsights.bestMatchups, tone: "border-emerald-300/25 bg-emerald-400/10" },
   ] as const;
 

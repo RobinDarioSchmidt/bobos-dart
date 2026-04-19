@@ -313,7 +313,7 @@ export function SignedInOverviewSection({
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-xs uppercase tracking-[0.24em] text-stone-400">App-Gefühl</p>
-              <p className="mt-1 text-lg font-semibold text-white">F?r Handy vorbereitet</p>
+              <p className="mt-1 text-lg font-semibold text-white">Für Handy vorbereitet</p>
               <p className="mt-2 text-sm text-stone-400">
                 Du kannst Bobo&apos;s Dart als Web-App auf dem Homescreen nutzen. Wenn dein Browser keinen
                 direkten Installieren-Button anbietet, bekommst du hier die passende Anleitung.
