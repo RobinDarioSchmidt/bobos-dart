@@ -452,7 +452,7 @@ export async function POST(request: Request) {
     } catch {
       stateToStore = normalizeLiveState({
         ...stateToStore,
-        statusText: `${stateToStore.statusText} Cloud-Sync wird beim n?chsten Kontakt erneut versucht.`,
+        statusText: `${stateToStore.statusText} Cloud-Sync wird beim nächsten Kontakt erneut versucht.`,
       });
     }
 
@@ -570,7 +570,7 @@ export async function POST(request: Request) {
       currentState.bullOff.currentPlayerIndex = remainingJoined[0].index;
       currentState.statusText = `${leavingPlayer.name} hat den Raum verlassen. ${remainingJoined[0].player.name} ist wieder dran.`;
     } else {
-      currentState.statusText = `${leavingPlayer.name} hat den Raum verlassen. ${remainingJoined[0].player.name} fuehrt den Raum weiter.`;
+      currentState.statusText = `${leavingPlayer.name} hat den Raum verlassen. ${remainingJoined[0].player.name} f?hrt den Raum weiter.`;
     }
 
     const { data: updated, error: updateError } = await adminClient

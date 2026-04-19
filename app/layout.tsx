@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Bobo's Dart",
-  description: "Dart Hub f?r lokales Spiel, Online-Matches, Training und Langzeitstatistiken.",
+  description: "Dart Hub für lokales Spiel, Online-Matches, Training und Langzeitstatistiken.",
   applicationName: "Bobo's Dart",
   manifest: "/manifest.webmanifest",
   icons: {

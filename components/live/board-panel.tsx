@@ -431,7 +431,7 @@ export function LiveBoardPanel({
           ) : null}
           <p className="mt-1 text-sm text-stone-400">
             {liveState.bullOff.enabled && !liveState.bullOff.completed
-              ? "Ein Wurf pro Spieler entscheidet ?ber den Start."
+              ? "Ein Wurf pro Spieler entscheidet über den Start."
               : `${currentVisitTotal} Punkte · ${compactVisitText}`}
           </p>
         </div>
@@ -467,7 +467,7 @@ export function LiveBoardPanel({
           ) : (
             <p className="text-sm text-stone-400">
               {liveState.bullOff.enabled && !liveState.bullOff.completed
-                ? "Bull-Off wartet auf den n?chsten Wurf."
+                ? "Bull-Off wartet auf den nächsten Wurf."
                 : "Noch keine Darts geklickt."}
             </p>
           )}
@@ -504,7 +504,7 @@ export function LiveBoardPanel({
             disabled={!canControlLegTransition}
             className="mt-4 rounded-2xl bg-emerald-400 px-5 py-3 text-sm font-semibold text-black disabled:opacity-40"
           >
-            N?chstes Leg starten
+            Nächstes Leg starten
           </button>
         ) : null}
       </div>
@@ -512,7 +512,7 @@ export function LiveBoardPanel({
       {checkoutHints.length > 0 ? (
         <div className="mt-4 rounded-2xl border border-emerald-300/20 bg-emerald-400/10 p-4">
           <p className="text-[10px] uppercase tracking-[0.18em] text-emerald-100">
-            M?gliche Finishes f?r {currentPlayerName}
+            Mögliche Finishes für {currentPlayerName}
           </p>
           <div className="mt-2 flex flex-col gap-2">
             {checkoutHints.map((hint) => (

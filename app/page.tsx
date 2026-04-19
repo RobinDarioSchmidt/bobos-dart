@@ -232,7 +232,7 @@ function createTrainingSession(mode: TrainingMode): TrainingSession {
       hits: 0,
       score: 0,
       finished: false,
-      message: "Doubles Around gestartet. Arbeite dich ?ber Doubles bis Bull.",
+      message: "Doubles Around gestartet. Arbeite dich über Doubles bis Bull.",
       history: [],
       throws: [],
       currentGoalHits: [],
@@ -735,7 +735,7 @@ export default function Page() {
   const [installPromptEvent, setInstallPromptEvent] = useState<BeforeInstallPromptEvent | null>(null);
   const [installBusy, setInstallBusy] = useState(false);
   const [installHint, setInstallHint] = useState(
-    "Je nach Browser kannst du die App direkt installieren oder ?ber das Browser-Men? zum Homescreen hinzuf?gen.",
+    "Je nach Browser kannst du die App direkt installieren oder über das Browser-Menü zum Homescreen hinzufügen.",
   );
   const [isInstalledApp, setIsInstalledApp] = useState(false);
   const [hydrated, setHydrated] = useState(false);
@@ -818,15 +818,15 @@ export default function Page() {
     const userAgent = window.navigator.userAgent.toLowerCase();
     if (userAgent.includes("opr/") || userAgent.includes("opera")) {
       setInstallHint(
-        "Opera zeigt den Installieren-Button oft nicht an. Oeffne das Browser-Men? und w?hle 'Install app' oder 'Zum Startbildschirm'.",
+        "Opera zeigt den Installieren-Button oft nicht an. Öffne das Browser-Menü und wähle 'Install app' oder 'Zum Startbildschirm'.",
       );
     } else if (userAgent.includes("iphone") || userAgent.includes("ipad") || userAgent.includes("safari")) {
       setInstallHint(
-        "Auf Apple-Ger?ten installierst du die App ?ber Teilen > Zum Home-Bildschirm. Ein direkter Installieren-Button ist dort normal nicht verf?gbar.",
+        "Auf Apple-Geräten installierst du die App über Teilen > Zum Home-Bildschirm. Ein direkter Installieren-Button ist dort normal nicht verfügbar.",
       );
     } else {
       setInstallHint(
-        "Wenn dein Browser die App unterst?tzt, erscheint der Installieren-Button automatisch. Sonst findest du die Option meist im Browser-Men?.",
+        "Wenn dein Browser die App unterstützt, erscheint der Installieren-Button automatisch. Sonst findest du die Option meist im Browser-Menü.",
       );
     }
 
@@ -1020,7 +1020,7 @@ export default function Page() {
     const accessToken = freshSession?.access_token ?? nextSession.access_token;
     if (!accessToken) {
       setCloudLoading(false);
-      setCloudMessage("Kein g?ltiger Cloud-Token gefunden.");
+      setCloudMessage("Kein gültiger Cloud-Token gefunden.");
       return;
     }
 
@@ -1239,7 +1239,7 @@ export default function Page() {
     }
 
     if (!email || !password) {
-      setAuthMessage("Bitte E-Mail und Passwort ausf?llen.");
+      setAuthMessage("Bitte E-Mail und Passwort ausfüllen.");
       return;
     }
 
@@ -1352,7 +1352,7 @@ export default function Page() {
       }
     }
 
-    setCloudMessage(`Cloud-Save erfolgreich f?r ${winner.name}.`);
+    setCloudMessage(`Cloud-Save erfolgreich für ${winner.name}.`);
     await loadCloudMatches(session);
     await loadCloudDashboard(session);
   }
@@ -1463,7 +1463,7 @@ export default function Page() {
     setManualDart("");
     setManualVisit("");
     setLegWinner(null);
-    setStatusText(`N?chstes Leg gestartet. ${players[nextStarter].name} ist am Zug.`);
+    setStatusText(`Nächstes Leg gestartet. ${players[nextStarter].name} ist am Zug.`);
     setUndoStack([]);
   }
 
@@ -1545,7 +1545,7 @@ export default function Page() {
     if (bust) {
       const nextPlayerIndex = (activePlayer + 1) % nextPlayers.length;
       setActivePlayer(nextPlayerIndex);
-      setStatusText(`${player.name} bustet. ${nextPlayers[nextPlayerIndex].name} ?bernimmt.`);
+      setStatusText(`${player.name} bustet. ${nextPlayers[nextPlayerIndex].name} übernimmt.`);
       return;
     }
 
@@ -1696,7 +1696,7 @@ export default function Page() {
       const finished = dartsThrown >= 10;
       const historyEntry = `${segment.label}${isBull ? " getroffen" : " vorbei"}`;
       const message = finished
-        ? `Bull Drill beendet. ${hits} Treffer f?r ${score} Punkte.`
+        ? `Bull Drill beendet. ${hits} Treffer für ${score} Punkte.`
         : `Bull Drill: Dart ${dartsThrown}/10 - ${historyEntry}.`;
 
       setTrainingSession((prev) => ({
@@ -1745,7 +1745,7 @@ export default function Page() {
       const message = finished
         ? `Doubles Around beendet in ${dartsThrown} Darts.`
         : hit
-          ? `Double getroffen. N?chstes Ziel: ${nextTarget}.`
+          ? `Double getroffen. Nächstes Ziel: ${nextTarget}.`
           : `Noch nicht drin. Ziel bleibt ${target === 25 ? "Bull" : `D${target}`}.`;
 
       setTrainingSession((prev) => ({
@@ -1808,7 +1808,7 @@ export default function Page() {
       const message = finished
         ? `Shanghai beendet in ${dartsThrown} Darts.`
         : clearedTarget
-          ? `Shanghai auf ${target} komplett. N?chstes Ziel: ${nextTarget}.`
+          ? `Shanghai auf ${target} komplett. Nächstes Ziel: ${nextTarget}.`
           : `Shanghai ${target}: ${progressText}.`;
 
       setTrainingSession((prev) => ({
@@ -1858,7 +1858,7 @@ export default function Page() {
     const message = finished
       ? `Around the Clock beendet in ${dartsThrown} Darts.`
       : hit
-        ? `Treffer. N?chstes Ziel: ${nextTarget}.`
+        ? `Treffer. Nächstes Ziel: ${nextTarget}.`
         : `Knapp daneben. Ziel bleibt ${target === 25 ? "Bull" : target}.`;
 
     setTrainingSession((prev) => ({
@@ -1978,7 +1978,7 @@ export default function Page() {
                   Bobo&apos;s Dart ist jetzt Match-Tracker und Trainingsboard in einer App.
                 </h1>
                 <p className="max-w-2xl text-sm leading-6 text-stone-300 sm:text-base">
-                  Wechsle zwischen lokalem Match-Modus und Training, erfasse W?rfe als Segmente
+                  Wechsle zwischen lokalem Match-Modus und Training, erfasse Würfe als Segmente
                   mit `S`, `D`, `T` oder Bulls und speichere Fortschritt direkt im Browser.
                 </p>
               </div>
@@ -2109,7 +2109,7 @@ export default function Page() {
                         <p>{session.user.email}</p>
                         {profileName ? <p className="text-stone-400">Profilname: {profileName}</p> : null}
                         <p className="mt-1 text-stone-400">
-                          Match-Historie, Training und deine App-Einstellungen werden f?r eingeloggte Nutzer in der Cloud gehalten.
+                          Match-Historie, Training und deine App-Einstellungen werden für eingeloggte Nutzer in der Cloud gehalten.
                         </p>
                       </div>
                       <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
@@ -2368,7 +2368,7 @@ export default function Page() {
               <section className="rounded-[2rem] border border-white/10 bg-white/5 p-6 backdrop-blur">
                 <div className="flex items-center justify-between gap-4">
                   <div>
-                    <h2 className="text-2xl font-semibold text-white">W?rfe f?r {currentPlayer.name}</h2>
+                    <h2 className="text-2xl font-semibold text-white">Würfe für {currentPlayer.name}</h2>
                     <p className="mt-1 text-sm text-stone-400">
                       Segmente antippen, manuell eingeben oder einen Besuch direkt buchen.
                     </p>
@@ -2425,7 +2425,7 @@ export default function Page() {
                     onClick={commitManualDart}
                     className="h-12 rounded-2xl bg-emerald-400 px-5 font-semibold text-black transition hover:bg-emerald-300"
                   >
-                    Dart hinzuf?gen
+                    Dart hinzufügen
                   </button>
                 </div>
 
@@ -2448,7 +2448,7 @@ export default function Page() {
                       onClick={legWinner !== null ? startNextLeg : () => startFreshMatch(mode)}
                       className="rounded-2xl border border-red-400/30 bg-red-400/10 px-5 py-3 font-semibold text-red-100 transition hover:bg-red-400/20"
                     >
-                      {legWinner !== null ? "N?chstes Leg" : "Neues Match"}
+                      {legWinner !== null ? "Nächstes Leg" : "Neues Match"}
                     </button>
                   ) : (
                     <button
@@ -2519,7 +2519,7 @@ export default function Page() {
                           <thead className="bg-black/10 text-stone-400">
                             <tr>
                               <th className="px-4 py-3 font-medium">#</th>
-                              <th className="px-4 py-3 font-medium">W?rfe</th>
+                              <th className="px-4 py-3 font-medium">Würfe</th>
                               <th className="px-4 py-3 font-medium">Vorher</th>
                               <th className="px-4 py-3 font-medium">Nachher</th>
                             </tr>
@@ -2542,7 +2542,7 @@ export default function Page() {
                             ) : (
                               <tr>
                                 <td colSpan={4} className="px-4 py-6 text-center text-stone-400">
-                                  Noch keine Besuche f?r {player.name}.
+                                  Noch keine Besuche für {player.name}.
                                 </td>
                               </tr>
                             )}
@@ -2559,7 +2559,7 @@ export default function Page() {
               <section className="rounded-[2rem] border border-white/10 bg-white/5 p-6 backdrop-blur">
                 <h2 className="text-2xl font-semibold text-white">Segment Board</h2>
                 <p className="mt-1 text-sm text-stone-400">
-                  Tippe Singles, Doubles, Triples oder Bulls f?r den laufenden Besuch.
+                  Tippe Singles, Doubles, Triples oder Bulls für den laufenden Besuch.
                 </p>
                 <div className="mt-5">
                   <Dartboard
@@ -2572,7 +2572,7 @@ export default function Page() {
               <section className="rounded-[2rem] border border-white/10 bg-white/5 p-6 backdrop-blur">
                 <h2 className="text-2xl font-semibold text-white">Checkout-Hilfe</h2>
                 <p className="mt-1 text-sm text-stone-400">
-                  Empfehlungen f?r {currentPlayer.name} bei Restscore {currentPlayer.score}.
+                  Empfehlungen für {currentPlayer.name} bei Restscore {currentPlayer.score}.
                 </p>
 
                 <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-4">
@@ -2669,7 +2669,7 @@ export default function Page() {
               <section className="rounded-[2rem] border border-white/10 bg-white/5 p-6 backdrop-blur">
                 <h2 className="text-2xl font-semibold text-white">Training Setup</h2>
                 <p className="mt-1 text-sm text-stone-400">
-                  W?hle einen Modus und trage danach jeden Dart ?ber das Segment Board ein.
+                  Wähle einen Modus und trage danach jeden Dart über das Segment Board ein.
                 </p>
 
                 <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -2742,7 +2742,7 @@ export default function Page() {
                   {trainingSession.mode === "shanghai"
                     ? "Treffe auf jedem Ziel Single, Double und Triple, bevor du weiterrueckst."
                     : trainingSession.mode === "doubles-around"
-                      ? "Nur Doubles z?hlen. Arbeite dich ?ber D1 bis Bull."
+                      ? "Nur Doubles zählen. Arbeite dich über D1 bis Bull."
                       : trainingSession.mode === "bull-drill"
                         ? "Zehn Darts auf Bull und Outer Bull, jeder Treffer zaehlt sofort."
                         : "Treffe die Ziele der Reihe nach von 1 bis Bull."}
@@ -2764,7 +2764,7 @@ export default function Page() {
                     ))
                   ) : (
                     <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-4 text-sm text-stone-400">
-                      Noch keine Trainingsw?rfe in dieser Session.
+                      Noch keine Trainingswürfe in dieser Session.
                     </div>
                   )}
                 </div>

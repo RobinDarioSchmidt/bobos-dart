@@ -553,7 +553,7 @@ export default function ProfilePage() {
             <h1 className="mt-1 text-2xl font-semibold text-white sm:text-3xl">Langzeitstatistiken</h1>
           </div>
           <Link href="/" className="rounded-2xl border border-white/10 bg-black/20 px-3 py-2 text-sm font-semibold">
-            Zur?ck
+            Zurück
           </Link>
         </div>
 
@@ -720,7 +720,7 @@ export default function ProfilePage() {
                 <div className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4">
                   <h2 className="text-lg font-semibold text-white">Wurfmuster</h2>
                   <div className="mt-3 grid grid-cols-2 gap-2">
-                    <StatPill label="Alle W?rfe" value={String(data.insights.throwStats.totalThrows)} />
+                    <StatPill label="Alle Würfe" value={String(data.insights.throwStats.totalThrows)} />
                     <StatPill label="Board-Treffer" value={String(data.insights.throwStats.boardThrows)} />
                     <StatPill label="Triples" value={String(data.insights.throwStats.triplesHit)} />
                     <StatPill label="Doubles" value={String(data.insights.throwStats.doublesHit)} />

@@ -133,7 +133,7 @@ export function HeatmapBoard({ numbers, max }: { numbers: Record<string, number>
     <div className="rounded-[1.25rem] border border-white/10 bg-black/20 p-4">
       <div className="flex items-center justify-between gap-3">
         <p className="text-[10px] uppercase tracking-[0.18em] text-stone-400">Board Heat</p>
-        <p className="text-xs text-stone-400">je heller, desto h?ufiger</p>
+        <p className="text-xs text-stone-400">je heller, desto häufiger</p>
       </div>
       <svg viewBox="0 0 240 240" className="mx-auto mt-3 w-full max-w-[17rem]">
         <circle cx="120" cy="120" r="113" fill="#0b1120" />
@@ -295,7 +295,7 @@ export function MatchArchiveCard({
           href={`/profile/matches/${match.id}`}
           className="rounded-full border border-emerald-300/25 bg-emerald-400/12 px-3 py-1.5 text-sm font-semibold text-emerald-100"
         >
-          ?ffnen
+          Öffnen
         </Link>
       </div>
     </div>

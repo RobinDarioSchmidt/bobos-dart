@@ -173,7 +173,7 @@ export async function GET(
             [...modeBreakdown].sort((left, right) => right.winRate - left.winRate || right.matches - left.matches)[0] ?? null,
           rivalryTone:
             matchesAgainst.length >= 6 && Math.abs((summary?.wins ?? 0) - (summary?.losses ?? 0)) <= 2
-              ? "Klassische Rivalit?t"
+              ? "Klassische Rivalität"
               : (summary?.winRate ?? 0) >= 65
                 ? "Lieblingsgegner"
                 : (summary?.winRate ?? 0) <= 35

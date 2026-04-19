@@ -140,7 +140,7 @@ export function LiveScoreboardPanel({
           </span>
         </div>
         {cloudSyncPending ? (
-          <p className="mt-3 text-xs text-amber-200">Cloud-Statistiken werden f?r dieses Match noch gesichert.</p>
+          <p className="mt-3 text-xs text-amber-200">Cloud-Statistiken werden für dieses Match noch gesichert.</p>
         ) : null}
         <div className="mt-3 grid gap-2 sm:grid-cols-[1.2fr_0.8fr]">
           <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
@@ -181,7 +181,7 @@ export function LiveScoreboardPanel({
           </div>
           <p className="mt-2 text-xs text-stone-400">
             {audioMode === "clips"
-              ? "Bereit f?r deine aufgenommenen Audiofiles unter /public/audio/live."
+              ? "Bereit für deine aufgenommenen Audiofiles unter /public/audio/live."
               : audioMode === "speech"
                 ? "Browser-Sprachausgabe ist aktiv."
                 : "Live-Sounds sind aktuell ausgeschaltet."}
@@ -229,7 +229,7 @@ export function LiveStatsPanel({
           </div>
         </div>
       ) : (
-        <p className="mt-3 text-sm text-stone-400">Noch keine Live-Stats verf?gbar.</p>
+        <p className="mt-3 text-sm text-stone-400">Noch keine Live-Stats verfügbar.</p>
       )}
 
       <div className="mt-3 space-y-2">
@@ -418,7 +418,7 @@ export function LiveMatchSummaryPanel({
               ? `${awards.bestCheckoutVisit.darts.join(", ")} als Checkout`
               : awards.maxVisitOwner
                 ? `${awards.maxVisitOwner.name} mit ${awards.maxVisit} als Best Visit`
-                : "Noch kein Highlight verf?gbar"}
+                : "Noch kein Highlight verfügbar"}
           </p>
         </div>
       </div>

@@ -4,7 +4,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "Bobo's Dart",
     short_name: "Bobo's Dart",
-    description: "Dart Hub f?r lokales Spiel, Online-Matches, Training und Langzeitstatistiken.",
+    description: "Dart Hub für lokales Spiel, Online-Matches, Training und Langzeitstatistiken.",
     start_url: "/",
     display: "standalone",
     background_color: "#09090b",

@@ -43,11 +43,11 @@ export function SignedOutLandingSection({
           </div>
           <div className="space-y-3">
             <h1 className="max-w-3xl text-4xl font-semibold tracking-tight text-white sm:text-5xl">
-              Darts f?r Zuhause, Training und Online-Matches in einer klaren App.
+              Darts für Zuhause, Training und Online-Matches in einer klaren App.
             </h1>
             <p className="max-w-2xl text-sm leading-6 text-stone-300 sm:text-base">
               Logge dich ein und entscheide danach, ob du lokal mit Gastspielern spielen,
-              online einen Raum ?ffnen, trainieren oder direkt in deine Langzeitstatistiken gehen willst.
+              online einen Raum öffnen, trainieren oder direkt in deine Langzeitstatistiken gehen willst.
             </p>
           </div>
           <div className="flex flex-wrap gap-3 text-sm text-stone-300">
@@ -156,14 +156,14 @@ export function SignedInOverviewSection({
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="space-y-3">
             <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-3 py-1 text-xs uppercase tracking-[0.28em] text-emerald-200">
-              Willkommen zur?ck
+              Willkommen zurück
             </div>
             <div>
               <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">
                 {profileName || profileDraft || "Spieler"}, wie soll es weitergehen?
               </h1>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-stone-300 sm:text-base">
-                W?hle deinen Modus und starte direkt in lokales Spiel, Online-Raum, Training oder Profil.
+                Wähle deinen Modus und starte direkt in lokales Spiel, Online-Raum, Training oder Profil.
               </p>
             </div>
           </div>
@@ -219,7 +219,7 @@ export function SignedInOverviewSection({
             <p className="text-xs uppercase tracking-[0.24em] text-sky-100">Online Spiel</p>
             <h2 className="mt-3 text-2xl font-semibold text-white">Raum erstellen oder beitreten</h2>
             <p className="mt-2 text-sm text-stone-300">
-              Live gegen Freunde spielen, synchronisiert ?ber eure Konten.
+              Live gegen Freunde spielen, synchronisiert über eure Konten.
             </p>
           </Link>
 
@@ -275,7 +275,7 @@ export function SignedInOverviewSection({
           </div>
 
           <div className="rounded-[1.5rem] border border-white/10 bg-black/20 p-4">
-            <p className="text-xs uppercase tracking-[0.24em] text-stone-400">Cloud ?bersicht</p>
+            <p className="text-xs uppercase tracking-[0.24em] text-stone-400">Cloud übersicht</p>
             {cloudStats ? (
               <div className="mt-4 grid grid-cols-2 gap-3">
                 <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
@@ -312,7 +312,7 @@ export function SignedInOverviewSection({
         <div className="rounded-[1.5rem] border border-white/10 bg-black/20 p-4">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-xs uppercase tracking-[0.24em] text-stone-400">App-Gef?hl</p>
+              <p className="text-xs uppercase tracking-[0.24em] text-stone-400">App-Gefühl</p>
               <p className="mt-1 text-lg font-semibold text-white">F?r Handy vorbereitet</p>
               <p className="mt-2 text-sm text-stone-400">
                 Du kannst Bobo&apos;s Dart als Web-App auf dem Homescreen nutzen. Wenn dein Browser keinen

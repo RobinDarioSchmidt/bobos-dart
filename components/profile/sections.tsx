@@ -386,7 +386,7 @@ export function ProfileSeasonLeaderboardSection({
             ))
           ) : (
             <div className="rounded-[1.25rem] border border-dashed border-white/10 bg-black/20 p-4 text-sm text-stone-400">
-              F?r dieses Zeitfenster gibt es noch nicht genug Daten.
+              Für dieses Zeitfenster gibt es noch nicht genug Daten.
             </div>
           )}
         </div>
@@ -496,7 +496,7 @@ export function ProfileDeepInsightsSection({
 
   return (
     <details className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4">
-      <summary className="cursor-pointer list-none text-lg font-semibold text-white">Checkout- und Rivalit?tsdaten</summary>
+      <summary className="cursor-pointer list-none text-lg font-semibold text-white">Checkout- und Rivalitätsdaten</summary>
       <div className="mt-4 space-y-4">
         <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
           <StatPill label="Checkouts" value={String(analytics.checkoutInsights.total)} tone="border-emerald-300/25 bg-emerald-400/12" />
