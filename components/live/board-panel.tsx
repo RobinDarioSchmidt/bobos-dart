@@ -93,14 +93,14 @@ function LiveDartboard({
     <div className={`rounded-[1.5rem] border border-white/10 bg-black/20 p-3 transition ${disabled ? "opacity-45" : ""}`}>
       <div className="mb-3 flex items-center justify-end gap-3">
         {hoveredSegment ? (
-          <div className="min-h-[3rem] min-w-[8.5rem] rounded-2xl border border-amber-300/30 bg-amber-300/10 px-3 py-2 text-right">
+          <div className="min-h-[3.5rem] min-w-[9rem] rounded-2xl border border-amber-300/30 bg-amber-300/10 px-3 py-2 text-right">
             <p className="text-[10px] uppercase tracking-[0.22em] text-amber-100">Ziel</p>
             <p className="whitespace-nowrap text-sm font-semibold text-white">
               {hoveredSegment.label} · {hoveredSegment.score}
             </p>
           </div>
         ) : (
-          <div className="flex min-h-[3rem] min-w-[8.5rem] items-center justify-center whitespace-nowrap rounded-2xl border border-white/10 bg-white/5 px-3 py-1 text-center text-[11px] uppercase tracking-[0.22em] text-stone-300">
+          <div className="flex min-h-[3.5rem] min-w-[9rem] items-center justify-center whitespace-nowrap rounded-2xl border border-white/10 bg-white/5 px-3 py-1 text-center text-[11px] uppercase tracking-[0.22em] text-stone-300">
             Hover + Klick
           </div>
         )}
