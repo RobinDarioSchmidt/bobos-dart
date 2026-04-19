@@ -273,7 +273,7 @@ export async function GET(request: Request) {
     .from("live_matches")
     .select("id, owner_id, room_code, state")
     .eq("room_code", roomCode.toUpperCase())
-    .single();
+    .maybeSingle();
 
   if (error || !data) {
     return NextResponse.json({ error: error?.message ?? "match_not_found" }, { status: 404 });
@@ -382,7 +382,7 @@ export async function POST(request: Request) {
       .from("live_matches")
       .select("id, owner_id, room_code, state")
       .eq("room_code", body.roomCode.toUpperCase())
-      .single();
+      .maybeSingle();
 
     if (error || !data) {
       return NextResponse.json({ error: error?.message ?? "match_not_found" }, { status: 404 });
@@ -431,7 +431,7 @@ export async function POST(request: Request) {
       .from("live_matches")
       .select("id, owner_id, room_code, state")
       .eq("room_code", body.roomCode.toUpperCase())
-      .single();
+      .maybeSingle();
 
     if (error || !data) {
       return NextResponse.json({ error: error?.message ?? "match_not_found" }, { status: 404 });
@@ -489,7 +489,7 @@ export async function POST(request: Request) {
       .from("live_matches")
       .select("id, owner_id, room_code, state")
       .eq("room_code", body.roomCode.toUpperCase())
-      .single();
+      .maybeSingle();
 
     if (error || !data) {
       return NextResponse.json({ error: error?.message ?? "match_not_found" }, { status: 404 });
