@@ -120,8 +120,7 @@ export function SignedInOverviewSection({
   onSaveProfile,
   onStartLocal,
   onStartTraining,
-  onLoadCloudDashboard,
-  onLoadCloudMatches,
+  onRefreshCloud,
   onLogout,
   canInstallApp,
   isInstalledApp,
@@ -141,8 +140,7 @@ export function SignedInOverviewSection({
   onSaveProfile: () => void;
   onStartLocal: () => void;
   onStartTraining: () => void;
-  onLoadCloudDashboard: () => void;
-  onLoadCloudMatches: () => void;
+  onRefreshCloud: () => void;
   onLogout: () => void;
   canInstallApp: boolean;
   isInstalledApp: boolean;
@@ -299,10 +297,10 @@ export function SignedInOverviewSection({
               <div className="mt-4 space-y-3">
                 <p className="text-sm text-stone-400">Deine Cloud-Daten werden gerade vorbereitet oder sind noch leer.</p>
                 <button
-                  onClick={onLoadCloudDashboard}
+                  onClick={onRefreshCloud}
                   className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white"
                 >
-                  Cloud-Statistik laden
+                  Jetzt aktualisieren
                 </button>
               </div>
             )}
@@ -333,16 +331,10 @@ export function SignedInOverviewSection({
           <div className="rounded-[1.5rem] border border-white/10 bg-black/20 p-4">
             <div className="flex flex-wrap gap-3">
               <button
-                onClick={onLoadCloudMatches}
-                className="rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-black"
-              >
-                Cloud-Historie laden
-              </button>
-              <button
-                onClick={onLoadCloudDashboard}
+                onClick={onRefreshCloud}
                 className="rounded-2xl border border-white/10 bg-black/20 px-4 py-2 text-sm font-semibold text-white"
               >
-                Cloud-Statistik laden
+                Jetzt aktualisieren
               </button>
               <Link
                 href="/profile"
@@ -351,6 +343,9 @@ export function SignedInOverviewSection({
                 Profilseite
               </Link>
             </div>
+            <p className="mt-4 text-sm text-stone-400">
+              Deine Cloud-Daten aktualisieren sich automatisch nach Login, nach Saves, beim Zurückkehren in die App und regelmäßig im Hintergrund.
+            </p>
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
               <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
                 <p className="text-xs uppercase tracking-[0.2em] text-stone-400">Matches</p>

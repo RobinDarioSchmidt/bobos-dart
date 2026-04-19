@@ -1107,6 +1107,16 @@ export default function Page() {
     setRecentTrainingSessions(result.recentTraining ?? []);
   }, []);
 
+  const refreshCloudData = useCallback(
+    async (nextSession: Session, options?: { includeHistory?: boolean }) => {
+      if (options?.includeHistory) {
+        await loadCloudMatches(nextSession);
+      }
+      await loadCloudDashboard(nextSession);
+    },
+    [loadCloudDashboard, loadCloudMatches],
+  );
+
   async function saveProfileDraft() {
     if (!supabase || !session) {
       return;
@@ -1142,7 +1152,7 @@ export default function Page() {
       ),
     );
     setCloudMessage("Profilname in der Cloud gespeichert.");
-    await loadCloudDashboard(session);
+    await refreshCloudData(session, { includeHistory: true });
   }
 
   useEffect(() => {
@@ -1154,8 +1164,7 @@ export default function Page() {
       setSession(data.session);
       if (data.session) {
         void loadCloudProfile(data.session);
-        void loadCloudMatches(data.session);
-        void loadCloudDashboard(data.session);
+        void refreshCloudData(data.session, { includeHistory: true });
       }
     });
 
@@ -1165,8 +1174,7 @@ export default function Page() {
       setSession(nextSession);
       if (nextSession) {
         void loadCloudProfile(nextSession);
-        void loadCloudMatches(nextSession);
-        void loadCloudDashboard(nextSession);
+        void refreshCloudData(nextSession, { includeHistory: true });
       } else {
         setProfileName("");
         setProfileDraft("");
@@ -1181,7 +1189,7 @@ export default function Page() {
     return () => {
       subscription.unsubscribe();
     };
-  }, [loadCloudDashboard, loadCloudMatches, loadCloudProfile]);
+  }, [loadCloudProfile, refreshCloudData]);
 
   useEffect(() => {
     if (!session || !supabase) {
@@ -1236,6 +1244,34 @@ export default function Page() {
       .eq("id", session.user.id);
   }, [appMode, cloudSettingsReady, doubleOut, legsToWin, mode, players, session, setsToWin, trainingSession.mode]);
 
+  useEffect(() => {
+    if (!session || typeof window === "undefined") {
+      return;
+    }
+
+    const refreshVisibleCloudData = () => {
+      if (document.visibilityState !== "visible") {
+        return;
+      }
+      void refreshCloudData(session, { includeHistory: true });
+    };
+
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        void refreshCloudData(session);
+      }
+    }, 45000);
+
+    window.addEventListener("focus", refreshVisibleCloudData);
+    document.addEventListener("visibilitychange", refreshVisibleCloudData);
+
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", refreshVisibleCloudData);
+      document.removeEventListener("visibilitychange", refreshVisibleCloudData);
+    };
+  }, [refreshCloudData, session]);
+
   async function handleAuthSubmit() {
     if (!supabase) {
       setAuthMessage("Supabase ist noch nicht konfiguriert.");
@@ -1257,8 +1293,7 @@ export default function Page() {
 
     if (data.session) {
       await ensureProfile(data.session);
-      await loadCloudMatches(data.session);
-      await loadCloudDashboard(data.session);
+      await refreshCloudData(data.session, { includeHistory: true });
       setAuthMessage("Login erfolgreich.");
       setSelectedFlow("overview");
     }
@@ -1357,8 +1392,7 @@ export default function Page() {
     }
 
     setCloudMessage(`Cloud-Save erfolgreich für ${winner.name}.`);
-    await loadCloudMatches(session);
-    await loadCloudDashboard(session);
+    await refreshCloudData(session, { includeHistory: true });
   }
 
   async function saveTrainingSessionToCloud(nextSession: TrainingSession) {
@@ -1409,7 +1443,7 @@ export default function Page() {
     }
 
     setCloudMessage("Training in der Cloud gespeichert.");
-    await loadCloudDashboard(session);
+    await refreshCloudData(session);
   }
 
   function resetLegBoards(nextPlayers: Player[]) {
@@ -1949,8 +1983,7 @@ export default function Page() {
               setAppMode("training");
               setSelectedFlow("training");
             }}
-            onLoadCloudDashboard={() => void loadCloudDashboard(session)}
-            onLoadCloudMatches={() => void loadCloudMatches(session)}
+            onRefreshCloud={() => void refreshCloudData(session, { includeHistory: true })}
             onLogout={() => void handleSignOut()}
             canInstallApp={Boolean(installPromptEvent)}
             isInstalledApp={isInstalledApp}
