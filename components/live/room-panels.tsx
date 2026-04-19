@@ -148,11 +148,13 @@ export function LiveRoomJoinPanel({
   isRoomHost,
   joinedPlayerCount,
   maxPlayers,
+  openRooms,
   loading,
   message,
   onToggle,
   onRoomCodeChange,
   onJoin,
+  onJoinSuggestedRoom,
   onCopyRoomCode,
   onCopyRoomLink,
   onReconnect,
@@ -165,11 +167,21 @@ export function LiveRoomJoinPanel({
   isRoomHost: boolean;
   joinedPlayerCount: number;
   maxPlayers: number;
+  openRooms: Array<{
+    room_code: string;
+    host_name: string;
+    mode: 301 | 501;
+    finish_mode: LiveFinishMode;
+    joined_players: number;
+    max_players: number;
+    status_text: string;
+  }>;
   loading: boolean;
   message: string;
   onToggle: () => void;
   onRoomCodeChange: (value: string) => void;
   onJoin: () => void;
+  onJoinSuggestedRoom: (roomCode: string) => void;
   onCopyRoomCode: () => void;
   onCopyRoomLink: () => void;
   onReconnect: () => void;
@@ -183,20 +195,51 @@ export function LiveRoomJoinPanel({
         <span className="text-sm text-stone-400">{joinOpen ? "Einklappen" : "Ausklappen"}</span>
       </button>
       {joinOpen ? (
-        <div className="mt-4 flex gap-2">
-          <input
-            value={roomCodeInput}
-            onChange={(event) => onRoomCodeChange(event.target.value.toUpperCase())}
-            placeholder="Raumcode"
-            className="h-11 flex-1 rounded-2xl border border-white/10 bg-black/20 px-4 text-white outline-none placeholder:text-stone-500"
-          />
-          <button
-            onClick={onJoin}
-            disabled={loading}
-            className="rounded-2xl bg-emerald-400 px-4 py-3 text-sm font-semibold text-black disabled:opacity-50"
-          >
-            Beitreten
-          </button>
+        <div className="mt-4 space-y-4">
+          <div className="flex gap-2">
+            <input
+              value={roomCodeInput}
+              onChange={(event) => onRoomCodeChange(event.target.value.toUpperCase())}
+              placeholder="Raumcode"
+              className="h-11 flex-1 rounded-2xl border border-white/10 bg-black/20 px-4 text-white outline-none placeholder:text-stone-500"
+            />
+            <button
+              onClick={onJoin}
+              disabled={loading}
+              className="rounded-2xl bg-emerald-400 px-4 py-3 text-sm font-semibold text-black disabled:opacity-50"
+            >
+              Beitreten
+            </button>
+          </div>
+
+          {openRooms.length > 0 ? (
+            <div className="space-y-2">
+              <p className="text-xs uppercase tracking-[0.22em] text-stone-400">Offene Räume</p>
+              {openRooms.map((room) => (
+                <button
+                  key={room.room_code}
+                  onClick={() => onJoinSuggestedRoom(room.room_code)}
+                  disabled={loading}
+                  className="w-full rounded-2xl border border-white/10 bg-black/20 p-3 text-left transition hover:bg-white/10 disabled:opacity-50"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-semibold text-white">{room.host_name}</p>
+                      <p className="mt-1 text-xs text-stone-400">
+                        Raum {room.room_code} · {room.mode} · {room.finish_mode === "single" ? "Single Out" : room.finish_mode === "double" ? "Double Out" : "Masters Out"}
+                      </p>
+                    </div>
+                    <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-stone-200">
+                      {room.joined_players}/{room.max_players}
+                    </div>
+                  </div>
+                  <p className="mt-2 text-sm text-stone-300">{room.status_text}</p>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-stone-400">Gerade sind keine offenen Räume sichtbar.</p>
+          )}
         </div>
       ) : null}
       {liveRoomCode ? (

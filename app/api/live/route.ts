@@ -19,6 +19,17 @@ type LiveMatchRow = {
   state: LiveMatchState;
 };
 
+type LiveRoomListEntry = {
+  room_code: string;
+  owner_id: string;
+  host_name: string;
+  mode: 301 | 501;
+  finish_mode: LiveFinishMode;
+  joined_players: number;
+  max_players: number;
+  status_text: string;
+};
+
 type CloudMatchInsert = {
   id: string;
   owner_id: string;
@@ -264,11 +275,46 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url);
   const roomCode = url.searchParams.get("roomCode");
+  const { adminClient } = getSupabaseAdminClients();
+
   if (!roomCode) {
-    return NextResponse.json({ error: "missing_room_code" }, { status: 400 });
+    const { data, error } = await adminClient
+      .from("live_matches")
+      .select("owner_id, room_code, state")
+      .order("updated_at", { ascending: false });
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
+    const rooms = ((data ?? []) as LiveMatchRow[])
+      .map((entry) => {
+        const state = normalizeLiveState(entry.state);
+        if (state.matchWinner !== null) {
+          return null;
+        }
+
+        const joinedPlayers = state.players.filter((player) => player.joined);
+        if (joinedPlayers.length === 0 || joinedPlayers.length >= state.maxPlayers) {
+          return null;
+        }
+
+        return {
+          room_code: entry.room_code,
+          owner_id: entry.owner_id,
+          host_name: state.players[0]?.name ?? "Host",
+          mode: state.mode,
+          finish_mode: state.finishMode,
+          joined_players: joinedPlayers.length,
+          max_players: state.maxPlayers,
+          status_text: state.statusText,
+        } satisfies LiveRoomListEntry;
+      })
+      .filter((entry): entry is LiveRoomListEntry => Boolean(entry));
+
+    return NextResponse.json({ rooms });
   }
 
-  const { adminClient } = getSupabaseAdminClients();
   const { data, error } = await adminClient
     .from("live_matches")
     .select("id, owner_id, room_code, state")

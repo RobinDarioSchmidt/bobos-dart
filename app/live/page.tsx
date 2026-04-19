@@ -42,6 +42,17 @@ type LiveMatchResponse = {
   };
 };
 
+type OpenLiveRoom = {
+  room_code: string;
+  owner_id: string;
+  host_name: string;
+  mode: 301 | 501;
+  finish_mode: LiveFinishMode;
+  joined_players: number;
+  max_players: number;
+  status_text: string;
+};
+
 const LIVE_ROOM_STORAGE_KEY = "bobos-dart-live-room";
 
 function formatLiveError(error: string) {
@@ -129,6 +140,7 @@ export default function LivePage() {
   const [liveRoomCode, setLiveRoomCode] = useState("");
   const [roomOwnerId, setRoomOwnerId] = useState("");
   const [liveState, setLiveState] = useState<LiveMatchState | null>(null);
+  const [openRooms, setOpenRooms] = useState<OpenLiveRoom[]>([]);
   const [mode, setMode] = useState<301 | 501>(501);
   const [finishMode, setFinishMode] = useState<LiveFinishMode>("double");
   const [bullOffEnabled, setBullOffEnabled] = useState(true);
@@ -239,6 +251,30 @@ export default function LivePage() {
     return freshSession?.access_token ?? null;
   }
 
+  const loadOpenRooms = useCallback(async () => {
+    const accessToken = await getAccessToken();
+    if (!accessToken) {
+      setOpenRooms([]);
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/live", {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+      const result = (await response.json()) as { rooms?: OpenLiveRoom[]; error?: string };
+      if (!response.ok || result.error) {
+        return;
+      }
+
+      setOpenRooms(result.rooms ?? []);
+    } catch {
+      // Keep the current list until the next successful refresh.
+    }
+  }, []);
+
   const fetchMatch = useCallback(async (roomCode: string) => {
     const accessToken = await getAccessToken();
     if (!accessToken) {
@@ -260,6 +296,7 @@ export default function LivePage() {
         setLiveRoomCode("");
         setRoomOwnerId("");
         setLiveState(null);
+        void loadOpenRooms();
       }
       return;
     }
@@ -268,7 +305,31 @@ export default function LivePage() {
     setRoomOwnerId(result.match.owner_id);
     setLiveState(normalizeLiveState(result.match.state));
     setConnectionState("online");
-  }, []);
+    void loadOpenRooms();
+  }, [loadOpenRooms]);
+
+  useEffect(() => {
+    if (!session) {
+      setOpenRooms([]);
+      return;
+    }
+
+    void loadOpenRooms();
+  }, [loadOpenRooms, session]);
+
+  useEffect(() => {
+    if (!session) {
+      return;
+    }
+
+    const interval = window.setInterval(() => {
+      void loadOpenRooms();
+    }, 20000);
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [loadOpenRooms, session]);
 
   useEffect(() => {
     if (!liveRoomCode || !session) {
@@ -401,10 +462,11 @@ export default function LivePage() {
           if (typeof window !== "undefined") {
             window.localStorage.removeItem(LIVE_ROOM_STORAGE_KEY);
           }
-          setMessage("Der Raum ist beendet.");
-          setConnectionState("online");
-          return { closed: true };
-        }
+        setMessage("Der Raum ist beendet.");
+        setConnectionState("online");
+        void loadOpenRooms();
+        return { closed: true };
+      }
         const nextError = "error" in result && result.error ? result.error : "update_failed";
         setMessage(formatLiveError(nextError));
         setConnectionState("offline");
@@ -416,6 +478,7 @@ export default function LivePage() {
       setRoomOwnerId(result.match.owner_id);
       setLiveState(normalized);
       setConnectionState("online");
+      void loadOpenRooms();
       return {
         owner_id: result.match.owner_id,
         room_code: result.match.room_code,
@@ -466,24 +529,27 @@ export default function LivePage() {
     if (match?.room_code) {
       setCreateOpen(false);
       setJoinOpen(false);
+      await loadOpenRooms();
       await broadcastRefresh(match.room_code, "create");
     }
   }
 
-  async function joinRoom() {
-    if (!roomCodeInput) {
+  async function joinRoom(roomCode = roomCodeInput) {
+    if (!roomCode) {
       setMessage("Bitte einen Raumcode eingeben.");
       return;
     }
 
     const match = await callLiveApi({
       action: "join",
-      roomCode: roomCodeInput,
+      roomCode,
       displayName,
     });
 
     if (match?.room_code) {
+      setRoomCodeInput(match.room_code);
       setJoinOpen(false);
+      await loadOpenRooms();
       await broadcastRefresh(match.room_code, "join");
     }
   }
@@ -710,6 +776,7 @@ export default function LivePage() {
     });
 
     if (result && "room_code" in result && typeof result.room_code === "string") {
+      await loadOpenRooms();
       await broadcastRefresh(result.room_code, "leave");
     }
   }
@@ -726,6 +793,7 @@ export default function LivePage() {
 
     if (result && "closed" in result && result.closed) {
       setMessage("Der Raum wurde geschlossen.");
+      await loadOpenRooms();
     }
   }
 
@@ -821,11 +889,16 @@ export default function LivePage() {
                 isRoomHost={isRoomHost}
                 joinedPlayerCount={joinedPlayerCount}
                 maxPlayers={liveState?.maxPlayers ?? maxPlayers}
+                openRooms={openRooms.filter((room) => room.room_code !== liveRoomCode)}
                 loading={loading}
                 message={message}
                 onToggle={() => setJoinOpen((prev) => !prev)}
                 onRoomCodeChange={setRoomCodeInput}
                 onJoin={() => void joinRoom()}
+                onJoinSuggestedRoom={(roomCode) => {
+                  setRoomCodeInput(roomCode);
+                  void joinRoom(roomCode);
+                }}
                 onCopyRoomCode={() => void copyRoomCode()}
                 onCopyRoomLink={() => void copyRoomLink()}
                 onReconnect={() => void reconnectToRoom()}
