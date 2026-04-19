@@ -17,6 +17,7 @@ type LiveMatchRow = {
   owner_id: string;
   room_code: string;
   state: LiveMatchState;
+  updated_at?: string;
 };
 
 type LiveRoomListEntry = {
@@ -40,6 +41,8 @@ type CloudMatchInsert = {
   status: "finished";
   winner_profile_id: string | null;
 };
+
+const LIVE_ROOM_INACTIVITY_MS = 60 * 60 * 1000;
 
 function mergeCloudSync(currentSync: LiveCloudSyncState, nextSync?: Partial<LiveCloudSyncState> | null) {
   return {
@@ -101,6 +104,18 @@ function parseLiveThrowLabel(label: string) {
 
 function getPersistedOwnerIds(state: LiveMatchState) {
   return new Set(state.cloudSync.persistedOwnerIds ?? []);
+}
+
+async function cleanupInactiveLiveRooms(adminClient: ReturnType<typeof getSupabaseAdminClients>["adminClient"]) {
+  const cutoffIso = new Date(Date.now() - LIVE_ROOM_INACTIVITY_MS).toISOString();
+  const { error } = await adminClient
+    .from("live_matches")
+    .delete()
+    .lt("updated_at", cutoffIso);
+
+  if (error) {
+    throw new Error(error.message);
+  }
 }
 
 async function persistCompletedLiveMatch(adminClient: ReturnType<typeof getSupabaseAdminClients>["adminClient"], state: LiveMatchState) {
@@ -277,6 +292,15 @@ export async function GET(request: Request) {
   const roomCode = url.searchParams.get("roomCode");
   const { adminClient } = getSupabaseAdminClients();
 
+  try {
+    await cleanupInactiveLiveRooms(adminClient);
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "cleanup_failed" },
+      { status: 400 },
+    );
+  }
+
   if (!roomCode) {
     const { data, error } = await adminClient
       .from("live_matches")
@@ -390,6 +414,15 @@ export async function POST(request: Request) {
 
   const { adminClient } = getSupabaseAdminClients();
   const adminEmail = process.env.ADMIN_EMAIL ?? "";
+
+  try {
+    await cleanupInactiveLiveRooms(adminClient);
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "cleanup_failed" },
+      { status: 400 },
+    );
+  }
 
   if (body.action === "create") {
     const displayName = getPreferredDisplayName(authResult.user.email, body.displayName, adminEmail);
