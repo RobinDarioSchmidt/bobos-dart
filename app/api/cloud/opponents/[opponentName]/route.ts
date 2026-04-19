@@ -13,6 +13,7 @@ export async function GET(
 
   const { opponentName } = await context.params;
   const decodedName = decodeURIComponent(opponentName);
+  const looksLikeProfileId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(decodedName);
   const { adminClient } = getSupabaseAdminClients();
   const { user } = authResult;
 
@@ -45,7 +46,9 @@ export async function GET(
     .map((match) => {
       const matchPlayers = (players ?? []).filter((player) => player.match_id === match.id);
       const mySeat = matchPlayers.find((player) => player.profile_id === user.id) ?? null;
-      const opponentSeat = matchPlayers.find((player) => (player.guest_name ?? "Gast") === decodedName) ?? null;
+      const opponentSeat = looksLikeProfileId
+        ? matchPlayers.find((player) => player.profile_id === decodedName) ?? null
+        : matchPlayers.find((player) => (player.guest_name ?? "Gast") === decodedName) ?? null;
 
       if (!mySeat || !opponentSeat) {
         return null;
@@ -182,7 +185,11 @@ export async function GET(
         };
 
   return NextResponse.json({
-    opponentName: decodedName,
+    opponentName: matchesAgainst[0]
+      ? ((looksLikeProfileId
+          ? ((players ?? []).find((player) => player.profile_id === decodedName)?.guest_name ?? decodedName)
+          : decodedName))
+      : decodedName,
     summary,
     matches: matchesAgainst,
     modeBreakdown,

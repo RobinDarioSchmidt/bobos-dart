@@ -51,11 +51,17 @@ type RecentMatchEntry = {
   double_out: boolean;
   winner: string;
   opponents: string;
+  opponent_entries?: Array<{
+    name: string;
+    profileId: string | null;
+    legs?: number;
+  }>;
   sets: string;
   did_win: boolean;
   player_average: number;
   player_best_visit: number;
   player_legs: number;
+  player_sets?: number;
 };
 
 type ProfileResponse = {
@@ -126,6 +132,7 @@ type ProfileResponse = {
     weeklyActivity: Array<{ period: string; matches: number; training: number }>;
     opponentBreakdown: Array<{
       name: string;
+      profileId?: string | null;
       matches: number;
       wins: number;
       winRate: number;
@@ -321,6 +328,7 @@ export default function ProfilePage() {
         weeklyActivity: [] as Array<{ period: string; matches: number; training: number }>,
         opponentBreakdown: [] as Array<{
           name: string;
+          profileId?: string | null;
           matches: number;
           wins: number;
           winRate: number;
@@ -429,15 +437,39 @@ export default function ProfilePage() {
       bestVisit: entry.bestVisit,
     }));
 
-    const opponentBreakdown = Object.entries(
-      filteredMatches.reduce<Record<string, { matches: number; wins: number; averageTotal: number; averageCount: number; bestVisit: number; legsFor: number; legsAgainst: number; lastPlayed: string }>>((acc, match) => {
-        const names = match.opponents
-          .split(",")
-          .map((entry) => entry.trim())
-          .filter(Boolean);
-        for (const name of names) {
-          if (!acc[name]) {
-            acc[name] = {
+    const opponentBreakdown = Object.values(
+      filteredMatches.reduce<
+        Record<
+          string,
+          {
+            name: string;
+            profileId: string | null;
+            matches: number;
+            wins: number;
+            averageTotal: number;
+            averageCount: number;
+            bestVisit: number;
+            legsFor: number;
+            legsAgainst: number;
+            lastPlayed: string;
+          }
+        >
+      >((acc, match) => {
+        const opponents =
+          match.opponent_entries && match.opponent_entries.length > 0
+            ? match.opponent_entries
+            : match.opponents
+                .split(",")
+                .map((entry) => entry.trim())
+                .filter(Boolean)
+                .map((name) => ({ name, profileId: null, legs: 0 }));
+
+        for (const opponent of opponents) {
+          const key = opponent.profileId ?? `${opponent.name}:guest`;
+          if (!acc[key]) {
+            acc[key] = {
+              name: opponent.name,
+              profileId: opponent.profileId ?? null,
               matches: 0,
               wins: 0,
               averageTotal: 0,
@@ -448,23 +480,25 @@ export default function ProfilePage() {
               lastPlayed: match.played_at,
             };
           }
-          acc[name].matches += 1;
-          acc[name].wins += match.did_win ? 1 : 0;
-          acc[name].bestVisit = Math.max(acc[name].bestVisit, match.player_best_visit);
-          acc[name].legsFor += match.player_legs;
+          acc[key].matches += 1;
+          acc[key].wins += match.did_win ? 1 : 0;
+          acc[key].bestVisit = Math.max(acc[key].bestVisit, match.player_best_visit);
+          acc[key].legsFor += match.player_legs;
+          acc[key].legsAgainst += opponent.legs ?? 0;
           if (match.player_average > 0) {
-            acc[name].averageTotal += match.player_average;
-            acc[name].averageCount += 1;
+            acc[key].averageTotal += match.player_average;
+            acc[key].averageCount += 1;
           }
-          if (new Date(match.played_at).getTime() > new Date(acc[name].lastPlayed).getTime()) {
-            acc[name].lastPlayed = match.played_at;
+          if (new Date(match.played_at).getTime() > new Date(acc[key].lastPlayed).getTime()) {
+            acc[key].lastPlayed = match.played_at;
           }
         }
         return acc;
       }, {}),
     )
-      .map(([name, values]) => ({
-        name,
+      .map((values) => ({
+        name: values.name,
+        profileId: values.profileId,
         matches: values.matches,
         wins: values.wins,
         winRate: values.matches > 0 ? Number(((values.wins / values.matches) * 100).toFixed(1)) : 0,

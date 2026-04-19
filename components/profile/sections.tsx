@@ -27,6 +27,7 @@ type AnalyticsShape = {
   weeklyActivity: Array<{ period: string; matches: number; training: number }>;
   opponentBreakdown: Array<{
     name: string;
+    profileId?: string | null;
     matches: number;
     wins: number;
     winRate: number;
@@ -232,11 +233,11 @@ export function ProfileAnalyticsPanel({
             <div className="mt-3 space-y-2">
               {analytics.opponentBreakdown.length > 0 ? (
                 analytics.opponentBreakdown.map((entry) => (
-                  <div key={entry.name} className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                  <div key={`${entry.profileId ?? "guest"}-${entry.name}`} className="rounded-2xl border border-white/10 bg-white/5 p-3">
                     <div className="flex items-center justify-between gap-3">
                       <p className="font-semibold text-white">{entry.name}</p>
                       <Link
-                        href={`/profile/opponents/${encodeURIComponent(entry.name)}`}
+                        href={`/profile/opponents/${encodeURIComponent(entry.profileId ?? entry.name)}`}
                         className="rounded-full border border-emerald-300/25 bg-emerald-400/12 px-2.5 py-1 text-xs font-semibold text-emerald-100"
                       >
                         Duell
