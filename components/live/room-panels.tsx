@@ -42,10 +42,10 @@ export function LiveRoomCreatePanel({
   onCreate: () => void;
 }) {
   return (
-    <div className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur">
-      <button onClick={onToggle} className="flex w-full items-center justify-between gap-3 text-left">
-        <h2 className="text-xl font-semibold text-white">Raum erstellen</h2>
-        <span className="text-sm text-stone-400">{createOpen ? "Einklappen" : "Ausklappen"}</span>
+    <div className="min-w-0 overflow-hidden rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur">
+      <button onClick={onToggle} className="flex w-full min-w-0 items-center justify-between gap-3 text-left">
+        <h2 className="min-w-0 text-xl font-semibold text-white">Raum erstellen</h2>
+        <span className="shrink-0 text-sm text-stone-400">{createOpen ? "Einklappen" : "Ausklappen"}</span>
       </button>
 
       {createOpen ? (
@@ -70,12 +70,12 @@ export function LiveRoomCreatePanel({
               501
             </button>
           </div>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 gap-2 min-[390px]:grid-cols-3">
             {(["single", "double", "master"] as LiveFinishMode[]).map((option) => (
               <button
                 key={option}
                 onClick={() => onFinishModeChange(option)}
-                className={`rounded-2xl px-3 py-3 text-xs font-semibold uppercase tracking-[0.18em] ${
+                className={`min-w-0 rounded-2xl px-3 py-3 text-xs font-semibold uppercase tracking-[0.12em] min-[390px]:tracking-[0.18em] ${
                   finishMode === option ? "bg-white text-black" : "border border-white/10 bg-black/20 text-white"
                 }`}
               >
@@ -189,19 +189,19 @@ export function LiveRoomJoinPanel({
   onCloseRoom: () => void;
 }) {
   return (
-    <div className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur">
-      <button onClick={onToggle} className="flex w-full items-center justify-between gap-3 text-left">
-        <h2 className="text-xl font-semibold text-white">Raum beitreten</h2>
-        <span className="text-sm text-stone-400">{joinOpen ? "Einklappen" : "Ausklappen"}</span>
+    <div className="min-w-0 overflow-hidden rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur">
+      <button onClick={onToggle} className="flex w-full min-w-0 items-center justify-between gap-3 text-left">
+        <h2 className="min-w-0 text-xl font-semibold text-white">Raum beitreten</h2>
+        <span className="shrink-0 text-sm text-stone-400">{joinOpen ? "Einklappen" : "Ausklappen"}</span>
       </button>
       {joinOpen ? (
         <div className="mt-4 space-y-4">
-          <div className="flex gap-2">
+          <div className="grid gap-2 min-[390px]:grid-cols-[1fr_auto]">
             <input
               value={roomCodeInput}
               onChange={(event) => onRoomCodeChange(event.target.value.toUpperCase())}
               placeholder="Raumcode"
-              className="h-11 flex-1 rounded-2xl border border-white/10 bg-black/20 px-4 text-white outline-none placeholder:text-stone-500"
+              className="h-11 min-w-0 rounded-2xl border border-white/10 bg-black/20 px-4 text-white outline-none placeholder:text-stone-500"
             />
             <button
               onClick={onJoin}

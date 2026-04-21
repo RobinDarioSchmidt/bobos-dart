@@ -918,7 +918,7 @@ export default function LivePage() {
           </section>
         ) : (
           <>
-            <section className="grid gap-4 lg:grid-cols-[0.95fr_1.05fr]">
+            <section className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
               <LiveRoomCreatePanel
                 createOpen={createOpen}
                 displayName={displayName}
