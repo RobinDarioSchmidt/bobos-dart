@@ -164,8 +164,8 @@ export function LiveScoreboardPanel({
             <div className="flex flex-wrap gap-2">
               {([
                 ["off", "Aus"],
-                ["speech", "Stimme"],
-                ["clips", "Clips"],
+                ["visits", "Nur Visits"],
+                ["all", "Alle"],
               ] as const).map(([value, label]) => (
                 <button
                   key={value}
@@ -180,10 +180,10 @@ export function LiveScoreboardPanel({
             </div>
           </div>
           <p className="mt-2 text-xs text-stone-400">
-            {audioMode === "clips"
-              ? "Bereit für deine aufgenommenen Audiofiles unter /public/audio/live."
-              : audioMode === "speech"
-                ? "Browser-Sprachausgabe ist aktiv."
+            {audioMode === "all"
+              ? "Einzelwürfe, Bull, No Score und Visit-Summen nutzen deine Clips."
+              : audioMode === "visits"
+                ? "Nur der gebuchte Visit wird als Summe angesagt."
                 : "Live-Sounds sind aktuell ausgeschaltet."}
           </p>
         </div>

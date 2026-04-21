@@ -28,6 +28,7 @@ import {
 } from "@/lib/live-match";
 import {
   LIVE_AUDIO_MODE_STORAGE_KEY,
+  playLiveDartCallout,
   playLiveVisitCallout,
   type LiveAudioMode,
 } from "@/lib/live-audio";
@@ -153,7 +154,7 @@ export default function LivePage() {
   const [createOpen, setCreateOpen] = useState(true);
   const [joinOpen, setJoinOpen] = useState(true);
   const [historyOpen, setHistoryOpen] = useState(true);
-  const [audioMode, setAudioMode] = useState<LiveAudioMode>("clips");
+  const [audioMode, setAudioMode] = useState<LiveAudioMode>("visits");
   const [connectionState, setConnectionState] = useState<"online" | "offline" | "connecting">(
     typeof navigator !== "undefined" && !navigator.onLine ? "offline" : "connecting",
   );
@@ -168,8 +169,12 @@ export default function LivePage() {
     }
 
     const storedMode = window.localStorage.getItem(LIVE_AUDIO_MODE_STORAGE_KEY);
-    if (storedMode === "off" || storedMode === "speech" || storedMode === "clips") {
+    if (storedMode === "off" || storedMode === "visits" || storedMode === "all") {
       setAudioMode(storedMode);
+    } else if (storedMode === "clips") {
+      setAudioMode("visits");
+    } else if (storedMode === "speech") {
+      setAudioMode("off");
     }
   }, []);
 
@@ -682,7 +687,16 @@ export default function LivePage() {
       return;
     }
 
-    const nextState = addPendingDart(liveState, toLiveDart(segment));
+    const dart = toLiveDart(segment);
+    const nextState = addPendingDart(liveState, dart);
+    const completedVisit = nextState.history.find((entry) => entry.result !== "leg-win") ?? null;
+    const previousVisit = liveState.history.find((entry) => entry.result !== "leg-win") ?? null;
+    if (
+      audioMode === "all" &&
+      (!completedVisit || completedVisit.createdAt === previousVisit?.createdAt)
+    ) {
+      void playLiveDartCallout(dart.label, audioMode);
+    }
     queueVisitAudio(liveState, nextState);
     await pushRoomState(nextState, "dart");
   }
@@ -697,7 +711,16 @@ export default function LivePage() {
       return;
     }
 
-    const nextState = addPendingDart(liveState, missDart());
+    const dart = missDart();
+    const nextState = addPendingDart(liveState, dart);
+    const completedVisit = nextState.history.find((entry) => entry.result !== "leg-win") ?? null;
+    const previousVisit = liveState.history.find((entry) => entry.result !== "leg-win") ?? null;
+    if (
+      audioMode === "all" &&
+      (!completedVisit || completedVisit.createdAt === previousVisit?.createdAt)
+    ) {
+      void playLiveDartCallout(dart.label, audioMode);
+    }
     queueVisitAudio(liveState, nextState);
     await pushRoomState(nextState, "miss");
   }

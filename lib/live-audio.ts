@@ -1,4 +1,4 @@
-export type LiveAudioMode = "off" | "speech" | "clips";
+export type LiveAudioMode = "off" | "visits" | "all";
 
 export const LIVE_AUDIO_MODE_STORAGE_KEY = "bobos-dart-live-audio-mode";
 
@@ -13,43 +13,41 @@ export const LIVE_AUDIO_EVENT_FILES = {
   matchWin: "/audio/live/events/match-win.mp3",
   bullOffWin: "/audio/live/events/bull-off-win.mp3",
   roomJoin: "/audio/live/events/room-join.mp3",
+  noScore: "/audio/live/events/no-score.mp3",
+  bullseye: "/audio/live/events/bullseye.mp3",
+  outerBull: "/audio/live/events/outer-bull.mp3",
 } as const;
-
-export function normalizeCalloutToClipKey(callout: string) {
-  return callout
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
-
-export function getLiveCalloutClipPath(callout: string) {
-  return `${CALL_OUT_DIRECTORY}/${normalizeCalloutToClipKey(callout)}.mp3`;
-}
 
 export function getLiveVisitClipPath(total: number) {
   return `${CALL_OUT_DIRECTORY}/${total}.mp3`;
 }
 
-function pickEnglishVoice(voices: SpeechSynthesisVoice[]) {
-  const preferredLocales = ["en-US", "en-GB", "en-AU", "en-CA"];
-
-  for (const locale of preferredLocales) {
-    const exactMatch = voices.find((voice) => voice.lang === locale);
-    if (exactMatch) {
-      return exactMatch;
-    }
+export function getLiveDartClipPath(label: string) {
+  const normalized = label.trim();
+  if (normalized === "Miss") {
+    return LIVE_AUDIO_EVENT_FILES.noScore;
+  }
+  if (normalized === "Bull") {
+    return LIVE_AUDIO_EVENT_FILES.bullseye;
+  }
+  if (normalized === "Outer Bull") {
+    return LIVE_AUDIO_EVENT_FILES.outerBull;
   }
 
-  const englishNamedVoice = voices.find((voice) => {
-    const lang = voice.lang.toLowerCase();
-    const name = voice.name.toLowerCase();
-    return lang.startsWith("en") && !name.includes("deutsch") && !name.includes("german");
-  });
-  if (englishNamedVoice) {
-    return englishNamedVoice;
+  const prefix = normalized[0];
+  const number = Number(normalized.slice(1));
+  if (!Number.isFinite(number)) {
+    return null;
   }
 
-  return voices.find((voice) => voice.lang.toLowerCase().startsWith("en")) ?? null;
+  if (prefix === "D") {
+    return `${CALL_OUT_DIRECTORY}/double-${number}.mp3`;
+  }
+  if (prefix === "T") {
+    return `${CALL_OUT_DIRECTORY}/triple-${number}.mp3`;
+  }
+
+  return `${CALL_OUT_DIRECTORY}/${number}.mp3`;
 }
 
 export async function playAudioClip(src: string) {
@@ -85,47 +83,17 @@ export async function playAudioClip(src: string) {
   }
 }
 
-export function speakEnglishCallout(text: string) {
-  if (typeof window === "undefined" || !("speechSynthesis" in window)) {
+export async function playLiveDartCallout(label: string, mode: LiveAudioMode) {
+  if (!label || mode !== "all") {
     return false;
   }
 
-  playbackToken += 1;
-  if (activeAudio) {
-    activeAudio.pause();
-    activeAudio.removeAttribute("src");
-    activeAudio.load();
-    activeAudio = null;
-  }
-
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.lang = "en-US";
-  utterance.rate = 1;
-  utterance.pitch = 1;
-  utterance.volume = 1;
-
-  const voices = window.speechSynthesis.getVoices();
-  const preferredVoice = pickEnglishVoice(voices);
-  if (preferredVoice) {
-    utterance.voice = preferredVoice;
-    utterance.lang = preferredVoice.lang;
-  }
-
-  window.speechSynthesis.cancel();
-  window.speechSynthesis.speak(utterance);
-  return true;
-}
-
-export async function playLiveCallout(callout: string, mode: LiveAudioMode) {
-  if (!callout || mode === "off") {
+  const clipPath = getLiveDartClipPath(label);
+  if (!clipPath) {
     return false;
   }
 
-  if (mode === "clips") {
-    return playAudioClip(getLiveCalloutClipPath(callout));
-  }
-
-  return speakEnglishCallout(callout);
+  return playAudioClip(clipPath);
 }
 
 export async function playLiveVisitCallout(total: number, mode: LiveAudioMode) {
@@ -133,9 +101,5 @@ export async function playLiveVisitCallout(total: number, mode: LiveAudioMode) {
     return false;
   }
 
-  if (mode === "clips") {
-    return playAudioClip(getLiveVisitClipPath(total));
-  }
-
-  return speakEnglishCallout(String(total));
+  return playAudioClip(getLiveVisitClipPath(total));
 }
