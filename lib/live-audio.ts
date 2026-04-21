@@ -3,6 +3,8 @@ export type LiveAudioMode = "off" | "speech" | "clips";
 export const LIVE_AUDIO_MODE_STORAGE_KEY = "bobos-dart-live-audio-mode";
 
 const CALL_OUT_DIRECTORY = "/audio/live/callouts";
+let activeAudio: HTMLAudioElement | null = null;
+let playbackToken = 0;
 
 export const LIVE_AUDIO_EVENT_FILES = {
   bust: "/audio/live/events/bust.mp3",
@@ -55,12 +57,30 @@ export async function playAudioClip(src: string) {
     return false;
   }
 
+  playbackToken += 1;
+  const currentToken = playbackToken;
+  if (activeAudio) {
+    activeAudio.pause();
+    activeAudio.removeAttribute("src");
+    activeAudio.load();
+    activeAudio = null;
+  }
+
   try {
     const audio = new Audio(src);
     audio.preload = "auto";
+    activeAudio = audio;
     await audio.play();
+    if (currentToken !== playbackToken) {
+      audio.pause();
+      return false;
+    }
     return true;
   } catch {
+    if (currentToken === playbackToken && activeAudio) {
+      activeAudio.pause();
+      activeAudio = null;
+    }
     return false;
   }
 }
@@ -68,6 +88,14 @@ export async function playAudioClip(src: string) {
 export function speakEnglishCallout(text: string) {
   if (typeof window === "undefined" || !("speechSynthesis" in window)) {
     return false;
+  }
+
+  playbackToken += 1;
+  if (activeAudio) {
+    activeAudio.pause();
+    activeAudio.removeAttribute("src");
+    activeAudio.load();
+    activeAudio = null;
   }
 
   const utterance = new SpeechSynthesisUtterance(text);
@@ -94,29 +122,19 @@ export async function playLiveCallout(callout: string, mode: LiveAudioMode) {
   }
 
   if (mode === "clips") {
-    const played = await playAudioClip(getLiveCalloutClipPath(callout));
-    if (played) {
-      return true;
-    }
-
-    return speakEnglishCallout(callout);
+    return playAudioClip(getLiveCalloutClipPath(callout));
   }
 
   return speakEnglishCallout(callout);
 }
 
 export async function playLiveVisitCallout(total: number, mode: LiveAudioMode) {
-  if (!Number.isFinite(total) || total <= 0 || mode === "off") {
+  if (!Number.isFinite(total) || total < 0 || mode === "off") {
     return false;
   }
 
   if (mode === "clips") {
-    const played = await playAudioClip(getLiveVisitClipPath(total));
-    if (played) {
-      return true;
-    }
-
-    return speakEnglishCallout(String(total));
+    return playAudioClip(getLiveVisitClipPath(total));
   }
 
   return speakEnglishCallout(String(total));
