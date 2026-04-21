@@ -7,9 +7,9 @@ export const metadata: Metadata = {
   applicationName: "Bobo's Dart",
   manifest: "/manifest.webmanifest",
   icons: {
-    icon: "/favicon.ico",
-    shortcut: "/favicon.ico",
-    apple: "/icons/icon-192.png",
+    icon: "/icons/favicon-32.png",
+    shortcut: "/icons/favicon-32.png",
+    apple: "/icons/apple-touch-icon.png",
   },
   appleWebApp: {
     capable: true,

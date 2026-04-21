@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 
 type CloudStats = {
@@ -38,8 +39,20 @@ export function SignedOutLandingSection({
     <section className="overflow-hidden rounded-[2rem] border border-white/10 bg-white/5 shadow-2xl shadow-black/30 backdrop-blur">
       <div className="grid gap-6 p-6 lg:grid-cols-[1.15fr_0.85fr] lg:p-8">
         <div className="space-y-5">
-          <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-3 py-1 text-xs uppercase tracking-[0.28em] text-emerald-200">
-            Dart Hub
+          <div className="flex items-center gap-3">
+            <Image
+              src="/icons/bobo-logo.jpg"
+              alt="Bobo mit Dart"
+              width={64}
+              height={64}
+              className="h-16 w-16 rounded-2xl border border-emerald-300/30 object-cover shadow-lg shadow-emerald-950/40"
+            />
+            <div>
+              <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-3 py-1 text-xs uppercase tracking-[0.28em] text-emerald-200">
+                Dart Hub
+              </div>
+              <p className="mt-2 text-sm font-semibold text-emerald-100">Bobo ist bereit.</p>
+            </div>
           </div>
           <div className="space-y-3">
             <h1 className="max-w-3xl text-4xl font-semibold tracking-tight text-white sm:text-5xl">
@@ -153,6 +166,16 @@ export function SignedInOverviewSection({
       <div className="space-y-6 p-6 lg:p-8">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="space-y-3">
+            <div className="flex items-center gap-3">
+              <Image
+                src="/icons/bobo-logo.jpg"
+                alt="Bobo mit Dart"
+                width={56}
+                height={56}
+                className="h-14 w-14 rounded-2xl border border-emerald-300/30 object-cover shadow-lg shadow-emerald-950/40"
+              />
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-100">Bobo&apos;s Dart</p>
+            </div>
             <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-3 py-1 text-xs uppercase tracking-[0.28em] text-emerald-200">
               Willkommen zurück
             </div>
