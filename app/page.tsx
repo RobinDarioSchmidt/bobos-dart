@@ -1942,7 +1942,7 @@ export default function Page() {
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top,_#1f2937,_#09090b_55%)] pb-28 text-stone-100 sm:pb-8">
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
+      <div className={`mx-auto flex w-full max-w-7xl flex-col gap-6 py-4 sm:px-6 sm:py-6 lg:px-8 ${session && selectedFlow === "overview" ? "px-0" : "px-4"}`}>
         {!session ? (
           <SignedOutLandingSection
             supabaseEnabled={supabaseEnabled}
