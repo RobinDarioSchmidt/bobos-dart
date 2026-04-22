@@ -1972,7 +1972,6 @@ export default function Page() {
             }
             cloudMessage={cloudMessage}
             cloudLoading={cloudLoading}
-            recentTrainingSessions={recentTrainingSessions}
             onProfileDraftChange={setProfileDraft}
             onSaveProfile={() => void saveProfileDraft()}
             onStartLocal={() => {

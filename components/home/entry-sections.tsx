@@ -12,13 +12,6 @@ type CloudStats = {
   trainingSessions: number;
 };
 
-type RecentTrainingEntry = {
-  score: number;
-  darts_thrown: number;
-  hits: number;
-  played_at: string;
-};
-
 export function SignedOutLandingSection({
   supabaseEnabled,
   email,
@@ -129,7 +122,6 @@ export function SignedInOverviewSection({
   cloudStats,
   cloudMessage,
   cloudLoading,
-  recentTrainingSessions,
   onProfileDraftChange,
   onSaveProfile,
   onStartLocal,
@@ -149,7 +141,6 @@ export function SignedInOverviewSection({
   cloudStats: CloudStats | null;
   cloudMessage: string;
   cloudLoading: boolean;
-  recentTrainingSessions: RecentTrainingEntry[];
   onProfileDraftChange: (value: string) => void;
   onSaveProfile: () => void;
   onStartLocal: () => void;
@@ -169,7 +160,7 @@ export function SignedInOverviewSection({
     <section className="overflow-hidden border-y border-white/10 bg-white/5 shadow-2xl shadow-black/30 backdrop-blur sm:rounded-[2rem] sm:border">
       <div className="space-y-5 px-3 py-4 sm:p-6 lg:p-8">
         <div className="grid grid-cols-[1fr_auto] items-start gap-3">
-          <div className="space-y-3">
+          <div>
             <div className="flex items-center gap-3">
               <Image
                 src="/icons/bobo-logo.jpg"
@@ -178,19 +169,12 @@ export function SignedInOverviewSection({
                 height={56}
                 className="h-14 w-14 rounded-2xl border border-emerald-300/30 object-cover shadow-lg shadow-emerald-950/40"
               />
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="min-w-0">
                 <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-100">Bobo&apos;s Dart</p>
-                {isInstalledApp ? (
-                  <div className="rounded-2xl border border-emerald-300/30 bg-emerald-400/10 px-3 py-1 text-xs font-semibold text-emerald-100">
-                    App installiert
-                  </div>
-                ) : null}
+                <h1 className="mt-1 truncate text-2xl font-semibold tracking-tight text-white sm:text-4xl">
+                  Hi, {displayName}!
+                </h1>
               </div>
-            </div>
-            <div>
-              <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-4xl">
-                Hi, {profileName || profileDraft || "Spieler"}!
-              </h1>
             </div>
           </div>
 
@@ -255,8 +239,15 @@ export function SignedInOverviewSection({
               <p className="truncate text-lg font-semibold text-white">{displayName}</p>
               <p className="mt-1 text-xs text-stone-400">{sessionEmail}</p>
             </button>
-            <div className="shrink-0 rounded-full bg-emerald-400/20 px-3 py-1 text-xs font-semibold text-emerald-200">
-              Verbunden
+            <div className="flex shrink-0 flex-col items-end gap-2">
+              <div className="rounded-full bg-emerald-400/20 px-3 py-1 text-xs font-semibold text-emerald-200">
+                Verbunden
+              </div>
+              {isInstalledApp ? (
+                <div className="rounded-full border border-emerald-300/30 bg-emerald-400/10 px-3 py-1 text-xs font-semibold text-emerald-100">
+                  App installiert
+                </div>
+              ) : null}
             </div>
           </div>
 
@@ -313,58 +304,6 @@ export function SignedInOverviewSection({
         {cloudMessage ? <p className="text-sm text-stone-300">{cloudMessage}</p> : null}
         {cloudLoading ? <p className="text-sm text-stone-500">Cloud-Historie wird geladen...</p> : null}
 
-        {cloudStats ? (
-          <div className="rounded-[1.5rem] border border-white/10 bg-black/20 p-4">
-            <div className="flex flex-wrap gap-3">
-              <button
-                onClick={onRefreshCloud}
-                className="rounded-2xl border border-white/10 bg-black/20 px-4 py-2 text-sm font-semibold text-white"
-              >
-                Jetzt aktualisieren
-              </button>
-              <Link
-                href="/profile"
-                className="rounded-2xl border border-white/10 bg-black/20 px-4 py-2 text-sm font-semibold text-white"
-              >
-                Profilseite
-              </Link>
-            </div>
-            <p className="mt-4 text-sm text-stone-400">
-              Deine Cloud-Daten aktualisieren sich automatisch nach Login, nach Saves, beim ZurÃ¼ckkehren in die App und regelmÃ¤ÃŸig im Hintergrund.
-            </p>
-            <div className="mt-4 grid gap-3 sm:grid-cols-3">
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
-                <p className="text-xs uppercase tracking-[0.2em] text-stone-400">Matches</p>
-                <p className="mt-2 text-xl font-semibold text-white">
-                  {cloudStats.matchesWon} / {cloudStats.matchesPlayed}
-                </p>
-              </div>
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
-                <p className="text-xs uppercase tracking-[0.2em] text-stone-400">Training</p>
-                <p className="mt-2 text-xl font-semibold text-white">{cloudStats.trainingSessions}</p>
-              </div>
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
-                <p className="text-xs uppercase tracking-[0.2em] text-stone-400">Best Visit</p>
-                <p className="mt-2 text-xl font-semibold text-white">{cloudStats.bestVisit}</p>
-              </div>
-            </div>
-            <div className="mt-4 space-y-2">
-              <p className="text-xs uppercase tracking-[0.2em] text-stone-400">Letzte Trainingssessions</p>
-              {recentTrainingSessions.length > 0 ? (
-                recentTrainingSessions.slice(0, 3).map((entry, index) => (
-                  <div
-                    key={`${entry.played_at}-${index}`}
-                    className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-stone-300"
-                  >
-                    {new Date(entry.played_at).toLocaleString("de-DE")} Â· Score {entry.score} Â· Treffer {entry.hits} Â· Darts {entry.darts_thrown}
-                  </div>
-                ))
-              ) : (
-                <p className="text-sm text-stone-400">Noch keine Trainingsdaten in der Cloud.</p>
-              )}
-            </div>
-          </div>
-        ) : null}
         <div className="rounded-[1.5rem] border border-white/10 bg-black/20 p-4">
           <div className="flex items-start justify-between gap-3">
             <div>
