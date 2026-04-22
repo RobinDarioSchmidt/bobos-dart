@@ -164,7 +164,7 @@ export function SignedInOverviewSection({
   return (
     <section className="overflow-hidden border-y border-white/10 bg-white/5 shadow-2xl shadow-black/30 backdrop-blur sm:rounded-[2rem] sm:border">
       <div className="space-y-5 px-3 py-4 sm:p-6 lg:p-8">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="grid grid-cols-[1fr_auto] items-start gap-3">
           <div className="space-y-3">
             <div className="flex items-center gap-3">
               <Image
@@ -184,16 +184,16 @@ export function SignedInOverviewSection({
               </div>
             </div>
             <div>
-              <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+              <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-4xl">
                 Hi, {profileName || profileDraft || "Spieler"}!
               </h1>
             </div>
           </div>
 
-          <div className="flex flex-wrap gap-3 lg:justify-end">
+          <div className="flex justify-end">
             <button
               onClick={onLogout}
-              className="rounded-2xl border border-white/10 bg-black/20 px-4 py-2 text-sm font-semibold text-white"
+              className="rounded-2xl border border-white/10 bg-black/20 px-3 py-2 text-sm font-semibold text-white sm:px-4"
             >
               Logout
             </button>
@@ -206,8 +206,8 @@ export function SignedInOverviewSection({
             className="rounded-[1.5rem] border border-white/10 bg-[linear-gradient(135deg,rgba(16,185,129,0.18),rgba(15,23,42,0.82))] p-4 text-left transition hover:border-emerald-300/40 hover:bg-emerald-400/10 sm:p-5"
           >
             <h2 className="text-xs font-semibold uppercase tracking-[0.24em] text-emerald-100">Lokales Spiel</h2>
-            <p className="mt-2 text-sm text-stone-300">
-              Gastnamen vergeben und vor Ort ein Match sofort starten.
+            <p className="mt-2 whitespace-nowrap text-sm text-stone-300">
+              Gastmatch vor Ort starten.
             </p>
           </button>
 
@@ -216,8 +216,8 @@ export function SignedInOverviewSection({
             className="rounded-[1.5rem] border border-white/10 bg-[linear-gradient(135deg,rgba(59,130,246,0.18),rgba(15,23,42,0.82))] p-4 transition hover:border-sky-300/40 hover:bg-sky-400/10 sm:p-5"
           >
             <h2 className="text-xs font-semibold uppercase tracking-[0.24em] text-sky-100">Online Spiel</h2>
-            <p className="mt-2 text-sm text-stone-300">
-              Raum erstellen oder beitreten und synchronisiert gegen Freunde spielen.
+            <p className="mt-2 whitespace-nowrap text-sm text-stone-300">
+              Raum erstellen oder beitreten.
             </p>
           </Link>
 
@@ -226,8 +226,8 @@ export function SignedInOverviewSection({
             className="rounded-[1.5rem] border border-white/10 bg-[linear-gradient(135deg,rgba(245,158,11,0.18),rgba(15,23,42,0.82))] p-4 text-left transition hover:border-amber-300/40 hover:bg-amber-300/10 sm:p-5"
           >
             <h2 className="text-xs font-semibold uppercase tracking-[0.24em] text-amber-100">Training</h2>
-            <p className="mt-2 text-sm text-stone-300">
-              Boardarbeit und Drills wie Around the Clock, Bull Drill oder Shanghai.
+            <p className="mt-2 whitespace-nowrap text-sm text-stone-300">
+              Drills und Boardarbeit.
             </p>
           </button>
 
@@ -236,8 +236,8 @@ export function SignedInOverviewSection({
             className="rounded-[1.5rem] border border-white/10 bg-[linear-gradient(135deg,rgba(217,70,239,0.16),rgba(15,23,42,0.82))] p-4 transition hover:border-fuchsia-300/40 hover:bg-fuchsia-400/10 sm:p-5"
           >
             <h2 className="text-xs font-semibold uppercase tracking-[0.24em] text-fuchsia-100">Profil & Stats</h2>
-            <p className="mt-2 text-sm text-stone-300">
-              Historische Daten, Averages, Gegner und Training kompakt ansehen.
+            <p className="mt-2 whitespace-nowrap text-sm text-stone-300">
+              Historie und Statistiken.
             </p>
           </Link>
         </div>
