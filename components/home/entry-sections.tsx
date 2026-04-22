@@ -174,38 +174,23 @@ export function SignedInOverviewSection({
                 height={56}
                 className="h-14 w-14 rounded-2xl border border-emerald-300/30 object-cover shadow-lg shadow-emerald-950/40"
               />
-              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-100">Bobo&apos;s Dart</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-100">Bobo&apos;s Dart</p>
+                {isInstalledApp ? (
+                  <div className="rounded-2xl border border-emerald-300/30 bg-emerald-400/10 px-3 py-1 text-xs font-semibold text-emerald-100">
+                    App installiert
+                  </div>
+                ) : null}
+              </div>
             </div>
             <div>
               <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">
-                {profileName || profileDraft || "Spieler"}, wie soll es weitergehen?
+                Hi, {profileName || profileDraft || "Spieler"}!
               </h1>
             </div>
           </div>
 
-          <div className="flex flex-wrap gap-3">
-            {canInstallApp && !isInstalledApp ? (
-              <button
-                onClick={onInstallApp}
-                disabled={installBusy}
-                className="rounded-2xl border border-emerald-300/30 bg-emerald-400/10 px-4 py-2 text-sm font-semibold text-emerald-100 disabled:opacity-50"
-              >
-                App installieren
-              </button>
-            ) : null}
-            {isInstalledApp ? (
-              <div className="rounded-2xl border border-emerald-300/30 bg-emerald-400/10 px-4 py-2 text-sm font-semibold text-emerald-100">
-                App installiert
-              </div>
-            ) : null}
-            {isAdmin ? (
-              <Link
-                href="/admin"
-                className="rounded-2xl bg-amber-300 px-4 py-2 text-sm font-semibold text-black"
-              >
-                Admin
-              </Link>
-            ) : null}
+          <div className="flex flex-wrap gap-3 lg:justify-end">
             <button
               onClick={onLogout}
               className="rounded-2xl border border-white/10 bg-black/20 px-4 py-2 text-sm font-semibold text-white"
@@ -320,22 +305,6 @@ export function SignedInOverviewSection({
           </div>
         </div>
 
-        <div className="rounded-[1.5rem] border border-white/10 bg-black/20 p-4">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-xs uppercase tracking-[0.24em] text-stone-400">App-GefÃ¼hl</p>
-              <p className="mt-1 text-lg font-semibold text-white">FÃ¼r Handy vorbereitet</p>
-              <p className="mt-2 text-sm text-stone-400">
-                Du kannst Bobo&apos;s Dart als Web-App auf dem Homescreen nutzen. Wenn dein Browser keinen
-                direkten Installieren-Button anbietet, bekommst du hier die passende Anleitung.
-              </p>
-              <p className="mt-3 text-sm text-stone-300">{installHint}</p>
-            </div>
-            <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-stone-200">
-              {isInstalledApp ? "Installiert" : canInstallApp ? "Installierbar" : "Manuell installierbar"}
-            </div>
-          </div>
-        </div>
 
         {cloudMessage ? <p className="text-sm text-stone-300">{cloudMessage}</p> : null}
         {cloudLoading ? <p className="text-sm text-stone-500">Cloud-Historie wird geladen...</p> : null}
@@ -391,6 +360,44 @@ export function SignedInOverviewSection({
               )}
             </div>
           </div>
+        ) : null}
+        <div className="rounded-[1.5rem] border border-white/10 bg-black/20 p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs uppercase tracking-[0.24em] text-stone-400">Web-App Installation</p>
+              <p className="mt-1 text-lg font-semibold text-white">{isInstalledApp ? "Web-App ist installiert" : "Für Handy vorbereitet"}</p>
+              {!isInstalledApp ? (
+                <>
+                  <p className="mt-2 text-sm text-stone-400">
+                    Du kannst Bobo&apos;s Dart als Web-App auf dem Homescreen nutzen. Wenn dein Browser keinen
+                    direkten Installieren-Button anbietet, bekommst du hier die passende Anleitung.
+                  </p>
+                  <p className="mt-3 text-sm text-stone-300">{installHint}</p>
+                </>
+              ) : null}
+            </div>
+            <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-stone-200">
+              {isInstalledApp ? "Installiert" : canInstallApp ? "Installierbar" : "Manuell installierbar"}
+            </div>
+          </div>
+          {canInstallApp && !isInstalledApp ? (
+            <button
+              onClick={onInstallApp}
+              disabled={installBusy}
+              className="mt-4 rounded-2xl border border-emerald-300/30 bg-emerald-400/10 px-4 py-2 text-sm font-semibold text-emerald-100 disabled:opacity-50"
+            >
+              App installieren
+            </button>
+          ) : null}
+        </div>
+
+        {isAdmin ? (
+          <Link
+            href="/admin"
+            className="inline-flex w-fit rounded-2xl bg-amber-300 px-4 py-2 text-sm font-semibold text-black"
+          >
+            Admin
+          </Link>
         ) : null}
       </div>
     </section>
