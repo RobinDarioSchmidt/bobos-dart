@@ -241,7 +241,7 @@ export function SignedInOverviewSection({
             href="/profile"
             className="rounded-[1.5rem] border border-white/10 bg-[linear-gradient(135deg,rgba(217,70,239,0.16),rgba(15,23,42,0.82))] p-4 transition hover:border-fuchsia-300/40 hover:bg-fuchsia-400/10 sm:p-5"
           >
-            <h2 className="text-xs font-semibold uppercase tracking-[0.24em] text-fuchsia-100">Profil & Stats</h2>
+            <h2 className="text-xs font-semibold uppercase tracking-[0.24em] text-fuchsia-100">Stats</h2>
           </Link>
         </div>
 
