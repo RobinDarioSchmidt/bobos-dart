@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useState } from "react";
 
 type CloudStats = {
   matchesPlayed: number;
@@ -161,6 +162,9 @@ export function SignedInOverviewSection({
   installHint: string;
   onInstallApp: () => void;
 }) {
+  const [profileEditorOpen, setProfileEditorOpen] = useState(false);
+  const displayName = profileName || profileDraft || sessionEmail || "Spieler";
+
   return (
     <section className="overflow-hidden border-y border-white/10 bg-white/5 shadow-2xl shadow-black/30 backdrop-blur sm:rounded-[2rem] sm:border">
       <div className="space-y-5 px-3 py-4 sm:p-6 lg:p-8">
@@ -242,67 +246,67 @@ export function SignedInOverviewSection({
           </Link>
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
-          <div className="rounded-[1.5rem] border border-white/10 bg-black/20 p-4">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-xs uppercase tracking-[0.24em] text-stone-400">Konto</p>
-                <p className="mt-1 text-lg font-semibold text-white">{sessionEmail}</p>
-                {profileName ? <p className="text-sm text-stone-400">Profilname: {profileName}</p> : null}
-              </div>
-              <div className="rounded-full bg-emerald-400/20 px-3 py-1 text-xs font-semibold text-emerald-200">
-                Verbunden
-              </div>
+        <div className="rounded-[1.5rem] border border-white/10 bg-black/20 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <button
+              onClick={() => setProfileEditorOpen((open) => !open)}
+              className="min-w-0 text-left"
+            >
+              <p className="truncate text-lg font-semibold text-white">{displayName}</p>
+              <p className="mt-1 text-xs text-stone-400">{sessionEmail}</p>
+            </button>
+            <div className="shrink-0 rounded-full bg-emerald-400/20 px-3 py-1 text-xs font-semibold text-emerald-200">
+              Verbunden
             </div>
-            <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto]">
+          </div>
+
+          {profileEditorOpen ? (
+            <div className="mt-3 grid grid-cols-[1fr_auto] gap-2">
               <input
                 value={profileDraft}
                 onChange={(event) => onProfileDraftChange(event.target.value)}
                 placeholder="Profilname"
-                className="h-11 rounded-2xl border border-white/10 bg-black/20 px-4 text-white outline-none placeholder:text-stone-500"
+                className="h-10 min-w-0 rounded-2xl border border-white/10 bg-black/20 px-4 text-white outline-none placeholder:text-stone-500"
               />
               <button
                 onClick={onSaveProfile}
-                className="rounded-2xl bg-emerald-400 px-4 py-2 text-sm font-semibold text-black"
+                className="h-10 rounded-2xl bg-emerald-400 px-4 text-sm font-semibold text-black"
               >
-                Profil speichern
+                Save
               </button>
             </div>
-          </div>
+          ) : null}
 
-          <div className="rounded-[1.5rem] border border-white/10 bg-black/20 p-4">
-            <p className="text-xs uppercase tracking-[0.24em] text-stone-400">Cloud Ã¼bersicht</p>
-            {cloudStats ? (
-              <div className="mt-4 grid grid-cols-2 gap-3">
-                <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
-                  <p className="text-xs text-stone-400">Matches</p>
-                  <p className="mt-1 text-2xl font-semibold text-white">{cloudStats.matchesPlayed}</p>
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
-                  <p className="text-xs text-stone-400">Training</p>
-                  <p className="mt-1 text-2xl font-semibold text-white">{cloudStats.trainingSessions}</p>
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
-                  <p className="text-xs text-stone-400">Best Avg</p>
-                  <p className="mt-1 text-2xl font-semibold text-white">{cloudStats.bestAverage.toFixed(2)}</p>
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
-                  <p className="text-xs text-stone-400">Best Visit</p>
-                  <p className="mt-1 text-2xl font-semibold text-white">{cloudStats.bestVisit}</p>
-                </div>
+          {cloudStats ? (
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                <p className="text-xs text-stone-400">Matches</p>
+                <p className="mt-1 text-2xl font-semibold text-white">{cloudStats.matchesPlayed}</p>
               </div>
-            ) : (
-              <div className="mt-4 space-y-3">
-                <p className="text-sm text-stone-400">Deine Cloud-Daten werden gerade vorbereitet oder sind noch leer.</p>
-                <button
-                  onClick={onRefreshCloud}
-                  className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white"
-                >
-                  Jetzt aktualisieren
-                </button>
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                <p className="text-xs text-stone-400">Training</p>
+                <p className="mt-1 text-2xl font-semibold text-white">{cloudStats.trainingSessions}</p>
               </div>
-            )}
-          </div>
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                <p className="text-xs text-stone-400">Best Avg</p>
+                <p className="mt-1 text-2xl font-semibold text-white">{cloudStats.bestAverage.toFixed(2)}</p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                <p className="text-xs text-stone-400">Best Visit</p>
+                <p className="mt-1 text-2xl font-semibold text-white">{cloudStats.bestVisit}</p>
+              </div>
+            </div>
+          ) : (
+            <div className="mt-4 space-y-3">
+              <p className="text-sm text-stone-400">Deine Cloud-Daten werden gerade vorbereitet oder sind noch leer.</p>
+              <button
+                onClick={onRefreshCloud}
+                className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white"
+              >
+                Jetzt aktualisieren
+              </button>
+            </div>
+          )}
         </div>
 
 
