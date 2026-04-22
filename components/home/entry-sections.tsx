@@ -12,6 +12,13 @@ type CloudStats = {
   trainingSessions: number;
 };
 
+type PlayerPresence = {
+  id: string;
+  displayName: string;
+  lastSeenAt: string;
+  isActive: boolean;
+};
+
 export function SignedOutLandingSection({
   supabaseEnabled,
   email,
@@ -122,6 +129,7 @@ export function SignedInOverviewSection({
   cloudStats,
   cloudMessage,
   cloudLoading,
+  playerPresence,
   onProfileDraftChange,
   onSaveProfile,
   onStartLocal,
@@ -142,6 +150,7 @@ export function SignedInOverviewSection({
   cloudStats: CloudStats | null;
   cloudMessage: string;
   cloudLoading: boolean;
+  playerPresence: PlayerPresence[];
   onProfileDraftChange: (value: string) => void;
   onSaveProfile: () => void;
   onStartLocal: () => void;
@@ -174,7 +183,7 @@ export function SignedInOverviewSection({
               <div className="min-w-0">
                 <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-100">Bobo&apos;s Dart</p>
                 <h1 className="mt-1 truncate text-2xl font-semibold tracking-tight text-white sm:text-4xl">
-                  Hi, {displayName}!
+                  Prost, {displayName}!
                 </h1>
               </div>
             </div>
@@ -307,10 +316,36 @@ export function SignedInOverviewSection({
         {cloudLoading ? <p className="text-sm text-stone-500">Cloud-Historie wird geladen...</p> : null}
 
         <div className="rounded-[1.5rem] border border-white/10 bg-black/20 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-xs uppercase tracking-[0.24em] text-stone-400">Spieler</p>
+            <p className="text-xs text-stone-500">aktiv: 30 min</p>
+          </div>
+          <div className="mt-3 divide-y divide-white/10 overflow-hidden rounded-2xl border border-white/10 bg-white/5">
+            {playerPresence.length > 0 ? (
+              playerPresence.map((player) => (
+                <div key={player.id} className="flex items-center justify-between gap-3 px-4 py-2">
+                  <p className="truncate text-sm font-semibold text-white">{player.displayName}</p>
+                  <div className="flex shrink-0 items-center gap-2 text-xs text-stone-400">
+                    <span
+                      className={`h-2.5 w-2.5 rounded-full ${
+                        player.isActive ? "bg-emerald-300 shadow-[0_0_12px_rgba(110,231,183,0.75)]" : "bg-stone-600"
+                      }`}
+                    />
+                    {player.isActive ? "online" : "offline"}
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p className="px-4 py-3 text-sm text-stone-400">Noch keine anderen Spieler gefunden.</p>
+            )}
+          </div>
+        </div>
+
+        <div className="rounded-[1.5rem] border border-white/10 bg-black/20 p-4">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-xs uppercase tracking-[0.24em] text-stone-400">Web-App Installation</p>
-              <p className="mt-1 text-lg font-semibold text-white">{isInstalledApp ? "Web-App ist installiert" : installTitle}</p>
+              <p className="text-xs uppercase tracking-[0.24em] text-stone-400">Web-App</p>
+              {!isInstalledApp ? <p className="mt-1 text-lg font-semibold text-white">{installTitle}</p> : null}
               {!isInstalledApp ? (
                 <>
                   <p className="mt-2 text-sm text-stone-400">

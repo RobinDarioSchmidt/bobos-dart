@@ -126,6 +126,13 @@ type CloudDashboardStats = {
   totalTrainingHits: number;
 };
 
+type CloudPlayerPresence = {
+  id: string;
+  displayName: string;
+  lastSeenAt: string;
+  isActive: boolean;
+};
+
 type TrainingCloudRow = {
   score: number;
   darts_thrown: number;
@@ -790,6 +797,7 @@ export default function Page() {
   const [cloudMessage, setCloudMessage] = useState("");
   const [cloudLoading, setCloudLoading] = useState(false);
   const [cloudStats, setCloudStats] = useState<CloudDashboardStats | null>(null);
+  const [playerPresence, setPlayerPresence] = useState<CloudPlayerPresence[]>([]);
   const [recentTrainingSessions, setRecentTrainingSessions] = useState<TrainingCloudRow[]>([]);
   const [trainingSession, setTrainingSession] = useState<TrainingSession>(() =>
     createTrainingSession("around-the-clock"),
@@ -1007,6 +1015,7 @@ export default function Page() {
       display_name: displayName,
       username: nextSession.user.email,
       app_settings: appSettings,
+      updated_at: new Date().toISOString(),
     });
   }, [adminEmail, appMode, doubleOut, legsToWin, mode, players, setsToWin, trainingSession.mode]);
 
@@ -1157,14 +1166,46 @@ export default function Page() {
     setRecentTrainingSessions(result.recentTraining ?? []);
   }, []);
 
+  const loadPlayerPresence = useCallback(async (nextSession: Session) => {
+    if (!supabase) {
+      return;
+    }
+
+    const {
+      data: { session: freshSession },
+    } = await supabase.auth.getSession();
+
+    const accessToken = freshSession?.access_token ?? nextSession.access_token;
+    if (!accessToken) {
+      return;
+    }
+
+    const response = await fetch("/api/cloud/players", {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    const result = (await response.json()) as {
+      error?: string;
+      players?: CloudPlayerPresence[];
+    };
+
+    if (!response.ok || result.error) {
+      return;
+    }
+
+    setPlayerPresence(result.players ?? []);
+  }, []);
+
   const refreshCloudData = useCallback(
     async (nextSession: Session, options?: { includeHistory?: boolean }) => {
       if (options?.includeHistory) {
         await loadCloudMatches(nextSession);
       }
-      await loadCloudDashboard(nextSession);
+      await Promise.all([loadCloudDashboard(nextSession), loadPlayerPresence(nextSession)]);
     },
-    [loadCloudDashboard, loadCloudMatches],
+    [loadCloudDashboard, loadCloudMatches, loadPlayerPresence],
   );
 
   async function saveProfileDraft() {
@@ -1182,6 +1223,7 @@ export default function Page() {
       .from("profiles")
       .update({
         display_name: trimmedName,
+        updated_at: new Date().toISOString(),
       })
       .eq("id", session.user.id);
 
@@ -1230,6 +1272,7 @@ export default function Page() {
         setProfileDraft("");
         setCloudMatchHistory([]);
         setCloudStats(null);
+        setPlayerPresence([]);
         setRecentTrainingSessions([]);
         setCloudSettingsReady(false);
         setSelectedFlow("overview");
@@ -1290,6 +1333,7 @@ export default function Page() {
       .from("profiles")
       .update({
         app_settings: appSettings,
+        updated_at: new Date().toISOString(),
       })
       .eq("id", session.user.id);
   }, [appMode, cloudSettingsReady, doubleOut, legsToWin, mode, players, session, setsToWin, trainingSession.mode]);
@@ -2022,6 +2066,7 @@ export default function Page() {
             }
             cloudMessage={cloudMessage}
             cloudLoading={cloudLoading}
+            playerPresence={playerPresence}
             onProfileDraftChange={setProfileDraft}
             onSaveProfile={() => void saveProfileDraft()}
             onStartLocal={() => {
