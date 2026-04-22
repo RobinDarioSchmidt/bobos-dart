@@ -643,6 +643,58 @@ export async function GET(request: Request) {
       tone: "amber",
     },
   ];
+  const chronologicalWins = allMatchesWithDetails
+    .filter((match) => match.did_win)
+    .map((match) => match.played_at)
+    .sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+  const chronologicalTrainings = trainingRows
+    .map((training) => training.played_at)
+    .sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+  const chronologicalCheckouts = selfDartRows
+    .filter((row) => row.is_checkout_dart && row.created_at)
+    .map((row) => row.created_at as string)
+    .sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+  const chronologicalBulls = countedBoardThrows
+    .filter((row) => (row.ring === "bull" || row.ring === "outer-bull") && row.created_at)
+    .map((row) => row.created_at as string)
+    .sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+  const firstMaximumPressure = allMatchesWithDetails
+    .filter((match) => match.player_best_visit >= 140)
+    .sort((a, b) => new Date(a.played_at).getTime() - new Date(b.played_at).getTime())[0]?.played_at;
+  const hotMonthUnlockedAt = chronologicalWins.find((winDate, index, wins) => {
+    const currentTime = new Date(winDate).getTime();
+    const thirtyDayWindowStart = currentTime - 30 * 24 * 60 * 60 * 1000;
+    return wins.filter((date) => {
+      const time = new Date(date).getTime();
+      return time >= thirtyDayWindowStart && time <= currentTime;
+    }).length >= 8 && index >= 7;
+  });
+  const recentMilestones = [
+    chronologicalWins[0]
+      ? { key: "first_win", title: "Erster Sieg", unlockedAt: chronologicalWins[0], tone: "emerald" }
+      : null,
+    chronologicalWins[9]
+      ? { key: "ten_wins", title: "Win Collector", unlockedAt: chronologicalWins[9], tone: "emerald" }
+      : null,
+    chronologicalCheckouts[24]
+      ? { key: "checkout_master", title: "Checkout Master", unlockedAt: chronologicalCheckouts[24], tone: "amber" }
+      : null,
+    chronologicalBulls[49]
+      ? { key: "bull_hunter", title: "Bull Hunter", unlockedAt: chronologicalBulls[49], tone: "rose" }
+      : null,
+    chronologicalTrainings[39]
+      ? { key: "training_grinder", title: "Training Grinder", unlockedAt: chronologicalTrainings[39], tone: "fuchsia" }
+      : null,
+    firstMaximumPressure
+      ? { key: "maximum_pressure", title: "Maximum Pressure", unlockedAt: firstMaximumPressure, tone: "emerald" }
+      : null,
+    hotMonthUnlockedAt
+      ? { key: "hot_month", title: "Heisser Monat", unlockedAt: hotMonthUnlockedAt, tone: "amber" }
+      : null,
+  ]
+    .filter((milestone): milestone is { key: string; title: string; unlockedAt: string; tone: string } => Boolean(milestone))
+    .sort((a, b) => new Date(b.unlockedAt).getTime() - new Date(a.unlockedAt).getTime())
+    .slice(0, 3);
   const highlightTitle =
     stats.winRate >= 65
       ? "Match Closer"
@@ -940,6 +992,7 @@ export async function GET(request: Request) {
       throwPatternTimeline,
       records,
       achievements,
+      recentMilestones,
       seasonalLeaderboards,
     },
   });

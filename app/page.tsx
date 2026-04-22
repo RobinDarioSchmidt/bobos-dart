@@ -133,6 +133,13 @@ type CloudPlayerPresence = {
   isActive: boolean;
 };
 
+type CloudRecentMilestone = {
+  key: string;
+  title: string;
+  unlockedAt: string;
+  tone: string;
+};
+
 type TrainingCloudRow = {
   score: number;
   darts_thrown: number;
@@ -798,6 +805,7 @@ export default function Page() {
   const [cloudLoading, setCloudLoading] = useState(false);
   const [cloudStats, setCloudStats] = useState<CloudDashboardStats | null>(null);
   const [playerPresence, setPlayerPresence] = useState<CloudPlayerPresence[]>([]);
+  const [recentMilestones, setRecentMilestones] = useState<CloudRecentMilestone[]>([]);
   const [recentTrainingSessions, setRecentTrainingSessions] = useState<TrainingCloudRow[]>([]);
   const [trainingSession, setTrainingSession] = useState<TrainingSession>(() =>
     createTrainingSession("around-the-clock"),
@@ -1150,6 +1158,9 @@ export default function Page() {
       profile?: CloudProfileRow & { created_at?: string };
       stats?: CloudDashboardStats;
       recentTraining?: TrainingCloudRow[];
+      insights?: {
+        recentMilestones?: CloudRecentMilestone[];
+      };
     };
 
     if (!response.ok || result.error) {
@@ -1163,6 +1174,7 @@ export default function Page() {
     }
 
     setCloudStats(result.stats ?? null);
+    setRecentMilestones(result.insights?.recentMilestones ?? []);
     setRecentTrainingSessions(result.recentTraining ?? []);
   }, []);
 
@@ -1273,6 +1285,7 @@ export default function Page() {
         setCloudMatchHistory([]);
         setCloudStats(null);
         setPlayerPresence([]);
+        setRecentMilestones([]);
         setRecentTrainingSessions([]);
         setCloudSettingsReady(false);
         setSelectedFlow("overview");
@@ -2067,6 +2080,7 @@ export default function Page() {
             cloudMessage={cloudMessage}
             cloudLoading={cloudLoading}
             playerPresence={playerPresence}
+            recentMilestones={recentMilestones}
             onProfileDraftChange={setProfileDraft}
             onSaveProfile={() => void saveProfileDraft()}
             onStartLocal={() => {

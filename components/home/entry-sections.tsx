@@ -19,6 +19,20 @@ type PlayerPresence = {
   isActive: boolean;
 };
 
+type RecentMilestone = {
+  key: string;
+  title: string;
+  unlockedAt: string;
+  tone: string;
+};
+
+const milestoneToneClasses: Record<string, string> = {
+  amber: "border-amber-300/25 bg-amber-300/10 text-amber-100",
+  emerald: "border-emerald-300/25 bg-emerald-400/10 text-emerald-100",
+  fuchsia: "border-fuchsia-300/25 bg-fuchsia-400/10 text-fuchsia-100",
+  rose: "border-rose-300/25 bg-rose-400/10 text-rose-100",
+};
+
 export function SignedOutLandingSection({
   supabaseEnabled,
   email,
@@ -130,6 +144,7 @@ export function SignedInOverviewSection({
   cloudMessage,
   cloudLoading,
   playerPresence,
+  recentMilestones,
   onProfileDraftChange,
   onSaveProfile,
   onStartLocal,
@@ -151,6 +166,7 @@ export function SignedInOverviewSection({
   cloudMessage: string;
   cloudLoading: boolean;
   playerPresence: PlayerPresence[];
+  recentMilestones: RecentMilestone[];
   onProfileDraftChange: (value: string) => void;
   onSaveProfile: () => void;
   onStartLocal: () => void;
@@ -199,15 +215,12 @@ export function SignedInOverviewSection({
           </div>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4">
           <button
             onClick={onStartLocal}
             className="rounded-[1.5rem] border border-white/10 bg-[linear-gradient(135deg,rgba(16,185,129,0.18),rgba(15,23,42,0.82))] p-4 text-left transition hover:border-emerald-300/40 hover:bg-emerald-400/10 sm:p-5"
           >
             <h2 className="text-xs font-semibold uppercase tracking-[0.24em] text-emerald-100">Lokales Spiel</h2>
-            <p className="mt-2 whitespace-nowrap text-sm text-stone-300">
-              Gastmatch vor Ort starten.
-            </p>
           </button>
 
           <Link
@@ -215,9 +228,6 @@ export function SignedInOverviewSection({
             className="rounded-[1.5rem] border border-white/10 bg-[linear-gradient(135deg,rgba(59,130,246,0.18),rgba(15,23,42,0.82))] p-4 transition hover:border-sky-300/40 hover:bg-sky-400/10 sm:p-5"
           >
             <h2 className="text-xs font-semibold uppercase tracking-[0.24em] text-sky-100">Online Spiel</h2>
-            <p className="mt-2 whitespace-nowrap text-sm text-stone-300">
-              Raum erstellen oder beitreten.
-            </p>
           </Link>
 
           <button
@@ -225,9 +235,6 @@ export function SignedInOverviewSection({
             className="rounded-[1.5rem] border border-white/10 bg-[linear-gradient(135deg,rgba(245,158,11,0.18),rgba(15,23,42,0.82))] p-4 text-left transition hover:border-amber-300/40 hover:bg-amber-300/10 sm:p-5"
           >
             <h2 className="text-xs font-semibold uppercase tracking-[0.24em] text-amber-100">Training</h2>
-            <p className="mt-2 whitespace-nowrap text-sm text-stone-300">
-              Drills und Boardarbeit.
-            </p>
           </button>
 
           <Link
@@ -235,9 +242,6 @@ export function SignedInOverviewSection({
             className="rounded-[1.5rem] border border-white/10 bg-[linear-gradient(135deg,rgba(217,70,239,0.16),rgba(15,23,42,0.82))] p-4 transition hover:border-fuchsia-300/40 hover:bg-fuchsia-400/10 sm:p-5"
           >
             <h2 className="text-xs font-semibold uppercase tracking-[0.24em] text-fuchsia-100">Profil & Stats</h2>
-            <p className="mt-2 whitespace-nowrap text-sm text-stone-300">
-              Historie und Statistiken.
-            </p>
           </Link>
         </div>
 
@@ -280,7 +284,22 @@ export function SignedInOverviewSection({
           ) : null}
 
           {cloudStats ? (
-            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="mt-4 space-y-3">
+              {recentMilestones.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {recentMilestones.map((milestone) => (
+                    <div
+                      key={milestone.key}
+                      className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+                        milestoneToneClasses[milestone.tone] ?? milestoneToneClasses.amber
+                      }`}
+                    >
+                      {milestone.title}
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
                 <p className="text-xs text-stone-400">Matches</p>
                 <p className="mt-1 text-2xl font-semibold text-white">{cloudStats.matchesPlayed}</p>
@@ -296,6 +315,7 @@ export function SignedInOverviewSection({
               <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
                 <p className="text-xs text-stone-400">Best Visit</p>
                 <p className="mt-1 text-2xl font-semibold text-white">{cloudStats.bestVisit}</p>
+              </div>
               </div>
             </div>
           ) : (
