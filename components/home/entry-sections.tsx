@@ -37,9 +37,9 @@ export function SignedOutLandingSection({
             <Image
               src="/icons/bobo-logo.jpg"
               alt="Bobo mit Dart"
-              width={64}
-              height={64}
-              className="h-16 w-16 rounded-2xl border border-emerald-300/30 object-cover shadow-lg shadow-emerald-950/40"
+              width={80}
+              height={80}
+              className="h-20 w-20 rounded-2xl border border-emerald-300/30 object-cover shadow-lg shadow-emerald-950/40"
             />
             <div>
               <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-3 py-1 text-xs uppercase tracking-[0.28em] text-emerald-200">
@@ -131,6 +131,7 @@ export function SignedInOverviewSection({
   canInstallApp,
   isInstalledApp,
   installBusy,
+  installTitle,
   installHint,
   onInstallApp,
 }: {
@@ -150,6 +151,7 @@ export function SignedInOverviewSection({
   canInstallApp: boolean;
   isInstalledApp: boolean;
   installBusy: boolean;
+  installTitle: string;
   installHint: string;
   onInstallApp: () => void;
 }) {
@@ -165,9 +167,9 @@ export function SignedInOverviewSection({
               <Image
                 src="/icons/bobo-logo.jpg"
                 alt="Bobo mit Dart"
-                width={56}
-                height={56}
-                className="h-14 w-14 rounded-2xl border border-emerald-300/30 object-cover shadow-lg shadow-emerald-950/40"
+                width={72}
+                height={72}
+                className="h-[4.5rem] w-[4.5rem] rounded-2xl border border-emerald-300/30 object-cover shadow-lg shadow-emerald-950/40"
               />
               <div className="min-w-0">
                 <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-100">Bobo&apos;s Dart</p>
@@ -308,7 +310,7 @@ export function SignedInOverviewSection({
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-xs uppercase tracking-[0.24em] text-stone-400">Web-App Installation</p>
-              <p className="mt-1 text-lg font-semibold text-white">{isInstalledApp ? "Web-App ist installiert" : "Für Handy vorbereitet"}</p>
+              <p className="mt-1 text-lg font-semibold text-white">{isInstalledApp ? "Web-App ist installiert" : installTitle}</p>
               {!isInstalledApp ? (
                 <>
                   <p className="mt-2 text-sm text-stone-400">

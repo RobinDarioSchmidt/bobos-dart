@@ -148,6 +148,66 @@ type BeforeInstallPromptEvent = Event & {
   userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
 };
 
+function getInstallGuidance(userAgentValue: string, platformValue: string) {
+  const userAgent = userAgentValue.toLowerCase();
+  const platform = platformValue.toLowerCase();
+  const os = userAgent.includes("android")
+    ? "Android"
+    : userAgent.includes("iphone") || userAgent.includes("ipad") || platform.includes("iphone") || platform.includes("ipad")
+      ? "iOS"
+      : userAgent.includes("windows")
+        ? "Windows"
+        : userAgent.includes("mac os") || platform.includes("mac")
+          ? "macOS"
+          : userAgent.includes("linux")
+            ? "Linux"
+            : "dein Gerät";
+  const browser = userAgent.includes("opr/") || userAgent.includes("opera")
+    ? "Opera"
+    : userAgent.includes("edg/")
+      ? "Edge"
+      : userAgent.includes("firefox") || userAgent.includes("fxios")
+        ? "Firefox"
+        : userAgent.includes("crios") || (userAgent.includes("chrome") && !userAgent.includes("chromium"))
+          ? "Chrome"
+          : userAgent.includes("safari")
+            ? "Safari"
+            : "dein Browser";
+
+  if (browser === "Opera") {
+    return {
+      title: `Installation für ${os}, ${browser}`,
+      hint: "Opera zeigt den Installieren-Button oft nicht an. Öffne das Browser-Menü und wähle 'Install app' oder 'Zum Startbildschirm'.",
+    };
+  }
+
+  if (os === "iOS") {
+    return {
+      title: `Installation für ${os}, ${browser}`,
+      hint: "Auf Apple-Geräten installierst du die App über Teilen > Zum Home-Bildschirm. Ein direkter Installieren-Button ist dort normal nicht verfügbar.",
+    };
+  }
+
+  if (browser === "Firefox" && os === "Android") {
+    return {
+      title: `Installation für ${os}, ${browser}`,
+      hint: "In Firefox auf Android findest du die Installation meist im Drei-Punkte-Menü unter 'Installieren' oder 'Zum Startbildschirm hinzufügen'.",
+    };
+  }
+
+  if (browser === "Chrome" || browser === "Edge") {
+    return {
+      title: `Installation für ${os}, ${browser}`,
+      hint: "Wenn dein Browser die Installation anbietet, erscheint hier der Installieren-Button. Alternativ findest du sie meist im Browser-Menü.",
+    };
+  }
+
+  return {
+    title: `Installation für ${os}, ${browser}`,
+    hint: "Wenn dein Browser die App unterstützt, erscheint der Installieren-Button automatisch. Sonst findest du die Option meist im Browser-Menü.",
+  };
+}
+
 type LocalStoredState = CloudAppSettings & {
   stats: StoredStats;
   localMatchHistory: MatchHistoryEntry[];
@@ -736,6 +796,7 @@ export default function Page() {
   );
   const [installPromptEvent, setInstallPromptEvent] = useState<BeforeInstallPromptEvent | null>(null);
   const [installBusy, setInstallBusy] = useState(false);
+  const [installTitle, setInstallTitle] = useState("Installation für dein Gerät");
   const [installHint, setInstallHint] = useState(
     "Je nach Browser kannst du die App direkt installieren oder über das Browser-Menü zum Homescreen hinzufügen.",
   );
@@ -818,20 +879,9 @@ export default function Page() {
       setIsInstalledApp(Boolean(installMediaQuery.matches || standaloneNavigator.standalone));
     };
 
-    const userAgent = window.navigator.userAgent.toLowerCase();
-    if (userAgent.includes("opr/") || userAgent.includes("opera")) {
-      setInstallHint(
-        "Opera zeigt den Installieren-Button oft nicht an. Öffne das Browser-Menü und wähle 'Install app' oder 'Zum Startbildschirm'.",
-      );
-    } else if (userAgent.includes("iphone") || userAgent.includes("ipad") || userAgent.includes("safari")) {
-      setInstallHint(
-        "Auf Apple-Geräten installierst du die App über Teilen > Zum Home-Bildschirm. Ein direkter Installieren-Button ist dort normal nicht verfügbar.",
-      );
-    } else {
-      setInstallHint(
-        "Wenn dein Browser die App unterstützt, erscheint der Installieren-Button automatisch. Sonst findest du die Option meist im Browser-Menü.",
-      );
-    }
+    const installGuidance = getInstallGuidance(window.navigator.userAgent, window.navigator.platform);
+    setInstallTitle(installGuidance.title);
+    setInstallHint(installGuidance.hint);
 
     const handleBeforeInstallPrompt = (event: Event) => {
       event.preventDefault();
@@ -1987,6 +2037,7 @@ export default function Page() {
             canInstallApp={Boolean(installPromptEvent)}
             isInstalledApp={isInstalledApp}
             installBusy={installBusy}
+            installTitle={installTitle}
             installHint={isInstalledApp ? "Die App laeuft bereits als installierte Web-App." : installHint}
             onInstallApp={() => void installApp()}
           />
