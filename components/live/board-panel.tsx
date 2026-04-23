@@ -158,6 +158,98 @@ function getSegmentFromBoardPoint(x: number, y: number) {
   return buildSegment(value, midAngle, "single-inner");
 }
 
+function renderBoardArtwork() {
+  return (
+    <>
+      <circle cx="200" cy="200" r="194" fill="#111827" />
+      <circle cx="200" cy="200" r="182" fill="#d6d3d1" />
+      <circle cx="200" cy="200" r={BOARD_RADIUS.doubleOuter} fill="#0f172a" />
+
+      {BOARD_ORDER.map((value, index) => {
+        const startAngle = BOARD_START_ANGLE + index * BOARD_SLICE_ANGLE;
+        const endAngle = startAngle + BOARD_SLICE_ANGLE;
+        const midAngle = startAngle + BOARD_SLICE_ANGLE / 2;
+        const isEven = index % 2 === 0;
+        const singleColor = isEven ? "#f5f5f4" : "#111827";
+        const doubleTripleColor = isEven ? "#b91c1c" : "#166534";
+        const labelPoint = polarToCartesian(BOARD_RADIUS.label, midAngle);
+
+        const staticSegments = [
+          {
+            key: `static-double-${value}`,
+            fill: doubleTripleColor,
+            path: describeSlice(BOARD_RADIUS.doubleInner, BOARD_RADIUS.doubleOuter, startAngle, endAngle),
+          },
+          {
+            key: `static-outer-single-${value}`,
+            fill: singleColor,
+            path: describeSlice(BOARD_RADIUS.tripleOuter, BOARD_RADIUS.doubleInner, startAngle, endAngle),
+          },
+          {
+            key: `static-triple-${value}`,
+            fill: doubleTripleColor,
+            path: describeSlice(BOARD_RADIUS.tripleInner, BOARD_RADIUS.tripleOuter, startAngle, endAngle),
+          },
+          {
+            key: `static-inner-single-${value}`,
+            fill: singleColor,
+            path: describeSlice(BOARD_RADIUS.bullOuter, BOARD_RADIUS.tripleInner, startAngle, endAngle),
+          },
+        ];
+
+        return (
+          <g key={`static-${value}`}>
+            {staticSegments.map(({ key, fill, path }) => (
+              <path key={key} d={path} fill={fill} stroke="#0a0a0a" strokeWidth="1.5" />
+            ))}
+            <text
+              x={labelPoint.x}
+              y={labelPoint.y}
+              fill="#9ca3af"
+              fontSize="16"
+              fontWeight="700"
+              textAnchor="middle"
+              dominantBaseline="middle"
+            >
+              {value}
+            </text>
+          </g>
+        );
+      })}
+
+      <circle cx="200" cy="200" r={BOARD_RADIUS.bullOuter} fill="#166534" stroke="#0a0a0a" strokeWidth="2" />
+      <circle cx="200" cy="200" r={BOARD_RADIUS.bullInner} fill="#b91c1c" stroke="#0a0a0a" strokeWidth="2" />
+    </>
+  );
+}
+
+function renderBoardMarkers(markers: LiveBoardMarker[]) {
+  return markers.map((marker, index) =>
+    marker.ring === "miss" || marker.x < 0 || marker.y < 0 ? null : (
+      <g key={`${marker.label}-${index}`}>
+        <line
+          x1={marker.x - 7}
+          y1={marker.y - 7}
+          x2={marker.x + 7}
+          y2={marker.y + 7}
+          stroke={markerColorForRing(marker.ring)}
+          strokeWidth="3"
+          strokeLinecap="round"
+        />
+        <line
+          x1={marker.x + 7}
+          y1={marker.y - 7}
+          x2={marker.x - 7}
+          y2={marker.y + 7}
+          stroke={markerColorForRing(marker.ring)}
+          strokeWidth="3"
+          strokeLinecap="round"
+        />
+      </g>
+    ),
+  );
+}
+
 function LiveDartboard({
   onSegmentSelect,
   disabled,
@@ -175,11 +267,14 @@ function LiveDartboard({
   const [touchPreview, setTouchPreview] = useState<{
     x: number;
     y: number;
+    boardX: number;
+    boardY: number;
     segment: LiveBoardSegment | null;
     active: boolean;
   } | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
   const suppressClickRef = useRef(false);
+  const touchPreviewActiveRef = useRef(false);
 
   function getBoardPointFromPointer(event: ReactPointerEvent<SVGSVGElement>) {
     const svg = svgRef.current;
@@ -212,6 +307,8 @@ function LiveDartboard({
     setTouchPreview({
       x: point.clientX,
       y: point.clientY,
+      boardX: point.boardX,
+      boardY: point.boardY,
       segment,
       active: true,
     });
@@ -225,13 +322,14 @@ function LiveDartboard({
     }
 
     suppressClickRef.current = true;
+    touchPreviewActiveRef.current = true;
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
     updateTouchPreview(event);
   }
 
   function handleTouchPointerMove(event: ReactPointerEvent<SVGSVGElement>) {
-    if (disabled || event.pointerType !== "touch" || !touchPreview?.active) {
+    if (disabled || event.pointerType !== "touch" || !touchPreviewActiveRef.current) {
       return;
     }
 
@@ -244,6 +342,7 @@ function LiveDartboard({
       return;
     }
 
+    touchPreviewActiveRef.current = false;
     event.preventDefault();
     const finalSegment = updateTouchPreview(event) ?? touchPreview?.segment ?? null;
     setTouchPreview(null);
@@ -258,6 +357,7 @@ function LiveDartboard({
   }
 
   function handleTouchPointerCancel() {
+    touchPreviewActiveRef.current = false;
     setTouchPreview(null);
     setHoveredSegment(null);
     window.setTimeout(() => {
@@ -304,9 +404,7 @@ function LiveDartboard({
           onPointerUp={handleTouchPointerEnd}
           onPointerCancel={handleTouchPointerCancel}
         >
-          <circle cx="200" cy="200" r="194" fill="#111827" />
-          <circle cx="200" cy="200" r="182" fill="#d6d3d1" />
-          <circle cx="200" cy="200" r={BOARD_RADIUS.doubleOuter} fill="#0f172a" />
+          {renderBoardArtwork()}
 
           {BOARD_ORDER.map((value, index) => {
             const startAngle = BOARD_START_ANGLE + index * BOARD_SLICE_ANGLE;
@@ -503,30 +601,7 @@ function LiveDartboard({
             />
           </g>
 
-          {markers.map((marker, index) =>
-            marker.ring === "miss" || marker.x < 0 || marker.y < 0 ? null : (
-              <g key={`${marker.label}-${index}`}>
-                <line
-                  x1={marker.x - 7}
-                  y1={marker.y - 7}
-                  x2={marker.x + 7}
-                  y2={marker.y + 7}
-                  stroke={markerColorForRing(marker.ring)}
-                  strokeWidth="3"
-                  strokeLinecap="round"
-                />
-                <line
-                  x1={marker.x + 7}
-                  y1={marker.y - 7}
-                  x2={marker.x - 7}
-                  y2={marker.y + 7}
-                  stroke={markerColorForRing(marker.ring)}
-                  strokeWidth="3"
-                  strokeLinecap="round"
-                />
-              </g>
-            ),
-          )}
+          {renderBoardMarkers(markers)}
         </svg>
 
         {disabled ? (
@@ -541,22 +616,28 @@ function LiveDartboard({
           <div
             className="pointer-events-none absolute z-10"
             style={{
-              left: `${Math.max(44, Math.min(touchPreview.x, 320))}px`,
-              top: `${Math.max(54, touchPreview.y - 72)}px`,
+              left: `${Math.max(56, Math.min(touchPreview.x, 340))}px`,
+              top: `${Math.max(64, touchPreview.y - 86)}px`,
               transform: "translate(-50%, -50%)",
             }}
           >
-            <div className="flex h-20 w-20 items-center justify-center rounded-full border border-white/20 bg-black/80 shadow-[0_10px_35px_rgba(0,0,0,0.45)] backdrop-blur">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full border border-amber-300/40 bg-amber-300/10 text-center">
-                <div>
-                  <div className="text-sm font-semibold text-white">
-                    {touchPreview.segment?.label ?? "Miss"}
-                  </div>
-                  <div className="text-[10px] uppercase tracking-[0.18em] text-amber-100">
-                    {touchPreview.segment?.score ?? 0}
-                  </div>
+            <div className="relative h-24 w-24 overflow-hidden rounded-full border-2 border-white/25 bg-black/85 shadow-[0_12px_36px_rgba(0,0,0,0.5)] backdrop-blur">
+              <svg
+                viewBox={`${Math.max(0, Math.min(330, touchPreview.boardX - 35))} ${Math.max(0, Math.min(330, touchPreview.boardY - 35))} 70 70`}
+                className="h-full w-full scale-[1.8]"
+              >
+                {renderBoardArtwork()}
+              </svg>
+              <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                <div className="relative h-6 w-6">
+                  <div className="absolute left-1/2 top-0 h-full w-px -translate-x-1/2 bg-white/90" />
+                  <div className="absolute left-0 top-1/2 h-px w-full -translate-y-1/2 bg-white/90" />
                 </div>
               </div>
+            </div>
+            <div className="mt-2 rounded-full border border-white/10 bg-black/75 px-3 py-1 text-center shadow-lg">
+              <div className="text-sm font-semibold text-white">{touchPreview.segment?.label ?? "Miss"}</div>
+              <div className="text-[10px] uppercase tracking-[0.18em] text-amber-100">{touchPreview.segment?.score ?? 0}</div>
             </div>
           </div>
         ) : null}
