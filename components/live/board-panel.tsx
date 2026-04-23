@@ -641,7 +641,7 @@ function LiveDartboard({
         {touchMaskEnabled ? (
           <div
             ref={touchMaskRef}
-            className={`absolute left-1/2 top-1/2 h-[97%] w-[97%] -translate-x-1/2 -translate-y-1/2 rounded-full [touch-action:none] ${
+            className={`absolute left-1/2 top-1/2 h-[106%] w-[106%] -translate-x-1/2 -translate-y-1/2 rounded-full [touch-action:none] ${
               disabled ? "pointer-events-none" : "pointer-events-auto"
             }`}
             onPointerDown={handleTouchPointerDown}
