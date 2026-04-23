@@ -975,32 +975,6 @@ export default function LivePage() {
             {liveState ? (
               <section className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
                 <div className="space-y-4">
-                  <LiveRoomStatusPanel
-                    liveRoomCode={liveRoomCode}
-                    isRoomHost={isRoomHost}
-                    joinedPlayerCount={joinedPlayerCount}
-                    maxPlayers={liveState.maxPlayers ?? maxPlayers}
-                    loading={loading}
-                    message={message}
-                    connectionState={connectionState}
-                    connectedNames={connectedNames}
-                    isCurrentUsersTurn={isCurrentUsersTurn}
-                    turnStatus={turnStatus}
-                    cloudSyncPending={cloudSyncPending}
-                    audioMode={audioMode}
-                    onAudioModeChange={setAudioMode}
-                    onCopyRoomCode={() => void copyRoomCode()}
-                    onCopyRoomLink={() => void copyRoomLink()}
-                    onReconnect={() => void reconnectToRoom()}
-                    onLeaveRoom={() => void leaveRoom()}
-                    onCloseRoom={() => void closeRoom()}
-                  />
-
-                  <LiveStatsPanel
-                    currentLiveStats={currentLiveStats}
-                    livePlayerStats={livePlayerStats}
-                    currentPlayerName={currentPlayer?.name ?? null}
-                  />
                   <LiveBoardPanel
                     liveState={liveState}
                     currentPlayerIndex={currentPlayerIndex}
@@ -1023,6 +997,11 @@ export default function LivePage() {
                     onFinishVisit={() => void handleFinishVisit()}
                     onNextLeg={() => void handleNextLeg()}
                   />
+                  <LiveStatsPanel
+                    currentLiveStats={currentLiveStats}
+                    livePlayerStats={livePlayerStats}
+                    currentPlayerName={currentPlayer?.name ?? null}
+                  />
 
                   {liveState.matchWinner !== null ? (
                     <LiveMatchSummaryPanel
@@ -1036,12 +1015,34 @@ export default function LivePage() {
 
                 </div>
 
-                <LiveHistoryPanel
-                  heading={historyHeading}
-                  historyOpen={historyOpen}
-                  history={liveState.history}
-                  onToggle={() => setHistoryOpen((prev) => !prev)}
-                />
+                <div className="space-y-4">
+                  <LiveHistoryPanel
+                    heading={historyHeading}
+                    historyOpen={historyOpen}
+                    history={liveState.history}
+                    onToggle={() => setHistoryOpen((prev) => !prev)}
+                  />
+                  <LiveRoomStatusPanel
+                    liveRoomCode={liveRoomCode}
+                    isRoomHost={isRoomHost}
+                    joinedPlayerCount={joinedPlayerCount}
+                    maxPlayers={liveState.maxPlayers ?? maxPlayers}
+                    loading={loading}
+                    message={message}
+                    connectionState={connectionState}
+                    connectedNames={connectedNames}
+                    isCurrentUsersTurn={isCurrentUsersTurn}
+                    turnStatus={turnStatus}
+                    cloudSyncPending={cloudSyncPending}
+                    audioMode={audioMode}
+                    onAudioModeChange={setAudioMode}
+                    onCopyRoomCode={() => void copyRoomCode()}
+                    onCopyRoomLink={() => void copyRoomLink()}
+                    onReconnect={() => void reconnectToRoom()}
+                    onLeaveRoom={() => void leaveRoom()}
+                    onCloseRoom={() => void closeRoom()}
+                  />
+                </div>
               </section>
             ) : null}
           </>
