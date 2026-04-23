@@ -2616,7 +2616,7 @@ function resetLegBoards(nextPlayers: Player[]) {
 
         {appMode === "match" ? (
           <section className="grid gap-4 lg:grid-cols-[1.08fr_0.92fr]">
-            <div className="order-2 space-y-4 lg:order-2">
+            <div className="order-1 space-y-4 lg:order-1">
               <section className="rounded-[2rem] border border-white/10 bg-white/5 p-5 backdrop-blur sm:p-6">
                 <div className="mb-5 rounded-2xl border border-white/10 bg-white/5 p-4">
                   <p className="text-xs uppercase tracking-[0.22em] text-stone-400">Spiel-Setup</p>
@@ -2937,7 +2937,7 @@ function resetLegBoards(nextPlayers: Player[]) {
               </details>
             </div>
 
-            <div className="order-1 space-y-4 lg:order-1">
+            <div className="order-2 space-y-4 lg:order-2">
               <section className="rounded-[2rem] border border-white/10 bg-white/5 p-5 backdrop-blur sm:p-6">
                 <div className="flex items-center justify-between gap-3">
                   <div>
@@ -3108,12 +3108,12 @@ function resetLegBoards(nextPlayers: Player[]) {
             </div>
           </section>
         ) : (
-          <section className="grid gap-6 lg:grid-cols-[0.92fr_1.08fr]">
-            <div className="space-y-6">
-              <section className="rounded-[2rem] border border-white/10 bg-white/5 p-5 backdrop-blur sm:p-6">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <section className="grid gap-4 lg:grid-cols-[1.08fr_0.92fr]">
+            <div className="order-2 space-y-4 lg:order-2">
+              <section className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur">
+                <div className="flex items-center justify-between gap-3">
                   <div>
-                    <p className="text-xs uppercase tracking-[0.22em] text-stone-400">Training</p>
+                    <p className="text-xs uppercase tracking-[0.22em] text-stone-400">Training Setup</p>
                     <h2 className="mt-1 text-2xl font-semibold text-white">{getTrainingModeLabel(trainingSession.mode)}</h2>
                     <p className="mt-1 text-sm text-stone-400">
                       Wähle einen Modus und trage danach jeden Dart über das Segment Board ein.
@@ -3121,9 +3121,9 @@ function resetLegBoards(nextPlayers: Player[]) {
                   </div>
                   <button
                     onClick={() => resetTraining()}
-                    className="rounded-2xl bg-white px-5 py-3 font-semibold text-black transition hover:bg-stone-200"
+                    className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-black transition hover:bg-stone-200"
                   >
-                    Session neu starten
+                    Reset
                   </button>
                 </div>
 
@@ -3198,12 +3198,10 @@ function resetLegBoards(nextPlayers: Player[]) {
                 </div>
               </section>
 
-              <details className="rounded-[2rem] border border-white/10 bg-white/5 p-5 backdrop-blur sm:p-6">
-                <summary className="cursor-pointer list-none text-2xl font-semibold text-white">
+              <details className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur">
+                <summary className="cursor-pointer list-none text-lg font-semibold text-white">
                   Training Feed
-                  <p className="mt-1 text-sm font-normal text-stone-400">
-                    Die letzten Trainingsdarts deiner aktuellen Session.
-                  </p>
+                  <p className="mt-1 text-sm font-normal text-stone-400">Die letzten Trainingsdarts deiner aktuellen Session.</p>
                 </summary>
 
                 <div className="mt-5 space-y-3">
@@ -3244,24 +3242,43 @@ function resetLegBoards(nextPlayers: Player[]) {
                 </div>
               </section>
 
-              <section className="rounded-[2rem] border border-white/10 bg-white/5 p-5 backdrop-blur sm:p-6">
-                <h2 className="text-2xl font-semibold text-white">Training Statistik</h2>
-                <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              <section className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[11px] uppercase tracking-[0.22em] text-stone-400">Live-Stats</p>
+                    <p className="text-xs text-stone-400">{getTrainingModeLabel(trainingSession.mode)} im Fokus</p>
+                  </div>
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-2">
                   <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                    <p className="text-xs uppercase tracking-[0.22em] text-stone-400">Trainings Sessions</p>
-                    <p className="mt-2 text-3xl font-semibold text-white">{stats.trainingSessions}</p>
+                    <p className="text-stone-400">Sessions</p>
+                    <p className="mt-1 text-lg font-semibold text-white">{stats.trainingSessions}</p>
                   </div>
                   <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                    <p className="text-xs uppercase tracking-[0.22em] text-stone-400">Best Training Score</p>
-                    <p className="mt-2 text-3xl font-semibold text-white">{stats.bestTrainingScore}</p>
+                    <p className="text-stone-400">Best Score</p>
+                    <p className="mt-1 text-lg font-semibold text-white">{stats.bestTrainingScore}</p>
                   </div>
                   <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                    <p className="text-xs uppercase tracking-[0.22em] text-stone-400">Treffer aktuell</p>
-                    <p className="mt-2 text-3xl font-semibold text-white">{trainingSession.hits}</p>
+                    <p className="text-stone-400">Treffer</p>
+                    <p className="mt-1 text-lg font-semibold text-white">{trainingSession.hits}</p>
                   </div>
                   <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                    <p className="text-xs uppercase tracking-[0.22em] text-stone-400">Darts aktuell</p>
-                    <p className="mt-2 text-3xl font-semibold text-white">{trainingSession.dartsThrown}</p>
+                    <p className="text-stone-400">Darts</p>
+                    <p className="mt-1 text-lg font-semibold text-white">{trainingSession.dartsThrown}</p>
+                  </div>
+                </div>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-semibold text-white">Training Score</p>
+                      <p className="text-sm text-stone-300">{trainingSession.score}</p>
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-semibold text-white">Ziel</p>
+                      <p className="text-sm text-stone-300">{trainingTarget}</p>
+                    </div>
                   </div>
                 </div>
               </section>
