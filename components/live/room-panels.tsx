@@ -1,61 +1,62 @@
-"use client";
+﻿"use client";
 
+import { useState } from "react";
 import type { LiveFinishMode } from "@/lib/live-match";
 
 const finishOptions: Array<{ value: LiveFinishMode; label: string }> = [
-  { value: "single", label: "Single" },
-  { value: "double", label: "Double" },
-  { value: "master", label: "Masters" },
+  { value: "single", label: "Straight Out" },
+  { value: "double", label: "Double Out" },
+  { value: "master", label: "Masters Out" },
 ];
+
+const entryOptions = ["Straight In", "Double In", "Masters In"] as const;
+const legOptions = [2, 3, 5] as const;
+const setOptions = [1, 2, 3] as const;
+
+function getNextValue<T>(options: readonly T[], currentValue: T) {
+  const currentIndex = options.findIndex((option) => option === currentValue);
+  return options[(currentIndex + 1) % options.length] ?? options[0];
+}
 
 export function LiveRoomCreatePanel({
   createOpen,
-  displayName,
   mode,
   finishMode,
   bullOffEnabled,
   legsToWin,
   setsToWin,
-  maxPlayers,
   loading,
   onToggle,
-  onDisplayNameChange,
   onModeChange,
   onFinishModeChange,
   onBullOffToggle,
   onLegsToWinChange,
   onSetsToWinChange,
-  onMaxPlayersChange,
   onCreate,
 }: {
   createOpen: boolean;
-  displayName: string;
   mode: 301 | 501;
   finishMode: LiveFinishMode;
   bullOffEnabled: boolean;
   legsToWin: number;
   setsToWin: number;
-  maxPlayers: number;
   loading: boolean;
   onToggle: () => void;
-  onDisplayNameChange: (value: string) => void;
   onModeChange: (value: 301 | 501) => void;
   onFinishModeChange: (value: LiveFinishMode) => void;
   onBullOffToggle: () => void;
   onLegsToWinChange: (value: number) => void;
   onSetsToWinChange: (value: number) => void;
-  onMaxPlayersChange: (value: number) => void;
   onCreate: () => void;
 }) {
-  const optionButton = "rounded-2xl border px-3 py-2.5 text-sm font-semibold transition";
+  const [entryModeLabel, setEntryModeLabel] = useState<(typeof entryOptions)[number]>("Straight In");
+  const optionButton =
+    "min-w-0 rounded-2xl border border-white/10 bg-black/20 px-3 py-3 text-sm font-semibold text-white transition hover:bg-white/10";
 
   return (
     <div className="min-w-0 overflow-hidden rounded-[1.5rem] border border-white/10 bg-white/5 p-3 shadow-2xl shadow-black/20 backdrop-blur sm:p-4">
       <button onClick={onToggle} className="flex w-full min-w-0 items-center justify-between gap-3 text-left">
-        <div className="min-w-0">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-100">Setup</p>
-          <h2 className="mt-1 min-w-0 text-xl font-semibold text-white">Raum erstellen</h2>
-        </div>
+        <h2 className="min-w-0 text-xl font-semibold text-white">Raum erstellen</h2>
         <span className="shrink-0 rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs font-semibold text-stone-300">
           {createOpen ? "Zu" : "Auf"}
         </span>
@@ -63,101 +64,58 @@ export function LiveRoomCreatePanel({
 
       {createOpen ? (
         <div className="mt-3 space-y-3">
-          <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
-            <label className="text-[11px] font-semibold uppercase tracking-[0.2em] text-stone-500">Name</label>
-            <input
-              value={displayName}
-              onChange={(event) => onDisplayNameChange(event.target.value)}
-              placeholder="Dein Anzeigename"
-              className="mt-1 h-8 w-full bg-transparent text-base font-semibold text-white outline-none placeholder:text-stone-600"
-            />
-          </div>
-
           <div className="grid grid-cols-2 gap-2">
             <button
               onClick={() => onModeChange(301)}
-              className={`${optionButton} ${mode === 301 ? "border-amber-300 bg-amber-300 text-black" : "border-white/10 bg-black/20 text-white"}`}
+              className={`${optionButton} ${mode === 301 ? "border-amber-300 bg-amber-300 text-black hover:bg-amber-300" : ""}`}
             >
               301
             </button>
             <button
               onClick={() => onModeChange(501)}
-              className={`${optionButton} ${mode === 501 ? "border-emerald-400 bg-emerald-400 text-black" : "border-white/10 bg-black/20 text-white"}`}
+              className={`${optionButton} ${mode === 501 ? "border-emerald-400 bg-emerald-400 text-black hover:bg-emerald-400" : ""}`}
             >
               501
             </button>
           </div>
 
           <div className="grid grid-cols-3 gap-2">
-            {finishOptions.map((option) => (
-              <button
-                key={option.value}
-                onClick={() => onFinishModeChange(option.value)}
-                className={`min-w-0 rounded-2xl border px-2 py-2.5 text-xs font-semibold uppercase tracking-[0.12em] transition ${
-                  finishMode === option.value ? "border-white bg-white text-black" : "border-white/10 bg-black/20 text-white"
-                }`}
-              >
-                {option.label}
-              </button>
-            ))}
+            <button
+              onClick={() => setEntryModeLabel((current) => getNextValue(entryOptions, current))}
+              className={optionButton}
+            >
+              {entryModeLabel}
+            </button>
+            <button
+              onClick={() => onFinishModeChange(getNextValue(finishOptions.map((option) => option.value), finishMode))}
+              className={optionButton}
+            >
+              {finishOptions.find((option) => option.value === finishMode)?.label ?? "Straight Out"}
+            </button>
+            <button
+              onClick={onBullOffToggle}
+              className={`${optionButton} ${
+                bullOffEnabled ? "border-amber-300/30 bg-amber-300/10 text-amber-100 hover:bg-amber-300/10" : ""
+              }`}
+            >
+              {bullOffEnabled ? "Bull-Off An" : "Bull-Off Aus"}
+            </button>
           </div>
 
-          <div className="grid grid-cols-3 gap-2">
-            <label className="min-w-0 rounded-2xl border border-white/10 bg-black/20 px-3 py-2">
-              <span className="block text-[10px] font-semibold uppercase tracking-[0.16em] text-stone-500">Legs</span>
-              <select
-                value={legsToWin}
-                onChange={(event) => onLegsToWinChange(Number(event.target.value))}
-                className="mt-1 w-full bg-transparent text-sm font-semibold text-white outline-none"
-              >
-                {[2, 3, 5].map((value) => (
-                  <option key={value} value={value}>
-                    {value}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="min-w-0 rounded-2xl border border-white/10 bg-black/20 px-3 py-2">
-              <span className="block text-[10px] font-semibold uppercase tracking-[0.16em] text-stone-500">Sätze</span>
-              <select
-                value={setsToWin}
-                onChange={(event) => onSetsToWinChange(Number(event.target.value))}
-                className="mt-1 w-full bg-transparent text-sm font-semibold text-white outline-none"
-              >
-                {[1, 2, 3].map((value) => (
-                  <option key={value} value={value}>
-                    {value}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="min-w-0 rounded-2xl border border-white/10 bg-black/20 px-3 py-2">
-              <span className="block text-[10px] font-semibold uppercase tracking-[0.16em] text-stone-500">Spieler</span>
-              <select
-                value={maxPlayers}
-                onChange={(event) => onMaxPlayersChange(Number(event.target.value))}
-                className="mt-1 w-full bg-transparent text-sm font-semibold text-white outline-none"
-              >
-                {[2, 3, 4].map((value) => (
-                  <option key={value} value={value}>
-                    {value}
-                  </option>
-                ))}
-              </select>
-            </label>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={() => onLegsToWinChange(getNextValue(legOptions, legsToWin as (typeof legOptions)[number]))}
+              className={optionButton}
+            >
+              {legsToWin} Legs
+            </button>
+            <button
+              onClick={() => onSetsToWinChange(getNextValue(setOptions, setsToWin as (typeof setOptions)[number]))}
+              className={optionButton}
+            >
+              {setsToWin} {setsToWin === 1 ? "Satz" : "Saetze"}
+            </button>
           </div>
-
-          <button
-            onClick={onBullOffToggle}
-            className={`flex w-full items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left text-sm font-semibold ${
-              bullOffEnabled
-                ? "border-amber-300/30 bg-amber-300/10 text-amber-100"
-                : "border-white/10 bg-black/20 text-stone-300"
-            }`}
-          >
-            <span>Bull-Off</span>
-            <span className="text-xs uppercase tracking-[0.16em]">{bullOffEnabled ? "Aktiv" : "Aus"}</span>
-          </button>
 
           <button
             onClick={onCreate}
@@ -245,7 +203,7 @@ export function LiveRoomJoinPanel({
 
           {openRooms.length > 0 ? (
             <div className="space-y-2">
-              <p className="text-xs uppercase tracking-[0.22em] text-stone-400">Offene Räume</p>
+              <p className="text-xs uppercase tracking-[0.22em] text-stone-400">Offene Raeume</p>
               {openRooms.map((room) => (
                 <button
                   key={room.room_code}
@@ -257,7 +215,7 @@ export function LiveRoomJoinPanel({
                     <div>
                       <p className="font-semibold text-white">{room.host_name}</p>
                       <p className="mt-1 text-xs text-stone-400">
-                        Raum {room.room_code} · {room.mode} · {room.finish_mode === "single" ? "Single Out" : room.finish_mode === "double" ? "Double Out" : "Masters Out"}
+                        Raum {room.room_code} - {room.mode} - {room.finish_mode === "single" ? "Single Out" : room.finish_mode === "double" ? "Double Out" : "Masters Out"}
                       </p>
                     </div>
                     <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-stone-200">
@@ -269,7 +227,7 @@ export function LiveRoomJoinPanel({
               ))}
             </div>
           ) : (
-            <p className="text-sm text-stone-400">Gerade sind keine offenen Räume sichtbar.</p>
+            <p className="text-sm text-stone-400">Gerade sind keine offenen Raeume sichtbar.</p>
           )}
         </div>
       ) : null}
@@ -322,7 +280,7 @@ export function LiveRoomJoinPanel({
                 disabled={loading}
                 className="rounded-2xl border border-red-400/30 bg-red-400/10 px-4 py-2 text-sm font-semibold text-red-100 disabled:opacity-50"
               >
-                Raum schließen
+                Raum schliessen
               </button>
             ) : null}
           </div>
@@ -332,3 +290,4 @@ export function LiveRoomJoinPanel({
     </div>
   );
 }
+

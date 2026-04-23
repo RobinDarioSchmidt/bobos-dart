@@ -1,5 +1,6 @@
-"use client";
+﻿"use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
@@ -64,13 +65,13 @@ function formatLiveError(error: string) {
     case "missing_room_code":
       return "Bitte zuerst einen Raumcode eingeben.";
     case "match_not_found":
-      return "Dieser Raum ist nicht mehr verfügbar.";
+      return "Dieser Raum ist nicht mehr verfuegbar.";
     case "room_full":
       return "Der Raum ist bereits voll.";
     case "not_a_participant":
       return "Du bist aktuell nicht mehr Teil dieses Raums.";
     case "invalid_action":
-      return "Diese Aktion wird gerade nicht unterstützt.";
+      return "Diese Aktion wird gerade nicht unterstuetzt.";
     case "only_host_can_close_room":
       return "Nur der Host kann den Raum schliessen.";
     case "missing_service_role_or_supabase_config":
@@ -147,7 +148,7 @@ export default function LivePage() {
   const [bullOffEnabled, setBullOffEnabled] = useState(true);
   const [legsToWin, setLegsToWin] = useState(3);
   const [setsToWin, setSetsToWin] = useState(1);
-  const [maxPlayers, setMaxPlayers] = useState(2);
+  const [maxPlayers] = useState(4);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [connectedNames, setConnectedNames] = useState<string[]>([]);
@@ -669,13 +670,13 @@ export default function LivePage() {
       ? "Du bist nicht als Spieler eingetragen."
       : isCurrentUsersTurn
         ? liveState.bullOff.enabled && !liveState.bullOff.completed
-          ? "Du wirfst für das Bull-Off."
+          ? "Du wirfst fuer das Bull-Off."
           : "Du bist dran."
         : currentPlayer
           ? liveState.bullOff.enabled && !liveState.bullOff.completed
-            ? `${currentPlayer.name} wirft gerade für das Bull-Off.`
+            ? `${currentPlayer.name} wirft gerade fuer das Bull-Off.`
             : `${currentPlayer.name} ist gerade am Zug.`
-          : "Warte auf den nächsten Spieler.";
+          : "Warte auf den naechsten Spieler.";
 
   async function handleBoardSegment(segment: LiveBoardSegment) {
     if (!liveState) {
@@ -899,12 +900,21 @@ export default function LivePage() {
     <main className="min-h-screen bg-[radial-gradient(circle_at_top,_#1f2937,_#09090b_55%)] px-3 py-4 pb-28 text-stone-100 sm:px-4 sm:py-6 sm:pb-8">
       <div className="mx-auto flex max-w-5xl flex-col gap-4">
         <div className="flex items-center justify-between gap-3">
-          <div>
-            <p className="text-[11px] uppercase tracking-[0.22em] text-stone-400">Online Match</p>
-            <h1 className="mt-1 text-2xl font-semibold text-white sm:text-3xl">Gemeinsam online spielen</h1>
+          <div className="flex min-w-0 items-center gap-3">
+            <Image
+              src="/icons/bobo-logo.jpg"
+              alt="Bobo mit Dart"
+              width={72}
+              height={72}
+              className="h-[4.5rem] w-[4.5rem] rounded-2xl border border-emerald-300/30 object-cover shadow-lg shadow-emerald-950/40"
+            />
+            <div className="min-w-0">
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-100">Bobo&apos;s Dart</p>
+              <h1 className="mt-1 truncate text-2xl font-semibold text-white sm:text-3xl">Online Match</h1>
+            </div>
           </div>
           <Link href="/" className="rounded-2xl border border-white/10 bg-black/20 px-3 py-2 text-sm font-semibold">
-            Zurück
+            Zurueck
           </Link>
         </div>
 
@@ -914,29 +924,25 @@ export default function LivePage() {
           </section>
         ) : !session ? (
           <section className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4 text-sm text-stone-300">
-            Bitte zuerst in der Haupt-App einloggen und dann hierher zurückkommen.
+            Bitte zuerst in der Haupt-App einloggen und dann hierher zurueckkommen.
           </section>
         ) : (
           <>
             <section className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
               <LiveRoomCreatePanel
                 createOpen={createOpen}
-                displayName={displayName}
                 mode={mode}
                 finishMode={finishMode}
                 bullOffEnabled={bullOffEnabled}
                 legsToWin={legsToWin}
                 setsToWin={setsToWin}
-                maxPlayers={maxPlayers}
                 loading={loading}
                 onToggle={() => setCreateOpen((prev) => !prev)}
-                onDisplayNameChange={setDisplayName}
                 onModeChange={setMode}
                 onFinishModeChange={setFinishMode}
                 onBullOffToggle={() => setBullOffEnabled((prev) => !prev)}
                 onLegsToWinChange={setLegsToWin}
                 onSetsToWinChange={setSetsToWin}
-                onMaxPlayersChange={setMaxPlayers}
                 onCreate={() => void createRoom()}
               />
 
@@ -1035,3 +1041,4 @@ export default function LivePage() {
     </main>
   );
 }
+
