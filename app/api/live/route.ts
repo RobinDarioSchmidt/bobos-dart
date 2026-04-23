@@ -448,6 +448,7 @@ export async function POST(request: Request) {
         roomCode: string;
         deviceId: string;
         deviceLabel: string;
+        force?: boolean;
       }
     | {
         action: "leave";
@@ -621,7 +622,7 @@ export async function POST(request: Request) {
     }
 
     const activeDeviceLock = getActiveDeviceLockForProfile(currentState, authResult.user.id);
-    if (activeDeviceLock && activeDeviceLock.deviceId !== body.deviceId) {
+    if (activeDeviceLock && activeDeviceLock.deviceId !== body.deviceId && !body.force) {
       return NextResponse.json(
         { error: `device_already_active:${activeDeviceLock.deviceLabel}` },
         { status: 409 },

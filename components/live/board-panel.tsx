@@ -92,17 +92,17 @@ function LiveDartboard({
   const [hoveredSegment, setHoveredSegment] = useState<LiveBoardSegment | null>(null);
 
   return (
-    <div className={`rounded-[1.5rem] border border-white/10 bg-black/20 p-3 transition ${disabled ? "opacity-45" : ""}`}>
-      <div className="mb-3 flex items-center justify-end gap-3">
+    <div className={`rounded-[1.5rem] border border-white/10 bg-black/20 p-2 transition sm:p-3 ${disabled ? "opacity-45" : ""}`}>
+      <div className="mb-2 flex items-center justify-end gap-3 sm:mb-3">
         {hoveredSegment ? (
-          <div className="min-h-[3.5rem] min-w-[9rem] rounded-2xl border border-amber-300/30 bg-amber-300/10 px-3 py-2 text-right">
+          <div className="min-h-[3.25rem] min-w-[8.5rem] rounded-2xl border border-amber-300/30 bg-amber-300/10 px-3 py-2 text-right">
             <p className="text-[10px] uppercase tracking-[0.22em] text-amber-100">Ziel</p>
             <p className="whitespace-nowrap text-sm font-semibold text-white">
               {hoveredSegment.label} · {hoveredSegment.score}
             </p>
           </div>
         ) : (
-          <div className="flex min-h-[3.5rem] min-w-[9rem] items-center justify-center whitespace-nowrap rounded-2xl border border-white/10 bg-white/5 px-3 py-1 text-center text-[11px] uppercase tracking-[0.22em] text-stone-300">
+          <div className="flex min-h-[3.25rem] min-w-[8.5rem] items-center justify-center whitespace-nowrap rounded-2xl border border-white/10 bg-white/5 px-3 py-1 text-center text-[11px] uppercase tracking-[0.22em] text-stone-300">
             Hover + Klick
           </div>
         )}
@@ -111,7 +111,7 @@ function LiveDartboard({
       <div className="relative">
         <svg
           viewBox="0 0 400 400"
-          className={`mx-auto w-full max-w-[28rem] drop-shadow-[0_18px_40px_rgba(0,0,0,0.45)] ${disabled ? "pointer-events-none" : ""}`}
+          className={`mx-auto w-full max-w-[35rem] drop-shadow-[0_18px_40px_rgba(0,0,0,0.45)] ${disabled ? "pointer-events-none" : ""}`}
         >
           <circle cx="200" cy="200" r="194" fill="#111827" />
           <circle cx="200" cy="200" r="182" fill="#d6d3d1" />

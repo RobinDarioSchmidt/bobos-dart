@@ -199,7 +199,7 @@ export default function LivePage() {
   const [connectedNames, setConnectedNames] = useState<string[]>([]);
   const [createOpen, setCreateOpen] = useState(true);
   const [joinOpen, setJoinOpen] = useState(true);
-  const [historyOpen, setHistoryOpen] = useState(true);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [audioMode, setAudioMode] = useState<LiveAudioMode>("visits");
   const [deviceId, setDeviceId] = useState("");
   const [deviceLabel, setDeviceLabel] = useState("Dieses Geraet");
@@ -561,18 +561,18 @@ export default function LivePage() {
     }
   }
 
-  const claimDeviceLock = useCallback(async () => {
+  const claimDeviceLock = useCallback(async (force = false) => {
     if (!liveRoomCode || !deviceId) {
-      return;
+      return false;
     }
 
     if (deviceClaimInFlightRef.current || requestInFlightRef.current) {
-      return;
+      return false;
     }
 
     const accessToken = await getAccessToken();
     if (!accessToken) {
-      return;
+      return false;
     }
 
     deviceClaimInFlightRef.current = true;
@@ -589,6 +589,7 @@ export default function LivePage() {
           roomCode: liveRoomCode,
           deviceId,
           deviceLabel,
+          force,
         }),
       });
 
@@ -598,18 +599,27 @@ export default function LivePage() {
         if (nextError.startsWith("device_already_active:")) {
           setMessage(formatLiveError(nextError));
         }
-        return;
+        return false;
       }
 
       setLiveState(normalizeLiveState(result.match.state));
       setRoomOwnerId(result.match.owner_id);
       setLiveRoomCode(result.match.room_code);
+      return true;
     } catch {
       // Keep the last known state and retry on the next heartbeat.
+      return false;
     } finally {
       deviceClaimInFlightRef.current = false;
     }
   }, [deviceId, deviceLabel, liveRoomCode]);
+
+  async function handleTakeControl() {
+    const claimed = await claimDeviceLock(true);
+    if (claimed) {
+      setMessage("Dieses Geraet steuert den Account jetzt.");
+    }
+  }
 
   useEffect(() => {
     if (!liveRoomCode || !session || !deviceId) {
@@ -1078,7 +1088,7 @@ export default function LivePage() {
   }, [audioMode, latestScoredVisit]);
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top,_#1f2937,_#09090b_55%)] px-3 py-4 pb-28 text-stone-100 sm:px-4 sm:py-6 sm:pb-8">
+    <main className="min-h-screen bg-[radial-gradient(circle_at_top,_#1f2937,_#09090b_55%)] px-2 py-4 pb-28 text-stone-100 sm:px-4 sm:py-6 sm:pb-8">
       <div className="mx-auto flex max-w-5xl flex-col gap-4">
         <div className="flex items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-3">
@@ -1221,6 +1231,7 @@ export default function LivePage() {
                     cloudSyncPending={cloudSyncPending}
                     audioMode={audioMode}
                     onAudioModeChange={setAudioMode}
+                    onTakeControl={() => void handleTakeControl()}
                     onCopyRoomCode={() => void copyRoomCode()}
                     onCopyRoomLink={() => void copyRoomLink()}
                     onReconnect={() => void reconnectToRoom()}

@@ -308,6 +308,7 @@ export function LiveRoomStatusPanel({
   cloudSyncPending,
   audioMode,
   onAudioModeChange,
+  onTakeControl,
   onCopyRoomCode,
   onCopyRoomLink,
   onReconnect,
@@ -329,6 +330,7 @@ export function LiveRoomStatusPanel({
   cloudSyncPending: boolean;
   audioMode: LiveAudioMode;
   onAudioModeChange: (mode: LiveAudioMode) => void;
+  onTakeControl: () => void;
   onCopyRoomCode: () => void;
   onCopyRoomLink: () => void;
   onReconnect: () => void;
@@ -403,6 +405,15 @@ export function LiveRoomStatusPanel({
       </div>
 
       <div className="mt-3 flex flex-wrap gap-2">
+        {!hasDeviceControl ? (
+          <button
+            onClick={onTakeControl}
+            disabled={loading}
+            className="rounded-2xl border border-amber-300/30 bg-amber-300/10 px-4 py-2 text-sm font-semibold text-amber-100 disabled:opacity-50"
+          >
+            Dieses Geraet uebernehmen
+          </button>
+        ) : null}
         <button
           onClick={onCopyRoomCode}
           className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white"
