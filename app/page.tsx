@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
@@ -2276,29 +2277,38 @@ function resetLegBoards(nextPlayers: Player[]) {
         ) : (
           <>
             <div className="flex items-center justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-3">
+                <Image
+                  src="/icons/bobo-logo.jpg"
+                  alt="Bobo mit Dart"
+                  width={72}
+                  height={72}
+                  className="h-[4.5rem] w-[4.5rem] rounded-2xl border border-emerald-300/30 object-cover shadow-lg shadow-emerald-950/40"
+                />
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-100">Bobo&apos;s Dart</p>
+                  <h1 className="mt-1 truncate text-2xl font-semibold text-white sm:text-3xl">
+                    {selectedFlow === "local" ? "Lokales Match" : "Training"}
+                  </h1>
+                </div>
+              </div>
               <button
                 onClick={() => setSelectedFlow("overview")}
                 className="rounded-2xl border border-white/10 bg-black/20 px-4 py-2 text-sm font-semibold text-white"
               >
                 Zur Auswahl
               </button>
-              <div className="text-right">
-                <p className="text-xs uppercase tracking-[0.22em] text-stone-400">
-                  {selectedFlow === "local" ? "Lokales Spiel" : "Training"}
-                </p>
-                <p className="text-sm text-stone-300">{session.user.email}</p>
-              </div>
             </div>
 
-        <section className="overflow-hidden rounded-[2rem] border border-white/10 bg-white/5 shadow-2xl shadow-black/30 backdrop-blur">
-          <div className="grid gap-6 p-6 lg:grid-cols-[1.2fr_0.8fr] lg:p-8">
+        <section className="overflow-hidden rounded-[1.75rem] border border-white/10 bg-white/5 backdrop-blur">
+          <div className="grid gap-4 p-4 lg:grid-cols-[1.05fr_0.95fr] lg:p-5">
             <div className="space-y-5">
               <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-3 py-1 text-xs uppercase tracking-[0.28em] text-emerald-200">
-                Match + Training Suite
+                {selectedFlow === "local" ? "Lokales Spiel" : "Training"}
               </div>
               <div className="space-y-3">
-                <h1 className="max-w-3xl text-4xl font-semibold tracking-tight text-white sm:text-5xl">
-                  Bobo&apos;s Dart ist jetzt Match-Tracker und Trainingsboard in einer App.
+                <h1 className="max-w-3xl text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+                  {appMode === "match" ? "Alles bereit fuer das naechste Leg." : getTrainingModeLabel(trainingSession.mode)}
                 </h1>
                 <p className="max-w-2xl text-sm leading-6 text-stone-300 sm:text-base">
                   Wechsle zwischen lokalem Match-Modus und Training, erfasse Würfe als Segmente
@@ -2306,9 +2316,11 @@ function resetLegBoards(nextPlayers: Player[]) {
                 </p>
               </div>
               <div className="flex flex-wrap gap-3 text-sm text-stone-300">
-                <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1">2 bis 4 Spieler</span>
-                <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1">Segment Input</span>
-                <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1">Training Modi</span>
+                <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1">{players.length} Spieler</span>
+                <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1">{mode}</span>
+                <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1">
+                  {appMode === "match" ? `${getEntryModeLabel(entryMode)} · ${doubleOut ? "Double-Out" : "Straight-Out"}` : trainingTarget}
+                </span>
               </div>
               <div className="flex gap-3">
                 <button
@@ -2343,7 +2355,7 @@ function resetLegBoards(nextPlayers: Player[]) {
             <div className="rounded-[1.75rem] border border-white/10 bg-black/20 p-5">
               {appMode === "match" ? (
                 <>
-                  <p className="text-xs uppercase tracking-[0.24em] text-stone-400">Match Status</p>
+                  <p className="text-xs uppercase tracking-[0.24em] text-stone-400">Match Uebersicht</p>
                   <p className="mt-2 text-lg font-medium text-white">{statusText}</p>
                   <div className="mt-5 grid gap-4 sm:grid-cols-2">
                     {players.map((player, index) => {
@@ -2586,8 +2598,8 @@ function resetLegBoards(nextPlayers: Player[]) {
         </section>
 
         {appMode === "match" ? (
-          <section className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
-            <div className="space-y-6">
+          <section className="grid gap-4 lg:grid-cols-[1.08fr_0.92fr]">
+            <div className="order-2 space-y-4 lg:order-2">
               <section className="rounded-[2rem] border border-white/10 bg-white/5 p-5 backdrop-blur sm:p-6">
                 <div className="mb-5 rounded-2xl border border-white/10 bg-white/5 p-4">
                   <p className="text-xs uppercase tracking-[0.22em] text-stone-400">Spieler</p>
@@ -2895,7 +2907,7 @@ function resetLegBoards(nextPlayers: Player[]) {
               </details>
             </div>
 
-            <div className="space-y-6">
+            <div className="order-1 space-y-4 lg:order-1">
               <section className="rounded-[2rem] border border-white/10 bg-white/5 p-5 backdrop-blur sm:p-6">
                 <div className="flex items-center justify-between gap-3">
                   <div>
