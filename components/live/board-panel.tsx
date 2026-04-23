@@ -384,6 +384,8 @@ function LiveDartboard({
 
 export function LiveBoardPanel({
   liveState,
+  currentPlayerIndex,
+  currentUserId,
   boardHeading,
   currentVisitTotal,
   compactVisitText,
@@ -403,6 +405,8 @@ export function LiveBoardPanel({
   onNextLeg,
 }: {
   liveState: LiveMatchState;
+  currentPlayerIndex: number;
+  currentUserId: string;
   boardHeading: string;
   currentVisitTotal: number;
   compactVisitText: string;
@@ -421,6 +425,10 @@ export function LiveBoardPanel({
   onFinishVisit: () => void;
   onNextLeg: () => void;
 }) {
+  const visiblePlayers = liveState.players
+    .map((player, index) => ({ player, index }))
+    .filter(({ player }) => player.joined);
+
   return (
     <section className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur">
       <div className="flex items-start justify-between gap-3">
@@ -443,6 +451,44 @@ export function LiveBoardPanel({
           No score
         </button>
       </div>
+
+      {visiblePlayers.length > 0 ? (
+        <div className="mt-4 grid grid-cols-2 gap-3 xl:grid-cols-4">
+          {visiblePlayers.map(({ player, index: originalIndex }) => {
+            const isActive = currentPlayerIndex === originalIndex && liveState.matchWinner === null;
+            const isMe = player.profileId === currentUserId;
+
+            return (
+              <div
+                key={`${player.name}-${originalIndex}`}
+                className={`rounded-[1.25rem] border p-3 ${
+                  isActive ? "border-emerald-300/40 bg-emerald-300/10" : "border-white/10 bg-black/20"
+                }`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-semibold text-white">{player.name}</p>
+                  {isMe ? (
+                    <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[10px] uppercase tracking-[0.18em] text-stone-300">
+                      Du
+                    </span>
+                  ) : null}
+                </div>
+                <p className="mt-2 text-4xl font-semibold leading-none text-white">{player.score}</p>
+                <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                  <div className="rounded-2xl bg-white/5 p-2">
+                    <p className="text-stone-400">Sets</p>
+                    <p className="mt-1 text-lg font-semibold text-white">{player.sets}</p>
+                  </div>
+                  <div className="rounded-2xl bg-white/5 p-2">
+                    <p className="text-stone-400">Legs</p>
+                    <p className="mt-1 text-lg font-semibold text-white">{player.legs}</p>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
 
       <div className="mt-4">
         <LiveDartboard

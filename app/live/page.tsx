@@ -8,10 +8,9 @@ import { LiveBoardPanel, type LiveBoardSegment } from "@/components/live/board-p
 import {
   LiveHistoryPanel,
   LiveMatchSummaryPanel,
-  LiveScoreboardPanel,
   LiveStatsPanel,
 } from "@/components/live/match-panels";
-import { LiveRoomCreatePanel, LiveRoomJoinPanel } from "@/components/live/room-panels";
+import { LiveRoomCreatePanel, LiveRoomJoinPanel, LiveRoomStatusPanel } from "@/components/live/room-panels";
 import { MobileAppNav } from "@/components/mobile-app-nav";
 import {
   addPendingDart,
@@ -928,64 +927,73 @@ export default function LivePage() {
           </section>
         ) : (
           <>
-            <section className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
-              <LiveRoomCreatePanel
-                createOpen={createOpen}
-                mode={mode}
-                finishMode={finishMode}
-                bullOffEnabled={bullOffEnabled}
-                legsToWin={legsToWin}
-                setsToWin={setsToWin}
-                loading={loading}
-                onToggle={() => setCreateOpen((prev) => !prev)}
-                onModeChange={setMode}
-                onFinishModeChange={setFinishMode}
-                onBullOffToggle={() => setBullOffEnabled((prev) => !prev)}
-                onLegsToWinChange={setLegsToWin}
-                onSetsToWinChange={setSetsToWin}
-                onCreate={() => void createRoom()}
-              />
+            {!liveState ? (
+              <section className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+                <LiveRoomCreatePanel
+                  createOpen={createOpen}
+                  mode={mode}
+                  finishMode={finishMode}
+                  bullOffEnabled={bullOffEnabled}
+                  legsToWin={legsToWin}
+                  setsToWin={setsToWin}
+                  loading={loading}
+                  onToggle={() => setCreateOpen((prev) => !prev)}
+                  onModeChange={setMode}
+                  onFinishModeChange={setFinishMode}
+                  onBullOffToggle={() => setBullOffEnabled((prev) => !prev)}
+                  onLegsToWinChange={setLegsToWin}
+                  onSetsToWinChange={setSetsToWin}
+                  onCreate={() => void createRoom()}
+                />
 
-              <LiveRoomJoinPanel
-                joinOpen={joinOpen}
-                roomCodeInput={roomCodeInput}
-                liveRoomCode={liveRoomCode}
-                isRoomHost={isRoomHost}
-                joinedPlayerCount={joinedPlayerCount}
-                maxPlayers={liveState?.maxPlayers ?? maxPlayers}
-                openRooms={openRooms.filter((room) => room.room_code !== liveRoomCode)}
-                loading={loading}
-                message={message}
-                onToggle={() => setJoinOpen((prev) => !prev)}
-                onRoomCodeChange={setRoomCodeInput}
-                onJoin={() => void joinRoom()}
-                onJoinSuggestedRoom={(roomCode) => {
-                  setRoomCodeInput(roomCode);
-                  void joinRoom(roomCode);
-                }}
-                onCopyRoomCode={() => void copyRoomCode()}
-                onCopyRoomLink={() => void copyRoomLink()}
-                onReconnect={() => void reconnectToRoom()}
-                onLeaveRoom={() => void leaveRoom()}
-                onCloseRoom={() => void closeRoom()}
-              />
-            </section>
+                <LiveRoomJoinPanel
+                  joinOpen={joinOpen}
+                  roomCodeInput={roomCodeInput}
+                  liveRoomCode={liveRoomCode}
+                  isRoomHost={isRoomHost}
+                  joinedPlayerCount={joinedPlayerCount}
+                  maxPlayers={maxPlayers}
+                  openRooms={openRooms.filter((room) => room.room_code !== liveRoomCode)}
+                  loading={loading}
+                  message={message}
+                  onToggle={() => setJoinOpen((prev) => !prev)}
+                  onRoomCodeChange={setRoomCodeInput}
+                  onJoin={() => void joinRoom()}
+                  onJoinSuggestedRoom={(roomCode) => {
+                    setRoomCodeInput(roomCode);
+                    void joinRoom(roomCode);
+                  }}
+                  onCopyRoomCode={() => void copyRoomCode()}
+                  onCopyRoomLink={() => void copyRoomLink()}
+                  onReconnect={() => void reconnectToRoom()}
+                  onLeaveRoom={() => void leaveRoom()}
+                  onCloseRoom={() => void closeRoom()}
+                />
+              </section>
+            ) : null}
 
             {liveState ? (
               <section className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
                 <div className="space-y-4">
-                  <LiveScoreboardPanel
-                    liveState={liveState}
-                    currentPlayerIndex={currentPlayerIndex}
-                    currentUserId={session.user.id}
+                  <LiveRoomStatusPanel
+                    liveRoomCode={liveRoomCode}
+                    isRoomHost={isRoomHost}
+                    joinedPlayerCount={joinedPlayerCount}
+                    maxPlayers={liveState.maxPlayers ?? maxPlayers}
+                    loading={loading}
+                    message={message}
                     connectionState={connectionState}
                     connectedNames={connectedNames}
                     isCurrentUsersTurn={isCurrentUsersTurn}
                     turnStatus={turnStatus}
-                    onRefresh={() => void fetchMatch(liveRoomCode)}
                     cloudSyncPending={cloudSyncPending}
                     audioMode={audioMode}
                     onAudioModeChange={setAudioMode}
+                    onCopyRoomCode={() => void copyRoomCode()}
+                    onCopyRoomLink={() => void copyRoomLink()}
+                    onReconnect={() => void reconnectToRoom()}
+                    onLeaveRoom={() => void leaveRoom()}
+                    onCloseRoom={() => void closeRoom()}
                   />
 
                   <LiveStatsPanel
@@ -995,6 +1003,8 @@ export default function LivePage() {
                   />
                   <LiveBoardPanel
                     liveState={liveState}
+                    currentPlayerIndex={currentPlayerIndex}
+                    currentUserId={session.user.id}
                     boardHeading={boardHeading}
                     currentVisitTotal={currentVisitTotal}
                     compactVisitText={compactVisitText}
