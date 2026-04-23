@@ -909,6 +909,7 @@ export default function Page() {
   const [stats, setStats] = useState<StoredStats>(emptyStats);
   const [localMatchHistory, setLocalMatchHistory] = useState<MatchHistoryEntry[]>([]);
   const [cloudMatchHistory, setCloudMatchHistory] = useState<MatchHistoryEntry[]>([]);
+  const [localHistoryOpen, setLocalHistoryOpen] = useState(false);
   const [undoStack, setUndoStack] = useState<UndoSnapshot[]>([]);
   const [session, setSession] = useState<Session | null>(null);
   const [profileName, setProfileName] = useState("");
@@ -1106,6 +1107,22 @@ export default function Page() {
 
   const currentPlayer = players[activePlayer];
   const currentPlayerMetrics = useMemo(() => getPlayerMetrics(currentPlayer), [currentPlayer]);
+  const localPlayerStats = useMemo(
+    () =>
+      players.map((player) => {
+        const metrics = getPlayerMetrics(player);
+        return {
+          name: player.name,
+          average: Number(metrics.average),
+          bestVisit: metrics.highestVisit,
+          visits: player.visits.length,
+          busts: player.visits.filter((visit) => visit.bust).length,
+          checkouts: player.visits.filter((visit) => visit.checkout).length,
+          scoredPoints: metrics.pointsScored,
+        };
+      }),
+    [players],
+  );
   const currentVisitTotal = currentDarts.reduce((sum, dart) => sum + dart, 0);
   const checkoutHints = currentPlayer.entered ? getCheckoutHints(currentPlayer.score, doubleOut) : [];
 
@@ -2858,15 +2875,22 @@ function resetLegBoards(nextPlayers: Player[]) {
                 </details>
               </section>
 
-              <details className="rounded-[2rem] border border-white/10 bg-white/5 p-5 backdrop-blur sm:p-6">
-                <summary className="cursor-pointer list-none text-2xl font-semibold text-white">
-                  Historie
-                  <p className="mt-1 text-sm font-normal text-stone-400">
-                    Besuche im laufenden Leg.
-                  </p>
+              <details className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur" open={localHistoryOpen}>
+                <summary
+                  onClick={(event) => {
+                    event.preventDefault();
+                    setLocalHistoryOpen((prev) => !prev);
+                  }}
+                  className="flex cursor-pointer list-none items-center justify-between gap-3"
+                >
+                  <div>
+                    <h2 className="text-lg font-semibold text-white">Live Historie</h2>
+                    <p className="mt-1 text-sm font-normal text-stone-400">Besuche im laufenden Leg.</p>
+                  </div>
+                  <span className="text-sm text-stone-400">{localHistoryOpen ? "Einklappen" : "Ausklappen"}</span>
                 </summary>
 
-                <div className="mt-5 grid gap-4 xl:grid-cols-2">
+                {localHistoryOpen ? <div className="mt-5 grid gap-4 xl:grid-cols-2">
                   {players.map((player, playerIndex) => (
                     <div key={`${player.name}-history-${playerIndex}`} className="rounded-2xl border border-white/10">
                       <div className="border-b border-white/10 bg-black/20 px-4 py-3">
@@ -2909,7 +2933,7 @@ function resetLegBoards(nextPlayers: Player[]) {
                       </div>
                     </div>
                   ))}
-                </div>
+                </div> : null}
               </details>
             </div>
 
@@ -2938,7 +2962,7 @@ function resetLegBoards(nextPlayers: Player[]) {
               </section>
 
               <section className="rounded-[2rem] border border-white/10 bg-white/5 p-6 backdrop-blur">
-                <h2 className="text-2xl font-semibold text-white">Match-Stats</h2>
+                <p className="text-[11px] uppercase tracking-[0.22em] text-stone-400">Live-Stats</p>
                 {currentPlayer.entered ? (
                   <p className="mt-1 text-sm text-stone-400">
                     Empfehlungen für {currentPlayer.name} bei Restscore {currentPlayer.score}.
@@ -2966,15 +2990,61 @@ function resetLegBoards(nextPlayers: Player[]) {
                   )}
                 </div>
 
-                <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                <div className="mt-5 grid grid-cols-2 gap-2">
                   <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                    <p className="text-xs uppercase tracking-[0.22em] text-stone-400">Darts geworfen</p>
-                    <p className="mt-2 text-3xl font-semibold text-white">{currentPlayerMetrics.dartsThrown}</p>
+                    <p className="text-stone-400">Average</p>
+                    <p className="mt-1 text-lg font-semibold text-white">{currentPlayerMetrics.average}</p>
                   </div>
                   <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                    <p className="text-xs uppercase tracking-[0.22em] text-stone-400">Beste Aufnahme</p>
-                    <p className="mt-2 text-3xl font-semibold text-white">{currentPlayerMetrics.highestVisit}</p>
+                    <p className="text-stone-400">Best Visit</p>
+                    <p className="mt-1 text-lg font-semibold text-white">{currentPlayerMetrics.highestVisit}</p>
                   </div>
+                  <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                    <p className="text-stone-400">Busts</p>
+                    <p className="mt-1 text-lg font-semibold text-white">
+                      {currentPlayer.visits.filter((visit) => visit.bust).length}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                    <p className="text-stone-400">Checkouts</p>
+                    <p className="mt-1 text-lg font-semibold text-white">
+                      {currentPlayer.visits.filter((visit) => visit.checkout).length}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-3 space-y-2">
+                  {localPlayerStats.map((entry) => (
+                    <div
+                      key={`local-stat-${entry.name}`}
+                      className={`rounded-2xl border p-3 ${
+                        currentPlayer.name === entry.name ? "border-emerald-300/25 bg-emerald-400/12" : "border-white/10 bg-white/5"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-sm font-semibold text-white">{entry.name}</p>
+                        <p className="text-sm text-stone-300">{entry.average.toFixed(1)} Avg</p>
+                      </div>
+                      <div className="mt-2 grid grid-cols-4 gap-2 text-center text-xs">
+                        <div>
+                          <p className="text-stone-400">Visits</p>
+                          <p className="mt-1 font-semibold text-white">{entry.visits}</p>
+                        </div>
+                        <div>
+                          <p className="text-stone-400">Punkte</p>
+                          <p className="mt-1 font-semibold text-white">{entry.scoredPoints}</p>
+                        </div>
+                        <div>
+                          <p className="text-stone-400">Best</p>
+                          <p className="mt-1 font-semibold text-white">{entry.bestVisit}</p>
+                        </div>
+                        <div>
+                          <p className="text-stone-400">Busts</p>
+                          <p className="mt-1 font-semibold text-white">{entry.busts}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </section>
 
