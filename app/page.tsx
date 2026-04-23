@@ -2240,7 +2240,11 @@ function resetLegBoards(nextPlayers: Player[]) {
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top,_#1f2937,_#09090b_55%)] pb-28 text-stone-100 sm:pb-8">
-      <div className={`mx-auto flex w-full max-w-7xl flex-col gap-6 py-4 sm:px-6 sm:py-6 lg:px-8 ${session && selectedFlow === "overview" ? "px-0" : "px-4"}`}>
+      <div
+        className={`mx-auto flex w-full ${
+          session && selectedFlow !== "overview" ? "max-w-5xl" : "max-w-7xl"
+        } flex-col gap-6 py-4 sm:px-6 sm:py-6 lg:px-8 ${session && selectedFlow === "overview" ? "px-0" : "px-4"}`}
+      >
         {!session ? (
           <SignedOutLandingSection
             supabaseEnabled={supabaseEnabled}
@@ -2615,8 +2619,8 @@ function resetLegBoards(nextPlayers: Player[]) {
         </section>
 
         {appMode === "match" ? (
-          <section className="grid gap-4 lg:grid-cols-[1.08fr_0.92fr]">
-            <div className="order-1 space-y-4 lg:order-1">
+          <section className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+            <div className="order-2 space-y-4 lg:order-2">
               <section className="rounded-[2rem] border border-white/10 bg-white/5 p-5 backdrop-blur sm:p-6">
                 <div className="mb-5 rounded-2xl border border-white/10 bg-white/5 p-4">
                   <p className="text-xs uppercase tracking-[0.22em] text-stone-400">Spiel-Setup</p>
@@ -2937,7 +2941,7 @@ function resetLegBoards(nextPlayers: Player[]) {
               </details>
             </div>
 
-            <div className="order-2 space-y-4 lg:order-2">
+            <div className="order-1 space-y-4 lg:order-1">
               <section className="rounded-[2rem] border border-white/10 bg-white/5 p-5 backdrop-blur sm:p-6">
                 <div className="flex items-center justify-between gap-3">
                   <div>
@@ -3220,7 +3224,7 @@ function resetLegBoards(nextPlayers: Player[]) {
               </details>
             </div>
 
-            <div className="space-y-6">
+            <div className="order-1 space-y-4 lg:order-1">
               <section className="rounded-[2rem] border border-white/10 bg-white/5 p-5 backdrop-blur sm:p-6">
                 <div className="flex items-center justify-between gap-3">
                   <div>
