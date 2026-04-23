@@ -7,6 +7,7 @@ import {
   isLiveDeviceLockActive,
   normalizeLiveState,
   type LiveDeviceLock,
+  type LiveEntryMode,
   type LiveFinishMode,
   type LiveCloudSyncState,
   type LiveMatchState,
@@ -421,6 +422,7 @@ export async function POST(request: Request) {
     | {
         action: "create";
         mode: 301 | 501;
+        entryMode: LiveEntryMode;
         finishMode: LiveFinishMode;
         legsToWin: number;
         setsToWin: number;
@@ -476,6 +478,7 @@ export async function POST(request: Request) {
     const roomCode = generateRoomCode();
     let state: LiveMatchState = createEmptyLiveState({
       mode: body.mode,
+      entryMode: body.entryMode,
       finishMode: body.finishMode,
       legsToWin: body.legsToWin,
       setsToWin: body.setsToWin,
@@ -573,6 +576,7 @@ export async function POST(request: Request) {
       joined: true,
       score: state.mode,
       profileId: authResult.user.id,
+      entered: state.entryMode === "single",
     };
     state.statusText = `${displayName} ist im Online-Match angekommen.`;
     if (body.deviceId) {
@@ -769,6 +773,7 @@ export async function POST(request: Request) {
       score: currentState.mode,
       legs: 0,
       sets: 0,
+      entered: false,
       name: `Spieler ${participantIndex + 1}`,
     };
 

@@ -1,4 +1,5 @@
 export type LiveGameMode = 301 | 501;
+export type LiveEntryMode = "single" | "double" | "master";
 export type LiveFinishMode = "single" | "double" | "master";
 export type LiveSegmentRing =
   | "single-inner"
@@ -60,6 +61,7 @@ export type LivePlayer = {
   sets: number;
   joined: boolean;
   profileId: string | null;
+  entered: boolean;
 };
 
 export type LivePendingVisit = {
@@ -87,6 +89,7 @@ export type LiveBullOffState = {
 
 export type LiveMatchState = {
   mode: LiveGameMode;
+  entryMode: LiveEntryMode;
   finishMode: LiveFinishMode;
   legsToWin: number;
   setsToWin: number;
@@ -128,8 +131,21 @@ function deriveLegacySessionKey(state: Partial<LiveMatchState>) {
   return `legacy-${state.mode ?? 501}-${state.finishMode ?? "double"}-${playerSignature}-${historySeed}`;
 }
 
+function getEntryModeLabel(entryMode: LiveEntryMode) {
+  if (entryMode === "double") {
+    return "Double In";
+  }
+
+  if (entryMode === "master") {
+    return "Masters In";
+  }
+
+  return "Straight In";
+}
+
 export function createEmptyLiveState(params: {
   mode: LiveGameMode;
+  entryMode: LiveEntryMode;
   finishMode: LiveFinishMode;
   legsToWin: number;
   setsToWin: number;
@@ -147,6 +163,7 @@ export function createEmptyLiveState(params: {
           sets: 0,
           joined: true,
           profileId: params.ownerId,
+          entered: params.entryMode === "single",
         }
       : {
           name: `Spieler ${index + 1}`,
@@ -155,6 +172,7 @@ export function createEmptyLiveState(params: {
           sets: 0,
           joined: false,
           profileId: null,
+          entered: false,
         },
   );
 
@@ -162,6 +180,7 @@ export function createEmptyLiveState(params: {
 
   return {
     mode: params.mode,
+    entryMode: params.entryMode,
     finishMode: params.finishMode,
     legsToWin: params.legsToWin,
     setsToWin: params.setsToWin,
@@ -172,7 +191,9 @@ export function createEmptyLiveState(params: {
     matchWinner: null,
     statusText: params.bullOffEnabled
       ? `${params.ownerName} hat den Raum erstellt. Bull-Off entscheidet ueber den Start.`
-      : `${params.ownerName} hat den Raum erstellt.`,
+      : params.entryMode === "single"
+        ? `${params.ownerName} hat den Raum erstellt.`
+        : `${params.ownerName} hat den Raum erstellt. ${getEntryModeLabel(params.entryMode)} ist aktiv.`,
     bullOffEnabled: params.bullOffEnabled,
     bullOff: {
       enabled: params.bullOffEnabled,
@@ -218,10 +239,23 @@ export function canFinishWithDart(dart: LiveDart, finishMode: LiveFinishMode) {
   return dart.multiplier === 2 || dart.multiplier === 3;
 }
 
+export function canStartWithDart(dart: LiveDart, entryMode: LiveEntryMode) {
+  if (entryMode === "single") {
+    return dart.score > 0;
+  }
+
+  if (entryMode === "double") {
+    return dart.multiplier === 2;
+  }
+
+  return dart.multiplier === 2 || dart.multiplier === 3;
+}
+
 export function normalizeLiveState(state: LiveMatchState | (Record<string, unknown> & Partial<LiveMatchState>)) {
   const nextState = cloneState(state) as Partial<LiveMatchState> & {
     doubleOut?: boolean;
   };
+  const entryMode = nextState.entryMode ?? "single";
   const finishMode =
     nextState.finishMode ??
     (nextState.doubleOut === true ? "double" : "single");
@@ -232,6 +266,7 @@ export function normalizeLiveState(state: LiveMatchState | (Record<string, unkno
 
   return {
     mode: nextState.mode ?? 501,
+    entryMode,
     finishMode,
     legsToWin: nextState.legsToWin ?? 3,
     setsToWin: nextState.setsToWin ?? 1,
@@ -249,7 +284,10 @@ export function normalizeLiveState(state: LiveMatchState | (Record<string, unkno
       winnerIndex: null,
       attempts: [],
     },
-    players: nextState.players ?? [],
+    players: (nextState.players ?? []).map((player) => ({
+      ...player,
+      entered: player.entered ?? (entryMode === "single" && player.joined),
+    })),
     history: nextState.history ?? [],
     pendingVisit: nextState.pendingVisit ?? null,
     lastCallout: nextState.lastCallout ?? null,
@@ -333,51 +371,71 @@ function getBullOffRank(dart: LiveDart) {
 function evaluateVisit(
   scoreBefore: number,
   darts: LiveDart[],
+  playerEntered: boolean,
+  entryMode: LiveEntryMode,
   finishMode: LiveFinishMode,
 ) {
   let scoreAfter = scoreBefore;
+  let entered = playerEntered;
+  let countedTotal = 0;
+  let usedDarts: LiveDart[] = [];
 
   for (let index = 0; index < darts.length; index += 1) {
     const dart = darts[index];
+    if (!entered) {
+      if (!canStartWithDart(dart, entryMode)) {
+        usedDarts = darts.slice(0, index + 1);
+        continue;
+      }
+
+      entered = true;
+    }
+
     const remaining = scoreAfter - dart.score;
+    countedTotal += dart.score;
+    usedDarts = darts.slice(0, index + 1);
 
     if (remaining < 0) {
       return {
-        total: darts.slice(0, index + 1).reduce((sum, entry) => sum + entry.score, 0),
+        total: countedTotal,
         scoreAfter: scoreBefore,
         bust: true,
         checkout: false,
-        usedDarts: darts.slice(0, index + 1),
+        usedDarts,
+        enteredAfterVisit: playerEntered,
       };
     }
 
     if (finishMode !== "single" && remaining === 1) {
       return {
-        total: darts.slice(0, index + 1).reduce((sum, entry) => sum + entry.score, 0),
+        total: countedTotal,
         scoreAfter: scoreBefore,
         bust: true,
         checkout: false,
-        usedDarts: darts.slice(0, index + 1),
+        usedDarts,
+        enteredAfterVisit: playerEntered,
       };
     }
 
     if (remaining === 0) {
       if (!canFinishWithDart(dart, finishMode)) {
         return {
-          total: darts.slice(0, index + 1).reduce((sum, entry) => sum + entry.score, 0),
+          total: countedTotal,
           scoreAfter: scoreBefore,
           bust: true,
           checkout: false,
-          usedDarts: darts.slice(0, index + 1),
+          usedDarts,
+          enteredAfterVisit: playerEntered,
         };
       }
 
       return {
-        total: darts.slice(0, index + 1).reduce((sum, entry) => sum + entry.score, 0),
+        total: countedTotal,
         scoreAfter: 0,
         bust: false,
         checkout: true,
-        usedDarts: darts.slice(0, index + 1),
+        usedDarts,
+        enteredAfterVisit: true,
       };
     }
 
@@ -385,11 +443,12 @@ function evaluateVisit(
   }
 
   return {
-    total: darts.reduce((sum, entry) => sum + entry.score, 0),
+    total: countedTotal,
     scoreAfter,
     bust: false,
     checkout: false,
-    usedDarts: darts,
+    usedDarts,
+    enteredAfterVisit: entered,
   };
 }
 
@@ -483,7 +542,7 @@ export function addPendingDart(previousState: LiveMatchState, dart: LiveDart) {
   };
   nextState.lastCallout = getThrowCallout(dart);
 
-  const evaluation = evaluateVisit(player.score, nextDarts, nextState.finishMode);
+  const evaluation = evaluateVisit(player.score, nextDarts, player.entered, nextState.entryMode, nextState.finishMode);
   if (evaluation.bust || evaluation.checkout || nextDarts.length === 3) {
     return finalizePendingVisit(nextState);
   }
@@ -533,8 +592,15 @@ export function finalizePendingVisit(previousState: LiveMatchState) {
 
   const player = nextState.players[nextState.activePlayer];
   const scoreBefore = player.score;
-  const evaluation = evaluateVisit(scoreBefore, nextState.pendingVisit.darts, nextState.finishMode);
+  const evaluation = evaluateVisit(
+    scoreBefore,
+    nextState.pendingVisit.darts,
+    player.entered,
+    nextState.entryMode,
+    nextState.finishMode,
+  );
   const usedLabels = evaluation.usedDarts.map((dart) => dart.label);
+  const wasEnteredBeforeVisit = player.entered;
 
   appendHistoryEntry(nextState, {
     playerIndex: nextState.activePlayer,
@@ -546,7 +612,15 @@ export function finalizePendingVisit(previousState: LiveMatchState) {
     checkout: evaluation.checkout,
     result: evaluation.bust ? "bust" : evaluation.checkout ? "checkout" : "ok",
     darts: usedLabels,
-    note: evaluation.bust ? "Bust" : evaluation.checkout ? "Checkout" : "OK",
+    note: evaluation.bust
+      ? "Bust"
+      : evaluation.checkout
+        ? "Checkout"
+        : !evaluation.enteredAfterVisit
+          ? "Nicht drin"
+          : !wasEnteredBeforeVisit && evaluation.enteredAfterVisit
+            ? "In"
+            : "OK",
     createdAt: new Date().toISOString(),
   });
 
@@ -558,7 +632,14 @@ export function finalizePendingVisit(previousState: LiveMatchState) {
     return nextState;
   }
 
+  player.entered = evaluation.enteredAfterVisit;
   player.score = evaluation.scoreAfter;
+
+  if (!player.entered) {
+    nextState.activePlayer = getNextJoinedPlayerIndex(nextState, nextState.activePlayer);
+    nextState.statusText = `${player.name} kommt noch nicht rein. ${nextState.players[nextState.activePlayer].name} ist dran.`;
+    return nextState;
+  }
 
   if (evaluation.checkout) {
     player.legs += 1;
@@ -606,6 +687,7 @@ export function startNextLiveLeg(previousState: LiveMatchState) {
   nextState.players = nextState.players.map((player) => ({
     ...player,
     score: nextState.mode,
+    entered: nextState.entryMode === "single",
   }));
   nextState.pendingVisit = null;
   nextState.legWinner = null;
@@ -618,7 +700,10 @@ export function startNextLiveLeg(previousState: LiveMatchState) {
     currentPlayerIndex: null,
     attempts: [],
   };
-  nextState.statusText = `${nextState.players[nextStarter].name} beginnt das naechste Leg.`;
+  nextState.statusText =
+    nextState.entryMode === "single"
+      ? `${nextState.players[nextStarter].name} beginnt das naechste Leg.`
+      : `${nextState.players[nextStarter].name} beginnt das naechste Leg und sucht ${getEntryModeLabel(nextState.entryMode)}.`;
   return nextState;
 }
 
@@ -635,6 +720,7 @@ export function startRematchLiveMatch(previousState: LiveMatchState) {
     score: nextState.mode,
     legs: 0,
     sets: 0,
+    entered: nextState.entryMode === "single",
   }));
   nextState.history = [];
   nextState.pendingVisit = null;
@@ -672,7 +758,10 @@ export function startRematchLiveMatch(previousState: LiveMatchState) {
   };
   nextState.activePlayer = rematchStarter;
   nextState.legStartingPlayer = rematchStarter;
-  nextState.statusText = `${nextState.players[rematchStarter].name} beginnt das Rematch.`;
+  nextState.statusText =
+    nextState.entryMode === "single"
+      ? `${nextState.players[rematchStarter].name} beginnt das Rematch.`
+      : `${nextState.players[rematchStarter].name} beginnt das Rematch und sucht ${getEntryModeLabel(nextState.entryMode)}.`;
   return nextState;
 }
 

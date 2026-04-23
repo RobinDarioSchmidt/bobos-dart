@@ -1,8 +1,7 @@
 ﻿"use client";
 
-import { useState } from "react";
 import type { LiveAudioMode } from "@/lib/live-audio";
-import type { LiveFinishMode } from "@/lib/live-match";
+import type { LiveEntryMode, LiveFinishMode } from "@/lib/live-match";
 
 const finishOptions: Array<{ value: LiveFinishMode; label: string }> = [
   { value: "single", label: "Straight Out" },
@@ -10,7 +9,6 @@ const finishOptions: Array<{ value: LiveFinishMode; label: string }> = [
   { value: "master", label: "Masters Out" },
 ];
 
-const entryOptions = ["Straight In", "Double In", "Masters In"] as const;
 const legOptions = [2, 3, 5] as const;
 const setOptions = [1, 2, 3] as const;
 
@@ -22,6 +20,7 @@ function getNextValue<T>(options: readonly T[], currentValue: T) {
 export function LiveRoomCreatePanel({
   createOpen,
   mode,
+  entryMode,
   finishMode,
   bullOffEnabled,
   legsToWin,
@@ -29,6 +28,7 @@ export function LiveRoomCreatePanel({
   loading,
   onToggle,
   onModeChange,
+  onEntryModeChange,
   onFinishModeChange,
   onBullOffToggle,
   onLegsToWinChange,
@@ -37,6 +37,7 @@ export function LiveRoomCreatePanel({
 }: {
   createOpen: boolean;
   mode: 301 | 501;
+  entryMode: LiveEntryMode;
   finishMode: LiveFinishMode;
   bullOffEnabled: boolean;
   legsToWin: number;
@@ -44,13 +45,13 @@ export function LiveRoomCreatePanel({
   loading: boolean;
   onToggle: () => void;
   onModeChange: (value: 301 | 501) => void;
+  onEntryModeChange: (value: LiveEntryMode) => void;
   onFinishModeChange: (value: LiveFinishMode) => void;
   onBullOffToggle: () => void;
   onLegsToWinChange: (value: number) => void;
   onSetsToWinChange: (value: number) => void;
   onCreate: () => void;
 }) {
-  const [entryModeLabel, setEntryModeLabel] = useState<(typeof entryOptions)[number]>("Straight In");
   const optionButton =
     "min-w-0 rounded-2xl border border-white/10 bg-black/20 px-3 py-3 text-sm font-semibold text-white transition hover:bg-white/10";
 
@@ -82,10 +83,14 @@ export function LiveRoomCreatePanel({
 
           <div className="grid grid-cols-3 gap-2">
             <button
-              onClick={() => setEntryModeLabel((current) => getNextValue(entryOptions, current))}
+              onClick={() =>
+                onEntryModeChange(
+                  getNextValue(["single", "double", "master"] as const, entryMode),
+                )
+              }
               className={optionButton}
             >
-              {entryModeLabel}
+              {entryMode === "single" ? "Straight In" : entryMode === "double" ? "Double In" : "Masters In"}
             </button>
             <button
               onClick={() => onFinishModeChange(getNextValue(finishOptions.map((option) => option.value), finishMode))}

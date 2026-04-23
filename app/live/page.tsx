@@ -24,6 +24,7 @@ import {
   startNextLiveLeg,
   type LiveBoardMarker,
   type LiveDart,
+  type LiveEntryMode,
   type LiveFinishMode,
   type LiveMatchState,
 } from "@/lib/live-match";
@@ -189,6 +190,7 @@ export default function LivePage() {
   const [liveState, setLiveState] = useState<LiveMatchState | null>(null);
   const [openRooms, setOpenRooms] = useState<OpenLiveRoom[]>([]);
   const [mode, setMode] = useState<301 | 501>(501);
+  const [entryMode, setEntryMode] = useState<LiveEntryMode>("single");
   const [finishMode, setFinishMode] = useState<LiveFinishMode>("double");
   const [bullOffEnabled, setBullOffEnabled] = useState(true);
   const [legsToWin, setLegsToWin] = useState(3);
@@ -661,6 +663,7 @@ export default function LivePage() {
     const match = await callLiveApi({
       action: "create",
       mode,
+      entryMode,
       finishMode,
       legsToWin,
       setsToWin,
@@ -798,7 +801,12 @@ export default function LivePage() {
   const currentVisitTotal = pendingVisit?.darts.reduce((sum, dart) => sum + dart.score, 0) ?? 0;
   const compactVisitText = pendingLabels.length > 0 ? pendingLabels.join(", ") : "Noch kein Dart";
   const checkoutHints = useMemo(() => {
-    if (!liveState || !currentPlayer || (liveState.bullOff.enabled && !liveState.bullOff.completed)) {
+    if (
+      !liveState ||
+      !currentPlayer ||
+      !currentPlayer.entered ||
+      (liveState.bullOff.enabled && !liveState.bullOff.completed)
+    ) {
       return [];
     }
 
@@ -831,10 +839,14 @@ export default function LivePage() {
       : isCurrentUsersTurn
         ? liveState.bullOff.enabled && !liveState.bullOff.completed
           ? "Du wirfst fuer das Bull-Off."
+          : currentPlayer && !currentPlayer.entered
+            ? `Du suchst ${liveState.entryMode === "double" ? "Double In" : "Masters In"}.`
           : "Du bist dran."
         : currentPlayer
           ? liveState.bullOff.enabled && !liveState.bullOff.completed
             ? `${currentPlayer.name} wirft gerade fuer das Bull-Off.`
+            : !currentPlayer.entered
+              ? `${currentPlayer.name} sucht ${liveState.entryMode === "double" ? "Double In" : "Masters In"}.`
             : `${currentPlayer.name} ist gerade am Zug.`
           : "Warte auf den naechsten Spieler.";
   const boardDisabledReason = loading
@@ -1020,6 +1032,8 @@ export default function LivePage() {
     : `Live Historie - ${currentPlayer?.name ?? "Niemand"} ist dran!`;
   const boardHeading = liveState?.bullOff.enabled && !liveState.bullOff.completed
     ? `${currentPlayer?.name ?? "Niemand"} wirft Bull-Off`
+    : liveState && currentPlayer && !currentPlayer.entered
+      ? `${currentPlayer.name} sucht ${liveState.entryMode === "double" ? "Double In" : "Masters In"}${pendingLabels.length > 0 ? ` - ${pendingLabels.join(", ")}` : ""}`
     : `${currentPlayer?.name ?? "Niemand"} ist dran${pendingLabels.length > 0 ? ` - ${pendingLabels.join(", ")}` : ""}`;
   const livePlayerStats = useMemo(() => (liveState ? getLivePlayerStats(liveState) : []), [liveState]);
   const cloudSyncPending = Boolean(
@@ -1124,6 +1138,7 @@ export default function LivePage() {
                 <LiveRoomCreatePanel
                   createOpen={createOpen}
                   mode={mode}
+                  entryMode={entryMode}
                   finishMode={finishMode}
                   bullOffEnabled={bullOffEnabled}
                   legsToWin={legsToWin}
@@ -1131,6 +1146,7 @@ export default function LivePage() {
                   loading={loading}
                   onToggle={() => setCreateOpen((prev) => !prev)}
                   onModeChange={setMode}
+                  onEntryModeChange={setEntryMode}
                   onFinishModeChange={setFinishMode}
                   onBullOffToggle={() => setBullOffEnabled((prev) => !prev)}
                   onLegsToWinChange={setLegsToWin}

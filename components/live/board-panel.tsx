@@ -776,7 +776,14 @@ export function LiveBoardPanel({
                 }`}
               >
                 <div className="flex items-center justify-between gap-2">
-                  <p className="text-sm font-semibold text-white">{player.name}</p>
+                  <div>
+                    <p className="text-sm font-semibold text-white">{player.name}</p>
+                    {!player.entered ? (
+                      <p className="mt-1 text-[10px] uppercase tracking-[0.18em] text-amber-100">
+                        {liveState.entryMode === "double" ? "Double In offen" : "Masters In offen"}
+                      </p>
+                    ) : null}
+                  </div>
                   {isMe ? (
                     <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[10px] uppercase tracking-[0.18em] text-stone-300">
                       Du
