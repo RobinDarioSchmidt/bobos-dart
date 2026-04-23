@@ -11,6 +11,7 @@ import { supabase, supabaseEnabled } from "@/lib/supabase";
 type AppMode = "match" | "training";
 type SelectedFlow = "overview" | "local" | "training";
 type GameMode = 301 | 501;
+type EntryMode = "single" | "double" | "master";
 type TrainingMode = "around-the-clock" | "bull-drill" | "shanghai" | "doubles-around";
 type SegmentRing = "single" | "double" | "triple" | "outer-bull" | "bull" | "miss" | "unknown";
 
@@ -29,6 +30,7 @@ type Player = {
   legs: number;
   sets: number;
   visits: Visit[];
+  entered: boolean;
 };
 
 type StoredStats = {
@@ -150,6 +152,7 @@ type TrainingCloudRow = {
 type CloudAppSettings = {
   appMode: AppMode;
   mode: GameMode;
+  entryMode: EntryMode;
   doubleOut: boolean;
   legsToWin: number;
   setsToWin: number;
@@ -258,13 +261,14 @@ const emptyStats: StoredStats = {
   bestTrainingScore: 0,
 };
 
-function createPlayers(mode: GameMode, names = ["Bobo", "Guest"]): Player[] {
+function createPlayers(mode: GameMode, names = ["Bobo", "Guest"], entryMode: EntryMode = "single"): Player[] {
   return names.map((name) => ({
     name,
     score: mode,
     legs: 0,
     sets: 0,
     visits: [],
+    entered: entryMode === "single",
   }));
 }
 
@@ -455,8 +459,117 @@ function segmentToStoredThrow(segment: Segment, target: string | null = null): S
   };
 }
 
-function isDouble(value: number) {
-  return value === 50 || (value > 0 && value % 2 === 0 && value <= 40);
+function canStartLocalWithLabel(label: string, entryMode: EntryMode) {
+  const parsed = parseThrowLabel(label);
+  if (entryMode === "single") {
+    return parsed.score > 0;
+  }
+
+  if (entryMode === "double") {
+    return parsed.multiplier === 2;
+  }
+
+  return parsed.multiplier === 2 || parsed.multiplier === 3;
+}
+
+function canFinishLocalWithLabel(label: string, doubleOut: boolean) {
+  if (!doubleOut) {
+    return true;
+  }
+
+  const parsed = parseThrowLabel(label);
+  return parsed.multiplier === 2;
+}
+
+function getEntryModeLabel(entryMode: EntryMode) {
+  if (entryMode === "double") {
+    return "Double In";
+  }
+
+  if (entryMode === "master") {
+    return "Masters In";
+  }
+
+  return "Straight In";
+}
+
+function getNextEntryMode(entryMode: EntryMode): EntryMode {
+  if (entryMode === "single") {
+    return "double";
+  }
+
+  if (entryMode === "double") {
+    return "master";
+  }
+
+  return "single";
+}
+
+function evaluateLocalVisit(
+  scoreBefore: number,
+  darts: number[],
+  labels: string[],
+  enteredBefore: boolean,
+  entryMode: EntryMode,
+  doubleOut: boolean,
+) {
+  let remaining = scoreBefore;
+  let enteredAfter = enteredBefore;
+  let countedTotal = 0;
+
+  for (let index = 0; index < darts.length; index += 1) {
+    const dart = darts[index] ?? 0;
+    const label = labels[index] ?? `${dart}`;
+
+    if (!enteredAfter) {
+      if (!canStartLocalWithLabel(label, entryMode)) {
+        continue;
+      }
+
+      enteredAfter = true;
+    }
+
+    remaining -= dart;
+    countedTotal += dart;
+
+    if (remaining < 0) {
+      return {
+        scoreAfter: scoreBefore,
+        countedTotal,
+        bust: true,
+        checkout: false,
+        enteredAfter: enteredBefore,
+      };
+    }
+
+    if (doubleOut && remaining === 1) {
+      return {
+        scoreAfter: scoreBefore,
+        countedTotal,
+        bust: true,
+        checkout: false,
+        enteredAfter: enteredBefore,
+      };
+    }
+
+    if (remaining === 0 && !canFinishLocalWithLabel(label, doubleOut)) {
+      return {
+        scoreAfter: scoreBefore,
+        countedTotal,
+        bust: true,
+        checkout: false,
+        enteredAfter: enteredBefore,
+      };
+    }
+  }
+
+  return {
+    scoreAfter: remaining,
+    countedTotal,
+    bust: false,
+    checkout: remaining === 0 && enteredAfter,
+    enteredAfter,
+  };
 }
 
 function formatAverage(pointsScored: number, dartsThrown: number) {
@@ -778,10 +891,11 @@ export default function Page() {
   const [appMode, setAppMode] = useState<AppMode>("match");
   const [selectedFlow, setSelectedFlow] = useState<SelectedFlow>("overview");
   const [mode, setMode] = useState<GameMode>(501);
+  const [entryMode, setEntryMode] = useState<EntryMode>("single");
   const [doubleOut, setDoubleOut] = useState(true);
   const [legsToWin, setLegsToWin] = useState(3);
   const [setsToWin, setSetsToWin] = useState(1);
-  const [players, setPlayers] = useState<Player[]>(() => createPlayers(501));
+  const [players, setPlayers] = useState<Player[]>(() => createPlayers(501, ["Bobo", "Guest"], "single"));
   const [activePlayer, setActivePlayer] = useState(0);
   const [legStartingPlayer, setLegStartingPlayer] = useState(0);
   const [currentDarts, setCurrentDarts] = useState<number[]>([]);
@@ -824,13 +938,18 @@ export default function Page() {
 
   const applyStoredState = useCallback((parsed: Partial<LocalStoredState>) => {
     const parsedMode = parsed.mode === 301 || parsed.mode === 501 ? parsed.mode : 501;
+    const parsedEntryMode =
+      parsed.entryMode === "single" || parsed.entryMode === "double" || parsed.entryMode === "master"
+        ? parsed.entryMode
+        : "single";
     const names =
       parsed.playerNames && parsed.playerNames.length >= 2 && parsed.playerNames.length <= 4
         ? parsed.playerNames
         : ["Bobo", "Guest"];
 
     setMode(parsedMode);
-    setPlayers(createPlayers(parsedMode, names));
+    setEntryMode(parsedEntryMode);
+    setPlayers(createPlayers(parsedMode, names, parsedEntryMode));
     setStatusText(`Match bereit. ${names[0]} beginnt.`);
     setActivePlayer(0);
     setLegStartingPlayer(0);
@@ -933,6 +1052,7 @@ export default function Page() {
       const parsed = JSON.parse(raw) as Partial<{
         mode: GameMode;
         appMode: AppMode;
+        entryMode: EntryMode;
         doubleOut: boolean;
         legsToWin: number;
         setsToWin: number;
@@ -959,6 +1079,7 @@ export default function Page() {
       JSON.stringify({
         appMode,
         mode,
+        entryMode,
         doubleOut,
         legsToWin,
         setsToWin,
@@ -971,6 +1092,7 @@ export default function Page() {
   }, [
     appMode,
     doubleOut,
+    entryMode,
     hydrated,
     legsToWin,
     localMatchHistory,
@@ -984,7 +1106,7 @@ export default function Page() {
   const currentPlayer = players[activePlayer];
   const currentPlayerMetrics = useMemo(() => getPlayerMetrics(currentPlayer), [currentPlayer]);
   const currentVisitTotal = currentDarts.reduce((sum, dart) => sum + dart, 0);
-  const checkoutHints = getCheckoutHints(currentPlayer.score, doubleOut);
+  const checkoutHints = currentPlayer.entered ? getCheckoutHints(currentPlayer.score, doubleOut) : [];
 
   function saveSnapshot() {
     setUndoStack((prev) => [
@@ -1011,6 +1133,7 @@ export default function Page() {
     const appSettings = buildCloudSettings({
       appMode,
       mode,
+      entryMode,
       doubleOut,
       legsToWin,
       setsToWin,
@@ -1025,7 +1148,7 @@ export default function Page() {
       app_settings: appSettings,
       updated_at: new Date().toISOString(),
     });
-  }, [adminEmail, appMode, doubleOut, legsToWin, mode, players, setsToWin, trainingSession.mode]);
+  }, [adminEmail, appMode, doubleOut, entryMode, legsToWin, mode, players, setsToWin, trainingSession.mode]);
 
   const loadCloudProfile = useCallback(async (nextSession: Session) => {
     if (!supabase) {
@@ -1335,6 +1458,7 @@ export default function Page() {
     const appSettings = buildCloudSettings({
       appMode,
       mode,
+      entryMode,
       doubleOut,
       legsToWin,
       setsToWin,
@@ -1349,7 +1473,7 @@ export default function Page() {
         updated_at: new Date().toISOString(),
       })
       .eq("id", session.user.id);
-  }, [appMode, cloudSettingsReady, doubleOut, legsToWin, mode, players, session, setsToWin, trainingSession.mode]);
+  }, [appMode, cloudSettingsReady, doubleOut, entryMode, legsToWin, mode, players, session, setsToWin, trainingSession.mode]);
 
   useEffect(() => {
     if (!session || typeof window === "undefined") {
@@ -1553,17 +1677,18 @@ export default function Page() {
     await refreshCloudData(session);
   }
 
-  function resetLegBoards(nextPlayers: Player[]) {
-    return nextPlayers.map((player) => ({
-      ...player,
-      score: mode,
-      visits: [],
-    }));
-  }
+function resetLegBoards(nextPlayers: Player[]) {
+  return nextPlayers.map((player) => ({
+    ...player,
+    score: mode,
+    visits: [],
+    entered: entryMode === "single",
+  }));
+}
 
   function startFreshMatch(nextMode = mode) {
     const names = players.map((player) => player.name);
-    const nextPlayers = createPlayers(nextMode, names);
+    const nextPlayers = createPlayers(nextMode, names, entryMode);
     setMode(nextMode);
     setPlayers(nextPlayers);
     setActivePlayer(0);
@@ -1574,7 +1699,11 @@ export default function Page() {
     setManualVisit("");
     setLegWinner(null);
     setMatchWinner(null);
-    setStatusText(`Neues Match bereit. ${nextPlayers[0].name} beginnt.`);
+    setStatusText(
+      entryMode === "single"
+        ? `Neues Match bereit. ${nextPlayers[0].name} beginnt.`
+        : `Neues Match bereit. ${nextPlayers[0].name} sucht ${getEntryModeLabel(entryMode)}.`,
+    );
     setUndoStack([]);
   }
 
@@ -1583,7 +1712,7 @@ export default function Page() {
       { length: nextCount },
       (_, index) => players[index]?.name ?? `Spieler ${index + 1}`,
     );
-    const nextPlayers = createPlayers(mode, nextNames);
+    const nextPlayers = createPlayers(mode, nextNames, entryMode);
     setPlayers(nextPlayers);
     setActivePlayer(0);
     setLegStartingPlayer(0);
@@ -1593,7 +1722,34 @@ export default function Page() {
     setManualVisit("");
     setLegWinner(null);
     setMatchWinner(null);
-    setStatusText(`Neues Match bereit. ${nextPlayers[0].name} beginnt.`);
+    setStatusText(
+      entryMode === "single"
+        ? `Neues Match bereit. ${nextPlayers[0].name} beginnt.`
+        : `Neues Match bereit. ${nextPlayers[0].name} sucht ${getEntryModeLabel(entryMode)}.`,
+    );
+    setUndoStack([]);
+  }
+
+  function cycleEntryMode() {
+    const nextEntryMode = getNextEntryMode(entryMode);
+    const names = players.map((player) => player.name);
+    const nextPlayers = createPlayers(mode, names, nextEntryMode);
+
+    setEntryMode(nextEntryMode);
+    setPlayers(nextPlayers);
+    setActivePlayer(0);
+    setLegStartingPlayer(0);
+    setCurrentDarts([]);
+    setCurrentLabels([]);
+    setManualDart("");
+    setManualVisit("");
+    setLegWinner(null);
+    setMatchWinner(null);
+    setStatusText(
+      nextEntryMode === "single"
+        ? `Neues Match bereit. ${nextPlayers[0].name} beginnt.`
+        : `Neues Match bereit. ${nextPlayers[0].name} sucht ${getEntryModeLabel(nextEntryMode)}.`,
+    );
     setUndoStack([]);
   }
 
@@ -1611,7 +1767,11 @@ export default function Page() {
     setManualDart("");
     setManualVisit("");
     setLegWinner(null);
-    setStatusText(`Nächstes Leg gestartet. ${players[nextStarter].name} ist am Zug.`);
+    setStatusText(
+      entryMode === "single"
+        ? `Nächstes Leg gestartet. ${players[nextStarter].name} ist am Zug.`
+        : `Nächstes Leg gestartet. ${players[nextStarter].name} sucht ${getEntryModeLabel(entryMode)}.`,
+    );
     setUndoStack([]);
   }
 
@@ -1664,13 +1824,11 @@ export default function Page() {
 
     const nextPlayers = clonePlayers(players);
     const player = nextPlayers[activePlayer];
-    const total = darts.reduce((sum, dart) => sum + dart, 0);
-    const remaining = player.score - total;
-    const checkout = remaining === 0;
-    const bust =
-      remaining < 0 ||
-      (doubleOut && remaining === 1) ||
-      (checkout && doubleOut && !isDouble(darts[darts.length - 1]));
+    const evaluation = evaluateLocalVisit(player.score, darts, labels, player.entered, entryMode, doubleOut);
+    const total = evaluation.countedTotal;
+    const remaining = evaluation.scoreAfter;
+    const checkout = evaluation.checkout;
+    const bust = evaluation.bust;
 
     const visit: Visit = {
       darts,
@@ -1683,6 +1841,7 @@ export default function Page() {
 
     player.visits = [...player.visits, visit];
     player.score = bust ? player.score : remaining;
+    player.entered = evaluation.enteredAfter;
 
     setPlayers(nextPlayers);
     setCurrentDarts([]);
@@ -1758,6 +1917,20 @@ export default function Page() {
 
     const nextPlayerIndex = (activePlayer + 1) % nextPlayers.length;
     setActivePlayer(nextPlayerIndex);
+    if (!player.entered && entryMode !== "single") {
+      setStatusText(
+        `${player.name} sucht weiter ${getEntryModeLabel(entryMode)}. ${nextPlayers[nextPlayerIndex].name} ist dran.`,
+      );
+      return;
+    }
+
+    if (entryMode !== "single" && !nextPlayers[nextPlayerIndex]?.entered) {
+      setStatusText(
+        `${player.name} stellt ${remaining}. ${nextPlayers[nextPlayerIndex].name} sucht ${getEntryModeLabel(entryMode)}.`,
+      );
+      return;
+    }
+
     setStatusText(`${player.name} stellt ${remaining}. ${nextPlayers[nextPlayerIndex].name} ist dran.`);
   }
 
@@ -2191,6 +2364,9 @@ export default function Page() {
                             onChange={(event) => updatePlayerName(index, event.target.value)}
                             className="w-full border-none bg-transparent text-lg font-semibold text-white outline-none"
                           />
+                          {entryMode !== "single" && !player.entered ? (
+                            <p className="mt-2 text-xs font-medium text-amber-200">{getEntryModeLabel(entryMode)} offen</p>
+                          ) : null}
                           <p className="mt-3 text-5xl font-semibold leading-none text-white">{player.score}</p>
                           <div className="mt-4 grid grid-cols-3 gap-2 text-sm">
                             <div className="rounded-2xl bg-black/20 p-3">
@@ -2460,6 +2636,16 @@ export default function Page() {
                   </div>
 
                   <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <p className="text-xs uppercase tracking-[0.22em] text-stone-400">Start Regel</p>
+                    <button
+                      onClick={cycleEntryMode}
+                      className="mt-3 w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-left text-stone-200 transition hover:bg-white/10"
+                    >
+                      {getEntryModeLabel(entryMode)}
+                    </button>
+                  </div>
+
+                  <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
                     <p className="text-xs uppercase tracking-[0.22em] text-stone-400">Finish Regel</p>
                     <button
                       onClick={() => setDoubleOut((prev) => !prev)}
@@ -2521,7 +2707,9 @@ export default function Page() {
                     <p className="text-xs uppercase tracking-[0.22em] text-stone-400">Lokaler Zug</p>
                     <h2 className="mt-1 text-2xl font-semibold text-white">{currentPlayer.name} ist dran</h2>
                     <p className="mt-1 text-sm text-stone-400">
-                      Baue den aktuellen Besuch auf oder buche ihn direkt als Gesamtwert.
+                      {entryMode !== "single" && !currentPlayer.entered
+                        ? `${currentPlayer.name} sucht gerade ${getEntryModeLabel(entryMode)}.`
+                        : "Baue den aktuellen Besuch auf oder buche ihn direkt als Gesamtwert."}
                     </p>
                   </div>
                   {legWinner !== null ? (
@@ -2714,11 +2902,13 @@ export default function Page() {
                     <p className="text-xs uppercase tracking-[0.22em] text-stone-400">Board</p>
                     <h2 className="mt-1 text-2xl font-semibold text-white">{currentPlayer.name} zielt auf den nächsten Besuch</h2>
                     <p className="mt-1 text-sm text-stone-400">
-                      Tippe Singles, Doubles, Triples oder Bulls für den laufenden Besuch.
+                      {entryMode !== "single" && !currentPlayer.entered
+                        ? `Öffne zuerst mit ${getEntryModeLabel(entryMode)}. Erst danach zählt der Score.`
+                        : "Tippe Singles, Doubles, Triples oder Bulls für den laufenden Besuch."}
                     </p>
                   </div>
                   <div className="rounded-full border border-white/10 bg-black/20 px-3 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-stone-300">
-                    {doubleOut ? "Double-Out" : "Straight-Out"}
+                    {getEntryModeLabel(entryMode)} · {doubleOut ? "Double-Out" : "Straight-Out"}
                   </div>
                 </div>
                 <div className="mt-5">
@@ -2731,9 +2921,15 @@ export default function Page() {
 
               <section className="rounded-[2rem] border border-white/10 bg-white/5 p-6 backdrop-blur">
                 <h2 className="text-2xl font-semibold text-white">Checkout-Hilfe</h2>
-                <p className="mt-1 text-sm text-stone-400">
-                  Empfehlungen für {currentPlayer.name} bei Restscore {currentPlayer.score}.
-                </p>
+                {currentPlayer.entered ? (
+                  <p className="mt-1 text-sm text-stone-400">
+                    Empfehlungen für {currentPlayer.name} bei Restscore {currentPlayer.score}.
+                  </p>
+                ) : (
+                  <p className="mt-1 text-sm text-stone-400">
+                    Checkout-Hinweise erscheinen, sobald {currentPlayer.name} mit {getEntryModeLabel(entryMode)} im Spiel ist.
+                  </p>
+                )}
 
                 <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-4">
                   {checkoutHints.length > 0 ? (
