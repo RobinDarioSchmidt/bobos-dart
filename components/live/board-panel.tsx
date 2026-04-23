@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { KeyboardEvent, PointerEvent as ReactPointerEvent } from "react";
 import type { LiveBoardMarker, LiveMatchState, LiveSegmentRing } from "@/lib/live-match";
 
@@ -275,32 +275,55 @@ function LiveDartboard({
     active: boolean;
   } | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
+  const touchMaskRef = useRef<HTMLDivElement | null>(null);
   const suppressClickRef = useRef(false);
   const touchPreviewActiveRef = useRef(false);
+  const [touchMaskEnabled, setTouchMaskEnabled] = useState(false);
 
-  function getBoardPointFromPointer(event: ReactPointerEvent<SVGSVGElement>) {
-    const svg = svgRef.current;
-    if (!svg) {
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+      return;
+    }
+
+    const mediaQuery = window.matchMedia("(pointer: coarse)");
+    const sync = () => setTouchMaskEnabled(mediaQuery.matches);
+    sync();
+    mediaQuery.addEventListener("change", sync);
+    return () => mediaQuery.removeEventListener("change", sync);
+  }, []);
+
+  function getBoardPointFromTouchMask(event: ReactPointerEvent<HTMLDivElement>) {
+    const touchMask = touchMaskRef.current;
+    if (!touchMask) {
       return null;
     }
 
-    const rect = svg.getBoundingClientRect();
+    const rect = touchMask.getBoundingClientRect();
     if (!rect.width || !rect.height) {
       return null;
     }
 
-    const scaleX = 400 / rect.width;
-    const scaleY = 400 / rect.height;
+    const localX = event.clientX - rect.left;
+    const localY = event.clientY - rect.top;
+    const centerX = rect.width / 2;
+    const centerY = rect.height / 2;
+    const radius = Math.sqrt((localX - centerX) ** 2 + (localY - centerY) ** 2);
+    if (radius > rect.width / 2) {
+      return null;
+    }
+
+    const scaleX = (BOARD_RADIUS.doubleOuter * 2) / rect.width;
+    const scaleY = (BOARD_RADIUS.doubleOuter * 2) / rect.height;
     return {
-      boardX: (event.clientX - rect.left) * scaleX,
-      boardY: (event.clientY - rect.top) * scaleY,
+      boardX: 200 - BOARD_RADIUS.doubleOuter + localX * scaleX,
+      boardY: 200 - BOARD_RADIUS.doubleOuter + localY * scaleY,
       clientX: event.clientX - rect.left,
       clientY: event.clientY - rect.top,
     };
   }
 
-  function updateTouchPreview(event: ReactPointerEvent<SVGSVGElement>) {
-    const point = getBoardPointFromPointer(event);
+  function updateTouchPreview(event: ReactPointerEvent<HTMLDivElement>) {
+    const point = getBoardPointFromTouchMask(event);
     if (!point) {
       return null;
     }
@@ -322,7 +345,7 @@ function LiveDartboard({
     return segment ?? touchPreview?.segment ?? null;
   }
 
-  function handleTouchPointerDown(event: ReactPointerEvent<SVGSVGElement>) {
+  function handleTouchPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
     if (disabled || event.pointerType !== "touch") {
       return;
     }
@@ -338,7 +361,7 @@ function LiveDartboard({
     event.currentTarget.setPointerCapture(event.pointerId);
   }
 
-  function handleTouchPointerMove(event: ReactPointerEvent<SVGSVGElement>) {
+  function handleTouchPointerMove(event: ReactPointerEvent<HTMLDivElement>) {
     if (disabled || event.pointerType !== "touch" || !touchPreviewActiveRef.current) {
       return;
     }
@@ -347,7 +370,7 @@ function LiveDartboard({
     updateTouchPreview(event);
   }
 
-  function handleTouchPointerEnd(event: ReactPointerEvent<SVGSVGElement>) {
+  function handleTouchPointerEnd(event: ReactPointerEvent<HTMLDivElement>) {
     if (disabled || event.pointerType !== "touch") {
       return;
     }
@@ -416,10 +439,6 @@ function LiveDartboard({
           ref={svgRef}
           viewBox="0 0 400 400"
           className={`mx-auto w-full max-w-[35rem] drop-shadow-[0_18px_40px_rgba(0,0,0,0.45)] ${disabled ? "pointer-events-none" : ""}`}
-          onPointerDown={handleTouchPointerDown}
-          onPointerMove={handleTouchPointerMove}
-          onPointerUp={handleTouchPointerEnd}
-          onPointerCancel={handleTouchPointerCancel}
         >
           {renderBoardArtwork()}
 
@@ -620,6 +639,19 @@ function LiveDartboard({
 
           {renderBoardMarkers(markers)}
         </svg>
+
+        {touchMaskEnabled ? (
+          <div
+            ref={touchMaskRef}
+            className={`absolute left-1/2 top-1/2 h-[97%] w-[97%] -translate-x-1/2 -translate-y-1/2 rounded-full [touch-action:none] ${
+              disabled ? "pointer-events-none" : "pointer-events-auto"
+            }`}
+            onPointerDown={handleTouchPointerDown}
+            onPointerMove={handleTouchPointerMove}
+            onPointerUp={handleTouchPointerEnd}
+            onPointerCancel={handleTouchPointerCancel}
+          />
+        ) : null}
 
         {disabled ? (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
