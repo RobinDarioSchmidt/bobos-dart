@@ -92,7 +92,11 @@ function LiveDartboard({
   const [hoveredSegment, setHoveredSegment] = useState<LiveBoardSegment | null>(null);
 
   return (
-    <div className={`rounded-[1.5rem] border border-white/10 bg-black/20 p-2 transition sm:p-3 ${disabled ? "opacity-45" : ""}`}>
+    <div
+      className={`rounded-none border-0 bg-transparent p-0 transition sm:rounded-[1.5rem] sm:border sm:border-white/10 sm:bg-black/20 sm:p-3 ${
+        disabled ? "opacity-45" : ""
+      }`}
+    >
       <div className="mb-2 flex items-center justify-end gap-3 sm:mb-3">
         {hoveredSegment ? (
           <div className="min-h-[3.25rem] min-w-[8.5rem] rounded-2xl border border-amber-300/30 bg-amber-300/10 px-3 py-2 text-right">
@@ -434,8 +438,8 @@ export function LiveBoardPanel({
     .filter(({ player }) => player.joined);
 
   return (
-    <section className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur">
-      <div className="flex items-start justify-between gap-3">
+    <section className="rounded-none border-0 bg-transparent p-0 backdrop-blur-none sm:rounded-[1.5rem] sm:border sm:border-white/10 sm:bg-white/5 sm:p-4 sm:backdrop-blur">
+      <div className="px-2 sm:px-0 flex items-start justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold text-white">{boardHeading}</h2>
           {calloutText ? (
@@ -457,7 +461,7 @@ export function LiveBoardPanel({
       </div>
 
       {visiblePlayers.length > 0 ? (
-        <div className="mt-4 grid grid-cols-2 gap-3 xl:grid-cols-4">
+        <div className="mt-4 grid grid-cols-2 gap-3 px-2 sm:px-0 xl:grid-cols-4">
           {visiblePlayers.map(({ player, index: originalIndex }) => {
             const isActive = currentPlayerIndex === originalIndex && liveState.matchWinner === null;
             const isMe = player.profileId === currentUserId;
@@ -494,7 +498,7 @@ export function LiveBoardPanel({
         </div>
       ) : null}
 
-      <div className="mt-4">
+      <div className="mt-4 -mx-2 sm:mx-0">
         <LiveDartboard
           onSegmentSelect={onSegmentSelect}
           disabled={!canPlayFromThisDevice || loading}
@@ -504,7 +508,7 @@ export function LiveBoardPanel({
         />
       </div>
 
-      <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4">
+      <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4 mx-2 sm:mx-0">
         <div className="flex flex-wrap gap-2">
           {pendingLabels.length > 0 ? (
             pendingLabels.map((label, index) => (
@@ -561,7 +565,7 @@ export function LiveBoardPanel({
       </div>
 
       {checkoutHints.length > 0 ? (
-        <div className="mt-4 rounded-2xl border border-emerald-300/20 bg-emerald-400/10 p-4">
+        <div className="mt-4 rounded-2xl border border-emerald-300/20 bg-emerald-400/10 p-4 mx-2 sm:mx-0">
           <p className="text-[10px] uppercase tracking-[0.18em] text-emerald-100">
             Mögliche Finishes für {currentPlayerName}
           </p>
