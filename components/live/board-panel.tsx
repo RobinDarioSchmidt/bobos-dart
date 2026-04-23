@@ -252,12 +252,14 @@ function renderBoardMarkers(markers: LiveBoardMarker[]) {
 
 function LiveDartboard({
   onSegmentSelect,
+  onMiss,
   disabled,
   disabledLabel,
   markers,
   loading,
 }: {
   onSegmentSelect: (segment: LiveBoardSegment) => void;
+  onMiss: () => void;
   disabled: boolean;
   disabledLabel: string;
   markers: LiveBoardMarker[];
@@ -304,16 +306,20 @@ function LiveDartboard({
     }
 
     const segment = getSegmentFromBoardPoint(point.boardX, point.boardY);
+    if (!segment && !touchPreviewActiveRef.current) {
+      return null;
+    }
+
     setTouchPreview({
       x: point.clientX,
       y: point.clientY,
       boardX: point.boardX,
       boardY: point.boardY,
-      segment,
+      segment: segment ?? touchPreview?.segment ?? null,
       active: true,
     });
-    setHoveredSegment(segment);
-    return segment;
+    setHoveredSegment(segment ?? touchPreview?.segment ?? null);
+    return segment ?? touchPreview?.segment ?? null;
   }
 
   function handleTouchPointerDown(event: ReactPointerEvent<SVGSVGElement>) {
@@ -321,11 +327,15 @@ function LiveDartboard({
       return;
     }
 
+    const segment = updateTouchPreview(event);
+    if (!segment) {
+      return;
+    }
+
     suppressClickRef.current = true;
     touchPreviewActiveRef.current = true;
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
-    updateTouchPreview(event);
   }
 
   function handleTouchPointerMove(event: ReactPointerEvent<SVGSVGElement>) {
@@ -379,7 +389,14 @@ function LiveDartboard({
         disabled ? "opacity-45" : ""
       }`}
     >
-      <div className="mb-2 flex items-center justify-end gap-3 sm:mb-3">
+      <div className="mb-2 flex items-center justify-between gap-3 sm:mb-3">
+        <button
+          onClick={onMiss}
+          disabled={disabled || loading}
+          className="rounded-2xl border border-red-400/30 bg-red-400/10 px-4 py-2 text-sm font-semibold text-red-100 disabled:opacity-40"
+        >
+          No score
+        </button>
         {hoveredSegment ? (
           <div className="min-h-[3.25rem] min-w-[8.5rem] rounded-2xl border border-amber-300/30 bg-amber-300/10 px-3 py-2 text-right">
             <p className="text-[10px] uppercase tracking-[0.22em] text-amber-100">Ziel</p>
@@ -398,7 +415,7 @@ function LiveDartboard({
         <svg
           ref={svgRef}
           viewBox="0 0 400 400"
-          className={`mx-auto w-full max-w-[35rem] touch-none drop-shadow-[0_18px_40px_rgba(0,0,0,0.45)] ${disabled ? "pointer-events-none" : ""}`}
+          className={`mx-auto w-full max-w-[35rem] drop-shadow-[0_18px_40px_rgba(0,0,0,0.45)] ${disabled ? "pointer-events-none" : ""}`}
           onPointerDown={handleTouchPointerDown}
           onPointerMove={handleTouchPointerMove}
           onPointerUp={handleTouchPointerEnd}
@@ -615,11 +632,14 @@ function LiveDartboard({
         {touchPreview?.active ? (
           <div
             className="pointer-events-none absolute z-10"
-            style={{
-              left: `${Math.max(56, Math.min(touchPreview.x, 340))}px`,
-              top: `${Math.max(64, touchPreview.y - 86)}px`,
-              transform: "translate(-50%, -50%)",
-            }}
+            style={(() => {
+              const preferredLeft = touchPreview.x < 180 ? touchPreview.x + 78 : touchPreview.x - 78;
+              return {
+                left: `${Math.max(60, Math.min(preferredLeft, 340))}px`,
+                top: `${Math.max(64, touchPreview.y - 92)}px`,
+                transform: "translate(-50%, -50%)",
+              };
+            })()}
           >
             <div className="relative h-24 w-24 overflow-hidden rounded-full border-2 border-white/25 bg-black/85 shadow-[0_12px_36px_rgba(0,0,0,0.5)] backdrop-blur">
               <svg
@@ -630,14 +650,14 @@ function LiveDartboard({
               </svg>
               <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
                 <div className="relative h-6 w-6">
-                  <div className="absolute left-1/2 top-0 h-full w-px -translate-x-1/2 bg-white/90" />
-                  <div className="absolute left-0 top-1/2 h-px w-full -translate-y-1/2 bg-white/90" />
+                  <div className="absolute left-1/2 top-0 h-full w-px -translate-x-1/2 bg-amber-300" />
+                  <div className="absolute left-0 top-1/2 h-px w-full -translate-y-1/2 bg-amber-300" />
                 </div>
               </div>
             </div>
             <div className="mt-2 rounded-full border border-white/10 bg-black/75 px-3 py-1 text-center shadow-lg">
-              <div className="text-sm font-semibold text-white">{touchPreview.segment?.label ?? "Miss"}</div>
-              <div className="text-[10px] uppercase tracking-[0.18em] text-amber-100">{touchPreview.segment?.score ?? 0}</div>
+              <div className="text-sm font-semibold text-white">{touchPreview.segment?.label ?? "-"}</div>
+              <div className="text-[10px] uppercase tracking-[0.18em] text-amber-100">{touchPreview.segment?.score ?? ""}</div>
             </div>
           </div>
         ) : null}
@@ -709,13 +729,6 @@ export function LiveBoardPanel({
               : `${currentVisitTotal} Punkte · ${compactVisitText}`}
           </p>
         </div>
-        <button
-          onClick={onMiss}
-          disabled={!canPlayFromThisDevice || loading}
-          className="rounded-2xl border border-red-400/30 bg-red-400/10 px-4 py-2 text-sm font-semibold text-red-100 disabled:opacity-40"
-        >
-          No score
-        </button>
       </div>
 
       {visiblePlayers.length > 0 ? (
@@ -759,6 +772,7 @@ export function LiveBoardPanel({
       <div className="mt-4 -mx-2 sm:mx-0">
         <LiveDartboard
           onSegmentSelect={onSegmentSelect}
+          onMiss={onMiss}
           disabled={!canPlayFromThisDevice || loading}
           disabledLabel={boardDisabledReason}
           markers={boardMarkers}
