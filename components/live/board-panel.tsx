@@ -274,7 +274,6 @@ function LiveDartboard({
     segment: LiveBoardSegment | null;
     active: boolean;
   } | null>(null);
-  const svgRef = useRef<SVGSVGElement | null>(null);
   const touchMaskRef = useRef<HTMLDivElement | null>(null);
   const suppressClickRef = useRef(false);
   const touchPreviewActiveRef = useRef(false);
@@ -317,8 +316,8 @@ function LiveDartboard({
     return {
       boardX: 200 - BOARD_RADIUS.doubleOuter + localX * scaleX,
       boardY: 200 - BOARD_RADIUS.doubleOuter + localY * scaleY,
-      clientX: event.clientX - rect.left,
-      clientY: event.clientY - rect.top,
+      clientX: event.clientX,
+      clientY: event.clientY,
     };
   }
 
@@ -436,7 +435,6 @@ function LiveDartboard({
 
       <div className="relative">
         <svg
-          ref={svgRef}
           viewBox="0 0 400 400"
           className={`mx-auto w-full max-w-[35rem] drop-shadow-[0_18px_40px_rgba(0,0,0,0.45)] ${disabled ? "pointer-events-none" : ""}`}
         >
@@ -663,12 +661,13 @@ function LiveDartboard({
 
         {touchPreview?.active ? (
           <div
-            className="pointer-events-none absolute z-10"
+            className="pointer-events-none fixed z-[120]"
             style={(() => {
-              const preferredLeft = touchPreview.x < 180 ? touchPreview.x + 78 : touchPreview.x - 78;
+              const viewportWidth = typeof window !== "undefined" ? window.innerWidth : 400;
+              const preferredLeft = touchPreview.x;
               return {
-                left: `${Math.max(60, Math.min(preferredLeft, 340))}px`,
-                top: `${Math.max(64, touchPreview.y - 92)}px`,
+                left: `${Math.max(60, Math.min(preferredLeft, viewportWidth - 60))}px`,
+                top: `${Math.max(76, touchPreview.y - 112)}px`,
                 transform: "translate(-50%, -50%)",
               };
             })()}
