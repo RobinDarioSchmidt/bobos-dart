@@ -2,6 +2,14 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdminClients } from "@/lib/supabase-admin";
 import { authorizeSupabaseRequest } from "@/lib/server/request-auth";
 
+function averageOrZero(total: number, count: number, digits = 1) {
+  if (count <= 0) {
+    return 0;
+  }
+
+  return Number((total / count).toFixed(digits));
+}
+
 export async function GET(
   request: Request,
   context: { params: Promise<{ opponentName: string }> },
@@ -19,8 +27,9 @@ export async function GET(
 
   const { data: matches, error: matchesError } = await adminClient
     .from("matches")
-    .select("id, played_at, mode, double_out")
+    .select("id, played_at, mode, double_out, status")
     .eq("owner_id", user.id)
+    .eq("status", "finished")
     .order("played_at", { ascending: false });
 
   if (matchesError) {
@@ -140,18 +149,14 @@ export async function GET(
           winRate: Number(
             ((matchesAgainst.filter((match) => match.didWin).length / matchesAgainst.length) * 100).toFixed(1),
           ),
-          myAverage: Number(
-            (
-              matchesAgainst.reduce((sum, match) => sum + match.myAverage, 0) /
-              matchesAgainst.filter((match) => match.myAverage > 0).length
-            ).toFixed(1),
-          ) || 0,
-          opponentAverage: Number(
-            (
-              matchesAgainst.reduce((sum, match) => sum + match.opponentAverage, 0) /
-              matchesAgainst.filter((match) => match.opponentAverage > 0).length
-            ).toFixed(1),
-          ) || 0,
+          myAverage: averageOrZero(
+            matchesAgainst.reduce((sum, match) => sum + match.myAverage, 0),
+            matchesAgainst.filter((match) => match.myAverage > 0).length,
+          ),
+          opponentAverage: averageOrZero(
+            matchesAgainst.reduce((sum, match) => sum + match.opponentAverage, 0),
+            matchesAgainst.filter((match) => match.opponentAverage > 0).length,
+          ),
           myBestVisit: matchesAgainst.reduce((best, match) => Math.max(best, match.myBestVisit), 0),
           opponentBestVisit: matchesAgainst.reduce((best, match) => Math.max(best, match.opponentBestVisit), 0),
           myLegs: matchesAgainst.reduce((sum, match) => sum + match.myLegs, 0),

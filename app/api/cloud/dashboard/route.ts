@@ -34,6 +34,7 @@ type MatchRow = {
   mode: string;
   double_out: boolean;
   owner_id?: string;
+  status?: string;
 };
 
 type MatchDetailRow = {
@@ -97,8 +98,9 @@ export async function GET(request: Request) {
       ,
     adminClient
       .from("matches")
-      .select("id, owner_id, played_at, mode, double_out")
+      .select("id, owner_id, played_at, mode, double_out, status")
       .eq("owner_id", user.id)
+      .eq("status", "finished")
       .order("played_at", { ascending: false })
       ,
     adminClient
@@ -110,7 +112,7 @@ export async function GET(request: Request) {
       .from("match_players")
       .select("profile_id, match_id, sets_won, legs_won, average, best_visit, is_winner")
       .not("profile_id", "is", null),
-    adminClient.from("matches").select("id, owner_id, played_at"),
+    adminClient.from("matches").select("id, owner_id, played_at, status").eq("status", "finished"),
   ]);
 
   if (profileError) {
@@ -168,7 +170,8 @@ export async function GET(request: Request) {
   const selfDartRows = [...selfMatchDartRows, ...selfTrainingDartRows];
   const totalTrainingDarts = trainingRows.reduce((sum, row) => sum + row.darts_thrown, 0);
   const totalTrainingHits = trainingRows.reduce((sum, row) => sum + row.hits, 0);
-  const allMatchesWithDetails = matchRows.map((match) => {
+  const allMatchesWithDetails = matchRows
+    .map((match) => {
     const players = matchDetailRows.filter((row) => row.match_id === match.id);
     const winner = players.find((row) => row.is_winner)?.guest_name ?? "Unbekannt";
     const opponentEntries = players
@@ -184,7 +187,7 @@ export async function GET(request: Request) {
       .join(", ");
     const mySeat = players.find((row) => row.profile_id === user.id) ?? null;
 
-    return {
+      return {
       id: match.id,
       played_at: match.played_at,
       mode: match.mode,
@@ -198,10 +201,12 @@ export async function GET(request: Request) {
       player_best_visit: mySeat?.best_visit ?? 0,
       player_legs: mySeat?.legs_won ?? 0,
       player_sets: mySeat?.sets_won ?? 0,
-    };
-  });
+      };
+    })
+    .filter((match) => match.opponent_entries.length > 0 || match.did_win || match.player_average > 0 || match.player_best_visit > 0);
 
-  const recentMatchesWithDetails = recentMatchRows.map((match) => {
+  const recentMatchesWithDetails = recentMatchRows
+    .map((match) => {
     const players = matchDetailRows.filter((row) => row.match_id === match.id);
     const winner = players.find((row) => row.is_winner)?.guest_name ?? "Unbekannt";
     const opponents = players
@@ -210,7 +215,7 @@ export async function GET(request: Request) {
       .join(", ");
     const mySeat = players.find((row) => row.profile_id === user.id) ?? null;
 
-    return {
+      return {
       id: match.id,
       played_at: match.played_at,
       mode: match.mode,
@@ -230,8 +235,9 @@ export async function GET(request: Request) {
       player_best_visit: mySeat?.best_visit ?? 0,
       player_legs: mySeat?.legs_won ?? 0,
       player_sets: mySeat?.sets_won ?? 0,
-    };
-  });
+      };
+    })
+    .filter((match) => match.opponent_entries.length > 0 || match.did_win || match.player_average > 0 || match.player_best_visit > 0);
 
   const ownedPlayerRows = matchDetailRows.filter((row) => row.profile_id === user.id);
   const stats = {

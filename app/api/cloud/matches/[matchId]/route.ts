@@ -20,6 +20,7 @@ export async function GET(
     .select("id, owner_id, played_at, mode, double_out, legs_to_win, sets_to_win, status")
     .eq("id", matchId)
     .eq("owner_id", user.id)
+    .eq("status", "finished")
     .single();
 
   if (matchError || !match) {
