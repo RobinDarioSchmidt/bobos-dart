@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import type { KeyboardEvent } from "react";
+import { useRef, useState } from "react";
+import type { KeyboardEvent, PointerEvent as ReactPointerEvent } from "react";
 import type { LiveBoardMarker, LiveMatchState, LiveSegmentRing } from "@/lib/live-match";
 
 export type LiveBoardSegment = {
@@ -76,6 +76,88 @@ function markerColorForRing(ring: LiveSegmentRing) {
   return "#6b7280";
 }
 
+function buildSegment(value: number, midAngle: number, ring: LiveSegmentRing): LiveBoardSegment {
+  const markerRadiusByRing: Record<LiveSegmentRing, number> = {
+    double: (BOARD_RADIUS.doubleInner + BOARD_RADIUS.doubleOuter) / 2,
+    triple: (BOARD_RADIUS.tripleInner + BOARD_RADIUS.tripleOuter) / 2,
+    "single-outer": (BOARD_RADIUS.tripleOuter + BOARD_RADIUS.doubleInner) / 2,
+    "single-inner": (BOARD_RADIUS.bullOuter + BOARD_RADIUS.tripleInner) / 2,
+    "outer-bull": 21,
+    bull: 8,
+    miss: -1,
+  };
+
+  if (ring === "outer-bull") {
+    return {
+      label: "Outer Bull",
+      score: 25,
+      number: 25,
+      multiplier: 1,
+      ring,
+      marker: createMarker(markerRadiusByRing[ring], 0, "Outer Bull", ring),
+    };
+  }
+
+  if (ring === "bull") {
+    return {
+      label: "Bull",
+      score: 50,
+      number: 25,
+      multiplier: 2,
+      ring,
+      marker: createMarker(markerRadiusByRing[ring], 0, "Bull", ring),
+    };
+  }
+
+  const multiplier = ring === "double" ? 2 : ring === "triple" ? 3 : 1;
+  const prefix = multiplier === 2 ? "D" : multiplier === 3 ? "T" : "S";
+  return {
+    label: `${prefix}${value}`,
+    score: value * multiplier,
+    number: value,
+    multiplier,
+    ring,
+    marker: createMarker(markerRadiusByRing[ring], midAngle, `${prefix}${value}`, ring),
+  };
+}
+
+function getSegmentFromBoardPoint(x: number, y: number) {
+  const dx = x - 200;
+  const dy = y - 200;
+  const radius = Math.sqrt(dx * dx + dy * dy);
+
+  if (radius > BOARD_RADIUS.doubleOuter) {
+    return null;
+  }
+
+  if (radius <= BOARD_RADIUS.bullInner) {
+    return buildSegment(25, 0, "bull");
+  }
+
+  if (radius <= BOARD_RADIUS.bullOuter) {
+    return buildSegment(25, 0, "outer-bull");
+  }
+
+  const angle = (((Math.atan2(dy, dx) * 180) / Math.PI + 90) % 360 + 360) % 360;
+  const index = Math.floor((((angle - BOARD_START_ANGLE + 360) % 360) / BOARD_SLICE_ANGLE)) % BOARD_ORDER.length;
+  const value = BOARD_ORDER[index] ?? 20;
+  const midAngle = BOARD_START_ANGLE + index * BOARD_SLICE_ANGLE + BOARD_SLICE_ANGLE / 2;
+
+  if (radius >= BOARD_RADIUS.doubleInner) {
+    return buildSegment(value, midAngle, "double");
+  }
+
+  if (radius >= BOARD_RADIUS.tripleOuter) {
+    return buildSegment(value, midAngle, "single-outer");
+  }
+
+  if (radius >= BOARD_RADIUS.tripleInner) {
+    return buildSegment(value, midAngle, "triple");
+  }
+
+  return buildSegment(value, midAngle, "single-inner");
+}
+
 function LiveDartboard({
   onSegmentSelect,
   disabled,
@@ -90,6 +172,106 @@ function LiveDartboard({
   loading: boolean;
 }) {
   const [hoveredSegment, setHoveredSegment] = useState<LiveBoardSegment | null>(null);
+  const [touchPreview, setTouchPreview] = useState<{
+    x: number;
+    y: number;
+    segment: LiveBoardSegment | null;
+    active: boolean;
+  } | null>(null);
+  const svgRef = useRef<SVGSVGElement | null>(null);
+  const suppressClickRef = useRef(false);
+
+  function getBoardPointFromPointer(event: ReactPointerEvent<SVGSVGElement>) {
+    const svg = svgRef.current;
+    if (!svg) {
+      return null;
+    }
+
+    const rect = svg.getBoundingClientRect();
+    if (!rect.width || !rect.height) {
+      return null;
+    }
+
+    const scaleX = 400 / rect.width;
+    const scaleY = 400 / rect.height;
+    return {
+      boardX: (event.clientX - rect.left) * scaleX,
+      boardY: (event.clientY - rect.top) * scaleY,
+      clientX: event.clientX - rect.left,
+      clientY: event.clientY - rect.top,
+    };
+  }
+
+  function updateTouchPreview(event: ReactPointerEvent<SVGSVGElement>) {
+    const point = getBoardPointFromPointer(event);
+    if (!point) {
+      return null;
+    }
+
+    const segment = getSegmentFromBoardPoint(point.boardX, point.boardY);
+    setTouchPreview({
+      x: point.clientX,
+      y: point.clientY,
+      segment,
+      active: true,
+    });
+    setHoveredSegment(segment);
+    return segment;
+  }
+
+  function handleTouchPointerDown(event: ReactPointerEvent<SVGSVGElement>) {
+    if (disabled || event.pointerType !== "touch") {
+      return;
+    }
+
+    suppressClickRef.current = true;
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    updateTouchPreview(event);
+  }
+
+  function handleTouchPointerMove(event: ReactPointerEvent<SVGSVGElement>) {
+    if (disabled || event.pointerType !== "touch" || !touchPreview?.active) {
+      return;
+    }
+
+    event.preventDefault();
+    updateTouchPreview(event);
+  }
+
+  function handleTouchPointerEnd(event: ReactPointerEvent<SVGSVGElement>) {
+    if (disabled || event.pointerType !== "touch") {
+      return;
+    }
+
+    event.preventDefault();
+    const finalSegment = updateTouchPreview(event) ?? touchPreview?.segment ?? null;
+    setTouchPreview(null);
+    setHoveredSegment(null);
+    window.setTimeout(() => {
+      suppressClickRef.current = false;
+    }, 180);
+
+    if (finalSegment) {
+      onSegmentSelect(finalSegment);
+    }
+  }
+
+  function handleTouchPointerCancel() {
+    setTouchPreview(null);
+    setHoveredSegment(null);
+    window.setTimeout(() => {
+      suppressClickRef.current = false;
+    }, 180);
+  }
+
+  function handleSegmentClick(segment: LiveBoardSegment) {
+    if (disabled || suppressClickRef.current) {
+      return;
+    }
+
+    onSegmentSelect(segment);
+  }
 
   return (
     <div
@@ -114,8 +296,13 @@ function LiveDartboard({
 
       <div className="relative">
         <svg
+          ref={svgRef}
           viewBox="0 0 400 400"
-          className={`mx-auto w-full max-w-[35rem] drop-shadow-[0_18px_40px_rgba(0,0,0,0.45)] ${disabled ? "pointer-events-none" : ""}`}
+          className={`mx-auto w-full max-w-[35rem] touch-none drop-shadow-[0_18px_40px_rgba(0,0,0,0.45)] ${disabled ? "pointer-events-none" : ""}`}
+          onPointerDown={handleTouchPointerDown}
+          onPointerMove={handleTouchPointerMove}
+          onPointerUp={handleTouchPointerEnd}
+          onPointerCancel={handleTouchPointerCancel}
         >
           <circle cx="200" cy="200" r="194" fill="#111827" />
           <circle cx="200" cy="200" r="182" fill="#d6d3d1" />
@@ -193,7 +380,7 @@ function LiveDartboard({
                     role="button"
                     tabIndex={disabled ? -1 : 0}
                     aria-label={segment.label}
-                    onClick={() => !disabled && onSegmentSelect(segment)}
+                    onClick={() => handleSegmentClick(segment)}
                     onKeyDown={(event) => !disabled && handleBoardKeyDown(event, onSegmentSelect, segment)}
                     className="cursor-pointer outline-none"
                   >
@@ -229,27 +416,10 @@ function LiveDartboard({
             role="button"
             tabIndex={disabled ? -1 : 0}
             aria-label="Outer Bull"
-            onClick={() =>
-              !disabled &&
-              onSegmentSelect({
-                label: "Outer Bull",
-                score: 25,
-                number: 25,
-                multiplier: 1,
-                ring: "outer-bull",
-                marker: createMarker(21, 0, "Outer Bull", "outer-bull"),
-              })
-            }
+            onClick={() => handleSegmentClick(buildSegment(25, 0, "outer-bull"))}
             onKeyDown={(event) =>
               !disabled &&
-              handleBoardKeyDown(event, onSegmentSelect, {
-                label: "Outer Bull",
-                score: 25,
-                number: 25,
-                multiplier: 1,
-                ring: "outer-bull",
-                marker: createMarker(21, 0, "Outer Bull", "outer-bull"),
-              })
+              handleBoardKeyDown(event, onSegmentSelect, buildSegment(25, 0, "outer-bull"))
             }
             className="cursor-pointer outline-none"
           >
@@ -291,27 +461,10 @@ function LiveDartboard({
             role="button"
             tabIndex={disabled ? -1 : 0}
             aria-label="Bull"
-            onClick={() =>
-              !disabled &&
-              onSegmentSelect({
-                label: "Bull",
-                score: 50,
-                number: 25,
-                multiplier: 2,
-                ring: "bull",
-                marker: createMarker(8, 0, "Bull", "bull"),
-              })
-            }
+            onClick={() => handleSegmentClick(buildSegment(25, 0, "bull"))}
             onKeyDown={(event) =>
               !disabled &&
-              handleBoardKeyDown(event, onSegmentSelect, {
-                label: "Bull",
-                score: 50,
-                number: 25,
-                multiplier: 2,
-                ring: "bull",
-                marker: createMarker(8, 0, "Bull", "bull"),
-              })
+              handleBoardKeyDown(event, onSegmentSelect, buildSegment(25, 0, "bull"))
             }
             className="cursor-pointer outline-none"
           >
@@ -380,6 +533,30 @@ function LiveDartboard({
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
             <div className="rounded-full border border-white/10 bg-black/70 px-4 py-2 text-xs uppercase tracking-[0.22em] text-stone-200">
               {loading ? "Synchronisiert..." : disabledLabel}
+            </div>
+          </div>
+        ) : null}
+
+        {touchPreview?.active ? (
+          <div
+            className="pointer-events-none absolute z-10"
+            style={{
+              left: `${Math.max(44, Math.min(touchPreview.x, 320))}px`,
+              top: `${Math.max(54, touchPreview.y - 72)}px`,
+              transform: "translate(-50%, -50%)",
+            }}
+          >
+            <div className="flex h-20 w-20 items-center justify-center rounded-full border border-white/20 bg-black/80 shadow-[0_10px_35px_rgba(0,0,0,0.45)] backdrop-blur">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full border border-amber-300/40 bg-amber-300/10 text-center">
+                <div>
+                  <div className="text-sm font-semibold text-white">
+                    {touchPreview.segment?.label ?? "Miss"}
+                  </div>
+                  <div className="text-[10px] uppercase tracking-[0.18em] text-amber-100">
+                    {touchPreview.segment?.score ?? 0}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         ) : null}
