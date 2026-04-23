@@ -43,6 +43,14 @@ export type LiveCloudSyncState = {
   sessionKey: string;
   persistedOwnerIds: string[];
   persistedAt: string | null;
+  deviceLocks: LiveDeviceLock[];
+};
+
+export type LiveDeviceLock = {
+  profileId: string;
+  deviceId: string;
+  deviceLabel: string;
+  lastSeenAt: string;
 };
 
 export type LivePlayer = {
@@ -96,6 +104,8 @@ export type LiveMatchState = {
   lastCallout: string | null;
   cloudSync: LiveCloudSyncState;
 };
+
+export const LIVE_DEVICE_LOCK_TIMEOUT_MS = 45_000;
 
 function cloneState<T>(value: T) {
   return JSON.parse(JSON.stringify(value)) as T;
@@ -179,6 +189,7 @@ export function createEmptyLiveState(params: {
       sessionKey: generateSessionKey(),
       persistedOwnerIds: [],
       persistedAt: null,
+      deviceLocks: [],
     },
   } satisfies LiveMatchState;
 }
@@ -242,12 +253,26 @@ export function normalizeLiveState(state: LiveMatchState | (Record<string, unkno
     history: nextState.history ?? [],
     pendingVisit: nextState.pendingVisit ?? null,
     lastCallout: nextState.lastCallout ?? null,
-    cloudSync: nextState.cloudSync ?? {
-      sessionKey: deriveLegacySessionKey(nextState),
-      persistedOwnerIds: [],
-      persistedAt: null,
+    cloudSync: {
+      sessionKey: nextState.cloudSync?.sessionKey ?? deriveLegacySessionKey(nextState),
+      persistedOwnerIds: nextState.cloudSync?.persistedOwnerIds ?? [],
+      persistedAt: nextState.cloudSync?.persistedAt ?? null,
+      deviceLocks: nextState.cloudSync?.deviceLocks ?? [],
     },
   } satisfies LiveMatchState;
+}
+
+export function isLiveDeviceLockActive(lock: LiveDeviceLock | null | undefined, now = Date.now()) {
+  if (!lock?.lastSeenAt) {
+    return false;
+  }
+
+  const lastSeen = Date.parse(lock.lastSeenAt);
+  if (!Number.isFinite(lastSeen)) {
+    return false;
+  }
+
+  return now - lastSeen < LIVE_DEVICE_LOCK_TIMEOUT_MS;
 }
 
 export function getThrowCallout(dart: LiveDart) {
@@ -621,6 +646,7 @@ export function startRematchLiveMatch(previousState: LiveMatchState) {
     sessionKey: generateSessionKey(),
     persistedOwnerIds: [],
     persistedAt: null,
+    deviceLocks: nextState.cloudSync.deviceLocks ?? [],
   };
 
   if (nextState.bullOff.enabled) {

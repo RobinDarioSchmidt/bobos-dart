@@ -17,6 +17,7 @@ import {
   clearPendingVisit,
   finalizePendingVisit,
   getPreferredDisplayName,
+  isLiveDeviceLockActive,
   normalizeLiveState,
   removePendingDart,
   startRematchLiveMatch,
@@ -76,6 +77,11 @@ function formatLiveError(error: string) {
     case "missing_service_role_or_supabase_config":
         return "Der Online-Modus ist noch nicht komplett konfiguriert.";
     default:
+      if (error.startsWith("device_already_active:")) {
+        const activeDeviceLabel = error.slice("device_already_active:".length) || "einem anderen Geraet";
+        return `Dieses Konto wird in diesem Raum schon von ${activeDeviceLabel} gesteuert.`;
+      }
+
       if (error.startsWith("invalid_token:")) {
         return "Deine Sitzung ist abgelaufen. Bitte logge dich neu ein.";
       }
@@ -128,6 +134,46 @@ function missDart(): LiveDart {
   };
 }
 
+function createDeviceId() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+
+  return `device-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function getDeviceLabel() {
+  if (typeof navigator === "undefined") {
+    return "Dieses Geraet";
+  }
+
+  const userAgent = navigator.userAgent.toLowerCase();
+  const platform = userAgent.includes("android")
+    ? "Android"
+    : userAgent.includes("iphone") || userAgent.includes("ipad")
+      ? "iPhone"
+      : userAgent.includes("windows")
+        ? "Windows"
+        : userAgent.includes("mac os")
+          ? "Mac"
+          : "Geraet";
+  const browser = userAgent.includes("opr/") || userAgent.includes("opera")
+    ? "Opera"
+    : userAgent.includes("edg/")
+      ? "Edge"
+      : userAgent.includes("firefox")
+        ? "Firefox"
+        : userAgent.includes("samsungbrowser")
+          ? "Samsung Internet"
+          : userAgent.includes("chrome")
+            ? "Chrome"
+            : userAgent.includes("safari")
+              ? "Safari"
+              : "Browser";
+
+  return `${platform} ${browser}`;
+}
+
 export default function LivePage() {
   const [session, setSession] = useState<Session | null>(null);
   const [displayName, setDisplayName] = useState("");
@@ -155,13 +201,29 @@ export default function LivePage() {
   const [joinOpen, setJoinOpen] = useState(true);
   const [historyOpen, setHistoryOpen] = useState(true);
   const [audioMode, setAudioMode] = useState<LiveAudioMode>("visits");
+  const [deviceId, setDeviceId] = useState("");
+  const [deviceLabel, setDeviceLabel] = useState("Dieses Geraet");
   const [connectionState, setConnectionState] = useState<"online" | "offline" | "connecting">(
     typeof navigator !== "undefined" && !navigator.onLine ? "offline" : "connecting",
   );
   const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL ?? "";
   const liveChannelRef = useRef<ReturnType<NonNullable<typeof supabase>["channel"]> | null>(null);
   const requestInFlightRef = useRef(false);
+  const deviceClaimInFlightRef = useRef(false);
   const lastPlayedVisitRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const storageKey = "bobos-dart-live-device-id";
+    const storedDeviceId = window.sessionStorage.getItem(storageKey);
+    const nextDeviceId = storedDeviceId || createDeviceId();
+    window.sessionStorage.setItem(storageKey, nextDeviceId);
+    setDeviceId(nextDeviceId);
+    setDeviceLabel(getDeviceLabel());
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -499,6 +561,71 @@ export default function LivePage() {
     }
   }
 
+  const claimDeviceLock = useCallback(async () => {
+    if (!liveRoomCode || !deviceId) {
+      return;
+    }
+
+    if (deviceClaimInFlightRef.current || requestInFlightRef.current) {
+      return;
+    }
+
+    const accessToken = await getAccessToken();
+    if (!accessToken) {
+      return;
+    }
+
+    deviceClaimInFlightRef.current = true;
+
+    try {
+      const response = await fetch("/api/live", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          action: "claim_device",
+          roomCode: liveRoomCode,
+          deviceId,
+          deviceLabel,
+        }),
+      });
+
+      const result = (await response.json()) as LiveMatchResponse | { error: string };
+      if (!response.ok || !("match" in result)) {
+        const nextError = "error" in result && result.error ? result.error : "";
+        if (nextError.startsWith("device_already_active:")) {
+          setMessage(formatLiveError(nextError));
+        }
+        return;
+      }
+
+      setLiveState(normalizeLiveState(result.match.state));
+      setRoomOwnerId(result.match.owner_id);
+      setLiveRoomCode(result.match.room_code);
+    } catch {
+      // Keep the last known state and retry on the next heartbeat.
+    } finally {
+      deviceClaimInFlightRef.current = false;
+    }
+  }, [deviceId, deviceLabel, liveRoomCode]);
+
+  useEffect(() => {
+    if (!liveRoomCode || !session || !deviceId) {
+      return;
+    }
+
+    void claimDeviceLock();
+    const interval = window.setInterval(() => {
+      void claimDeviceLock();
+    }, 15_000);
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [claimDeviceLock, deviceId, liveRoomCode, session]);
+
   async function pushRoomState(nextState: LiveMatchState, reason: string) {
     if (!liveRoomCode) {
       return;
@@ -509,6 +636,7 @@ export default function LivePage() {
       action: "update",
       roomCode: liveRoomCode,
       state: nextState,
+      deviceId,
     });
 
     if (result) {
@@ -529,6 +657,8 @@ export default function LivePage() {
       maxPlayers,
       displayName,
       bullOffEnabled,
+      deviceId,
+      deviceLabel,
     });
 
     if (match?.room_code) {
@@ -549,6 +679,8 @@ export default function LivePage() {
       action: "join",
       roomCode,
       displayName,
+      deviceId,
+      deviceLabel,
     });
 
     if (match?.room_code) {
@@ -608,6 +740,19 @@ export default function LivePage() {
     () => liveState?.players.findIndex((player) => player.profileId === session?.user.id) ?? -1,
     [liveState, session?.user.id],
   );
+  const activeDeviceLock = useMemo(() => {
+    if (!liveState || !session) {
+      return null;
+    }
+
+    return (
+      (liveState.cloudSync.deviceLocks ?? []).find(
+        (lock) => lock.profileId === session.user.id && isLiveDeviceLockActive(lock),
+      ) ?? null
+    );
+  }, [liveState, session]);
+  const hasDeviceControl = Boolean(deviceId && (!activeDeviceLock || activeDeviceLock.deviceId === deviceId));
+  const deviceLockLabel = activeDeviceLock?.deviceLabel ?? null;
 
   const isCurrentUsersTurn = Boolean(
     liveState &&
@@ -624,6 +769,7 @@ export default function LivePage() {
       liveState.legWinner !== null &&
       liveState.matchWinner === null &&
       currentUserSeat >= 0 &&
+      hasDeviceControl &&
       (liveState.legWinner === currentUserSeat || liveState.players[0]?.profileId === session.user.id),
   );
   const canControlRematch = Boolean(
@@ -631,6 +777,7 @@ export default function LivePage() {
       session &&
       liveState.matchWinner !== null &&
       currentUserSeat >= 0 &&
+      hasDeviceControl &&
       (liveState.matchWinner === currentUserSeat || liveState.players[0]?.profileId === session.user.id),
   );
   const isRoomHost = Boolean(session?.user.id && roomOwnerId && session.user.id === roomOwnerId);
@@ -667,6 +814,10 @@ export default function LivePage() {
     ? ""
     : currentUserSeat < 0
       ? "Du bist nicht als Spieler eingetragen."
+      : !hasDeviceControl
+        ? deviceLockLabel
+          ? `${deviceLockLabel} steuert diesen Account gerade.`
+          : "Dieses Geraet ist gerade nur zum Zuschauen verbunden."
       : isCurrentUsersTurn
         ? liveState.bullOff.enabled && !liveState.bullOff.completed
           ? "Du wirfst fuer das Bull-Off."
@@ -676,14 +827,20 @@ export default function LivePage() {
             ? `${currentPlayer.name} wirft gerade fuer das Bull-Off.`
             : `${currentPlayer.name} ist gerade am Zug.`
           : "Warte auf den naechsten Spieler.";
+  const boardDisabledReason = loading
+    ? "Synchronisiert..."
+    : !hasDeviceControl
+      ? "Dieses Geraet schaut zu"
+      : "Warte auf deinen Zug";
+  const canPlayFromThisDevice = isCurrentUsersTurn && hasDeviceControl;
 
   async function handleBoardSegment(segment: LiveBoardSegment) {
     if (!liveState) {
       return;
     }
 
-    if (!isCurrentUsersTurn) {
-      setMessage("Du kannst nur werfen, wenn du selbst dran bist.");
+    if (!canPlayFromThisDevice) {
+      setMessage(hasDeviceControl ? "Du kannst nur werfen, wenn du selbst dran bist." : "Dieses Geraet darf den Account gerade nicht steuern.");
       return;
     }
 
@@ -706,8 +863,8 @@ export default function LivePage() {
       return;
     }
 
-    if (!isCurrentUsersTurn) {
-      setMessage("Du kannst nur werfen, wenn du selbst dran bist.");
+    if (!canPlayFromThisDevice) {
+      setMessage(hasDeviceControl ? "Du kannst nur werfen, wenn du selbst dran bist." : "Dieses Geraet darf den Account gerade nicht steuern.");
       return;
     }
 
@@ -734,6 +891,11 @@ export default function LivePage() {
       return;
     }
 
+    if (!canPlayFromThisDevice) {
+      setMessage(hasDeviceControl ? "Du kannst diesen Besuch gerade nicht bearbeiten." : "Dieses Geraet darf den Account gerade nicht steuern.");
+      return;
+    }
+
     const nextState = removePendingDart(liveState);
     await pushRoomState(nextState, "undo_dart");
   }
@@ -747,6 +909,11 @@ export default function LivePage() {
       return;
     }
 
+    if (!canPlayFromThisDevice) {
+      setMessage(hasDeviceControl ? "Du kannst diesen Besuch gerade nicht bearbeiten." : "Dieses Geraet darf den Account gerade nicht steuern.");
+      return;
+    }
+
     const nextState = clearPendingVisit(liveState);
     await pushRoomState(nextState, "clear_visit");
   }
@@ -757,6 +924,11 @@ export default function LivePage() {
     }
 
     if (loading) {
+      return;
+    }
+
+    if (!canPlayFromThisDevice) {
+      setMessage(hasDeviceControl ? "Du kannst diesen Besuch gerade nicht abschliessen." : "Dieses Geraet darf den Account gerade nicht steuern.");
       return;
     }
 
@@ -774,6 +946,11 @@ export default function LivePage() {
       return;
     }
 
+    if (!canControlLegTransition) {
+      setMessage(hasDeviceControl ? "Dieses Geraet kann das naechste Leg gerade nicht starten." : "Dieses Geraet darf den Account gerade nicht steuern.");
+      return;
+    }
+
     const nextState = startNextLiveLeg(liveState);
     await pushRoomState(nextState, "next_leg");
   }
@@ -784,6 +961,11 @@ export default function LivePage() {
     }
 
     if (loading) {
+      return;
+    }
+
+    if (!canControlRematch) {
+      setMessage(hasDeviceControl ? "Dieses Geraet kann das Rematch gerade nicht starten." : "Dieses Geraet darf den Account gerade nicht steuern.");
       return;
     }
 
@@ -983,7 +1165,8 @@ export default function LivePage() {
                     currentVisitTotal={currentVisitTotal}
                     compactVisitText={compactVisitText}
                     calloutText={liveState.lastCallout}
-                    isCurrentUsersTurn={isCurrentUsersTurn}
+                    canPlayFromThisDevice={canPlayFromThisDevice}
+                    boardDisabledReason={boardDisabledReason}
                     loading={loading}
                     boardMarkers={boardMarkers}
                     pendingLabels={pendingLabels}
@@ -1033,6 +1216,8 @@ export default function LivePage() {
                     connectedNames={connectedNames}
                     isCurrentUsersTurn={isCurrentUsersTurn}
                     turnStatus={turnStatus}
+                    hasDeviceControl={hasDeviceControl}
+                    deviceLockLabel={deviceLockLabel}
                     cloudSyncPending={cloudSyncPending}
                     audioMode={audioMode}
                     onAudioModeChange={setAudioMode}

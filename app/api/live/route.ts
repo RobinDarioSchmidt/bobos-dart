@@ -4,7 +4,9 @@ import {
   createEmptyLiveState,
   generateRoomCode,
   getPreferredDisplayName,
+  isLiveDeviceLockActive,
   normalizeLiveState,
+  type LiveDeviceLock,
   type LiveFinishMode,
   type LiveCloudSyncState,
   type LiveMatchState,
@@ -49,6 +51,7 @@ function mergeCloudSync(currentSync: LiveCloudSyncState, nextSync?: Partial<Live
     sessionKey: nextSync?.sessionKey ?? currentSync.sessionKey,
     persistedOwnerIds: Array.from(new Set([...(currentSync.persistedOwnerIds ?? []), ...(nextSync?.persistedOwnerIds ?? [])])),
     persistedAt: nextSync?.persistedAt ?? currentSync.persistedAt ?? null,
+    deviceLocks: currentSync.deviceLocks ?? [],
   } satisfies LiveCloudSyncState;
 }
 
@@ -104,6 +107,38 @@ function parseLiveThrowLabel(label: string) {
 
 function getPersistedOwnerIds(state: LiveMatchState) {
   return new Set(state.cloudSync.persistedOwnerIds ?? []);
+}
+
+function getActiveDeviceLocks(state: LiveMatchState) {
+  return (state.cloudSync.deviceLocks ?? []).filter((lock) => isLiveDeviceLockActive(lock));
+}
+
+function getActiveDeviceLockForProfile(state: LiveMatchState, profileId: string) {
+  return getActiveDeviceLocks(state).find((lock) => lock.profileId === profileId) ?? null;
+}
+
+function withUpdatedDeviceLock(state: LiveMatchState, deviceLock: LiveDeviceLock) {
+  const deviceLocks = (state.cloudSync.deviceLocks ?? []).filter(
+    (lock) => isLiveDeviceLockActive(lock) && lock.profileId !== deviceLock.profileId,
+  );
+
+  return normalizeLiveState({
+    ...state,
+    cloudSync: {
+      ...state.cloudSync,
+      deviceLocks: [...deviceLocks, deviceLock],
+    },
+  });
+}
+
+function withoutDeviceLock(state: LiveMatchState, profileId: string) {
+  return normalizeLiveState({
+    ...state,
+    cloudSync: {
+      ...state.cloudSync,
+      deviceLocks: (state.cloudSync.deviceLocks ?? []).filter((lock) => lock.profileId !== profileId && isLiveDeviceLockActive(lock)),
+    },
+  });
 }
 
 async function cleanupInactiveLiveRooms(adminClient: ReturnType<typeof getSupabaseAdminClients>["adminClient"]) {
@@ -392,16 +427,27 @@ export async function POST(request: Request) {
         maxPlayers: number;
         displayName: string;
         bullOffEnabled: boolean;
+        deviceId?: string;
+        deviceLabel?: string;
       }
     | {
         action: "join";
         roomCode: string;
         displayName: string;
+        deviceId?: string;
+        deviceLabel?: string;
       }
     | {
         action: "update";
         roomCode: string;
         state: LiveMatchState;
+        deviceId?: string;
+      }
+    | {
+        action: "claim_device";
+        roomCode: string;
+        deviceId: string;
+        deviceLabel: string;
       }
     | {
         action: "leave";
@@ -427,7 +473,7 @@ export async function POST(request: Request) {
   if (body.action === "create") {
     const displayName = getPreferredDisplayName(authResult.user.email, body.displayName, adminEmail);
     const roomCode = generateRoomCode();
-    const state = createEmptyLiveState({
+    let state: LiveMatchState = createEmptyLiveState({
       mode: body.mode,
       finishMode: body.finishMode,
       legsToWin: body.legsToWin,
@@ -437,6 +483,14 @@ export async function POST(request: Request) {
       ownerId: authResult.user.id,
       bullOffEnabled: body.bullOffEnabled,
     });
+    if (body.deviceId) {
+      state = withUpdatedDeviceLock(state, {
+        profileId: authResult.user.id,
+        deviceId: body.deviceId,
+        deviceLabel: body.deviceLabel ?? "Dieses Geraet",
+        lastSeenAt: new Date().toISOString(),
+      });
+    }
 
     const { data, error } = await adminClient
       .from("live_matches")
@@ -468,9 +522,42 @@ export async function POST(request: Request) {
     }
 
     const match = data as LiveMatchRow;
-    const state = normalizeLiveState(match.state);
+    let state: LiveMatchState = normalizeLiveState(match.state);
     const alreadyJoinedIndex = state.players.findIndex((player) => player.profileId === authResult.user.id);
     if (alreadyJoinedIndex >= 0) {
+      if (body.deviceId) {
+        const activeDeviceLock = getActiveDeviceLockForProfile(state, authResult.user.id);
+        if (activeDeviceLock && activeDeviceLock.deviceId !== body.deviceId) {
+          return NextResponse.json(
+            { error: `device_already_active:${activeDeviceLock.deviceLabel}` },
+            { status: 409 },
+          );
+        }
+
+        state = withUpdatedDeviceLock(state, {
+          profileId: authResult.user.id,
+          deviceId: body.deviceId,
+          deviceLabel: body.deviceLabel ?? "Dieses Geraet",
+          lastSeenAt: new Date().toISOString(),
+        });
+
+        const { data: refreshed, error: refreshError } = await adminClient
+          .from("live_matches")
+          .update({
+            state,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", match.id)
+          .select("id, owner_id, room_code, state")
+          .single();
+
+        if (refreshError || !refreshed) {
+          return NextResponse.json({ error: refreshError?.message ?? "join_failed" }, { status: 400 });
+        }
+
+        return NextResponse.json({ match: refreshed });
+      }
+
       return NextResponse.json({ match });
     }
 
@@ -487,6 +574,14 @@ export async function POST(request: Request) {
       profileId: authResult.user.id,
     };
     state.statusText = `${displayName} ist im Online-Match angekommen.`;
+    if (body.deviceId) {
+      state = withUpdatedDeviceLock(state, {
+        profileId: authResult.user.id,
+        deviceId: body.deviceId,
+        deviceLabel: body.deviceLabel ?? "Dieses Geraet",
+        lastSeenAt: new Date().toISOString(),
+      });
+    }
 
     const { data: updated, error: updateError } = await adminClient
       .from("live_matches")
@@ -500,6 +595,58 @@ export async function POST(request: Request) {
 
     if (updateError || !updated) {
       return NextResponse.json({ error: updateError?.message ?? "join_failed" }, { status: 400 });
+    }
+
+    return NextResponse.json({ match: updated });
+  }
+
+  if (body.action === "claim_device") {
+    const { data, error } = await adminClient
+      .from("live_matches")
+      .select("id, owner_id, room_code, state")
+      .eq("room_code", body.roomCode.toUpperCase())
+      .maybeSingle();
+
+    if (error || !data) {
+      return NextResponse.json({ error: error?.message ?? "match_not_found" }, { status: 404 });
+    }
+
+    const match = data as LiveMatchRow;
+    const currentState = normalizeLiveState(match.state);
+    const isParticipant = currentState.players.some(
+      (player) => player.joined && player.profileId === authResult.user.id,
+    );
+    if (!isParticipant) {
+      return NextResponse.json({ error: "not_a_participant" }, { status: 403 });
+    }
+
+    const activeDeviceLock = getActiveDeviceLockForProfile(currentState, authResult.user.id);
+    if (activeDeviceLock && activeDeviceLock.deviceId !== body.deviceId) {
+      return NextResponse.json(
+        { error: `device_already_active:${activeDeviceLock.deviceLabel}` },
+        { status: 409 },
+      );
+    }
+
+    const stateToStore = withUpdatedDeviceLock(currentState, {
+      profileId: authResult.user.id,
+      deviceId: body.deviceId,
+      deviceLabel: body.deviceLabel,
+      lastSeenAt: new Date().toISOString(),
+    });
+
+    const { data: updated, error: updateError } = await adminClient
+      .from("live_matches")
+      .update({
+        state: stateToStore,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", match.id)
+      .select("id, owner_id, room_code, state")
+      .single();
+
+    if (updateError || !updated) {
+      return NextResponse.json({ error: updateError?.message ?? "claim_device_failed" }, { status: 400 });
     }
 
     return NextResponse.json({ match: updated });
@@ -525,7 +672,22 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "not_a_participant" }, { status: 403 });
     }
 
-    let stateToStore = currentState;
+    const activeDeviceLock = getActiveDeviceLockForProfile(currentState, authResult.user.id);
+    if (activeDeviceLock && activeDeviceLock.deviceId !== body.deviceId) {
+      return NextResponse.json(
+        { error: `device_already_active:${activeDeviceLock.deviceLabel}` },
+        { status: 409 },
+      );
+    }
+
+    let stateToStore = body.deviceId
+      ? withUpdatedDeviceLock(currentState, {
+          profileId: authResult.user.id,
+          deviceId: body.deviceId,
+          deviceLabel: activeDeviceLock?.deviceLabel ?? "Dieses Geraet",
+          lastSeenAt: new Date().toISOString(),
+        })
+      : currentState;
     try {
       stateToStore = await persistCompletedLiveMatch(adminClient, stateToStore);
     } catch {
@@ -575,10 +737,11 @@ export async function POST(request: Request) {
     }
 
     const match = data as LiveMatchRow;
-    const currentState = normalizeLiveState(match.state);
+    let currentState = normalizeLiveState(match.state);
     const participantIndex = currentState.players.findIndex(
       (player) => player.joined && player.profileId === authResult.user.id,
     );
+    currentState = withoutDeviceLock(currentState, authResult.user.id);
 
     if (body.action === "close") {
       if (match.owner_id !== authResult.user.id) {

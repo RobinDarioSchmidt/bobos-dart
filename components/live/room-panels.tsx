@@ -303,6 +303,8 @@ export function LiveRoomStatusPanel({
   connectedNames,
   isCurrentUsersTurn,
   turnStatus,
+  hasDeviceControl,
+  deviceLockLabel,
   cloudSyncPending,
   audioMode,
   onAudioModeChange,
@@ -322,6 +324,8 @@ export function LiveRoomStatusPanel({
   connectedNames: string[];
   isCurrentUsersTurn: boolean;
   turnStatus: string;
+  hasDeviceControl: boolean;
+  deviceLockLabel: string | null;
   cloudSyncPending: boolean;
   audioMode: LiveAudioMode;
   onAudioModeChange: (mode: LiveAudioMode) => void;
@@ -373,11 +377,28 @@ export function LiveRoomStatusPanel({
         </div>
         <div
           className={`rounded-2xl border p-3 ${
-            isCurrentUsersTurn ? "border-emerald-300/30 bg-emerald-400/10" : "border-white/10 bg-white/5"
+            isCurrentUsersTurn && hasDeviceControl
+              ? "border-emerald-300/30 bg-emerald-400/10"
+              : !hasDeviceControl
+                ? "border-amber-300/30 bg-amber-300/10"
+                : "border-white/10 bg-white/5"
           }`}
         >
           <p className="text-[10px] uppercase tracking-[0.18em] text-stone-400">Dein Status</p>
-          <p className={`mt-2 text-sm font-semibold ${isCurrentUsersTurn ? "text-emerald-100" : "text-white"}`}>{turnStatus}</p>
+          <p
+            className={`mt-2 text-sm font-semibold ${
+              isCurrentUsersTurn && hasDeviceControl
+                ? "text-emerald-100"
+                : !hasDeviceControl
+                  ? "text-amber-100"
+                  : "text-white"
+            }`}
+          >
+            {turnStatus}
+          </p>
+          {!hasDeviceControl && deviceLockLabel ? (
+            <p className="mt-2 text-xs text-amber-100">Aktives Steuergeraet: {deviceLockLabel}</p>
+          ) : null}
         </div>
       </div>
 
