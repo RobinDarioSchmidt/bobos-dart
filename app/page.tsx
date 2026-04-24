@@ -271,7 +271,7 @@ const emptyStats: StoredStats = {
   bestTrainingScore: 0,
 };
 
-function createPlayers(mode: GameMode, names = ["Bobo", "Guest"], entryMode: EntryMode = "single"): Player[] {
+function createPlayers(mode: GameMode, names = ["Bobo"], entryMode: EntryMode = "single"): Player[] {
   return names.map((name) => ({
     name,
     score: mode,
@@ -907,7 +907,7 @@ export default function Page() {
   const [localMatchStarted, setLocalMatchStarted] = useState(false);
   const [legsToWin, setLegsToWin] = useState(3);
   const [setsToWin, setSetsToWin] = useState(1);
-  const [players, setPlayers] = useState<Player[]>(() => createPlayers(501, ["Bobo", "Guest"], "single"));
+  const [players, setPlayers] = useState<Player[]>(() => createPlayers(501, ["Bobo"], "single"));
   const [localBullOff, setLocalBullOff] = useState<{
     enabled: boolean;
     completed: boolean;
@@ -971,9 +971,9 @@ export default function Page() {
         ? parsed.entryMode
         : "single";
     const names =
-      parsed.playerNames && parsed.playerNames.length >= 2 && parsed.playerNames.length <= 4
+      parsed.playerNames && parsed.playerNames.length >= 1 && parsed.playerNames.length <= 4
         ? parsed.playerNames
-        : ["Bobo", "Guest"];
+        : ["Bobo"];
 
     setMode(parsedMode);
     setEntryMode(parsedEntryMode);
@@ -1876,8 +1876,6 @@ function resetLegBoards(nextPlayers: Player[]) {
     setLegStartingPlayer(0);
     setCurrentDarts([]);
     setCurrentLabels([]);
-    setManualDart("");
-    setManualVisit("");
     setLegWinner(null);
     setMatchWinner(null);
     setLocalMatchStarted(true);
@@ -1914,8 +1912,6 @@ function resetLegBoards(nextPlayers: Player[]) {
     setLegStartingPlayer(0);
     setCurrentDarts([]);
     setCurrentLabels([]);
-    setManualDart("");
-    setManualVisit("");
     setLegWinner(null);
     setMatchWinner(null);
     setLocalMatchStarted(false);
@@ -1935,8 +1931,6 @@ function resetLegBoards(nextPlayers: Player[]) {
     setLegStartingPlayer(0);
     setCurrentDarts([]);
     setCurrentLabels([]);
-    setManualDart("");
-    setManualVisit("");
     setLegWinner(null);
     setMatchWinner(null);
     setLocalMatchStarted(false);
@@ -2087,8 +2081,6 @@ function resetLegBoards(nextPlayers: Player[]) {
     setPlayers(nextPlayers);
     setCurrentDarts([]);
     setCurrentLabels([]);
-    setManualDart("");
-    setManualVisit("");
 
     if (bust) {
       const nextPlayerIndex = (activePlayer + 1) % nextPlayers.length;
@@ -2548,7 +2540,7 @@ function resetLegBoards(nextPlayers: Player[]) {
               </button>
             </div>
 
-        <section className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur">
+        {false ? <section className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur">
           <div className="flex flex-wrap items-center gap-3">
             <button
               onClick={() => setAppMode("match")}
@@ -2580,7 +2572,7 @@ function resetLegBoards(nextPlayers: Player[]) {
               {appMode === "match" ? statusText : trainingSession.message}
             </div>
           </div>
-        </section>
+        </section> : null}
 
         <section className="hidden overflow-hidden rounded-[1.75rem] border border-white/10 bg-white/5 backdrop-blur">
           <div className="grid gap-4 p-4 lg:grid-cols-[1.05fr_0.95fr] lg:p-5">
