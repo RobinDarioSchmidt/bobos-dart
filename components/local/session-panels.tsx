@@ -388,7 +388,9 @@ export function TrainingSetupPanel({
   dartsThrown,
   shanghaiProgress,
   helperText,
+  started,
   onReset,
+  onStart,
   onModeChange,
 }: {
   currentMode: TrainingMode;
@@ -397,7 +399,9 @@ export function TrainingSetupPanel({
   dartsThrown: number;
   shanghaiProgress: string | null;
   helperText: string;
+  started: boolean;
   onReset: () => void;
+  onStart: () => void;
   onModeChange: (value: TrainingMode) => void;
 }) {
   const options: Array<{ value: TrainingMode; label: string; activeClass: string }> = [
@@ -414,9 +418,11 @@ export function TrainingSetupPanel({
           <h2 className="text-xl font-semibold text-white">Training Setup</h2>
           <p className="mt-1 text-sm text-stone-400">{currentModeLabel}</p>
         </div>
-        <button onClick={onReset} className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-black transition hover:bg-stone-200">
-          Reset
-        </button>
+        {started ? (
+          <button onClick={onReset} className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-black transition hover:bg-stone-200">
+            Reset
+          </button>
+        ) : null}
       </div>
 
       <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
@@ -443,6 +449,10 @@ export function TrainingSetupPanel({
       </div>
 
       <div className="mt-3 rounded-[1.5rem] border border-white/10 bg-black/20 p-4 text-sm text-stone-300">{helperText}</div>
+
+      <button onClick={onStart} className="mt-3 w-full rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-black shadow-lg shadow-white/10">
+        Training starten
+      </button>
     </section>
   );
 }

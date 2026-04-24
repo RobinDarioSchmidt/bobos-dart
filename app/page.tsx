@@ -935,6 +935,7 @@ export default function Page() {
   const [cloudMatchHistory, setCloudMatchHistory] = useState<MatchHistoryEntry[]>([]);
   const [localHistoryOpen, setLocalHistoryOpen] = useState(false);
   const [trainingFeedOpen, setTrainingFeedOpen] = useState(false);
+  const [trainingStarted, setTrainingStarted] = useState(false);
   const [undoStack, setUndoStack] = useState<UndoSnapshot[]>([]);
   const [session, setSession] = useState<Session | null>(null);
   const [profileName, setProfileName] = useState("");
@@ -2212,10 +2213,12 @@ function resetLegBoards(nextPlayers: Player[]) {
 
   function resetTraining(modeOverride = trainingSession.mode) {
     setTrainingSession(createTrainingSession(modeOverride));
+    setTrainingStarted(false);
   }
 
   function switchTrainingMode(nextMode: TrainingMode) {
     setTrainingSession(createTrainingSession(nextMode));
+    setTrainingStarted(false);
   }
 
   async function installApp() {
@@ -2507,6 +2510,7 @@ function resetLegBoards(nextPlayers: Player[]) {
             }}
             onStartTraining={() => {
               setAppMode("training");
+              setTrainingStarted(false);
               setSelectedFlow("training");
             }}
             onRefreshCloud={() => void refreshCloudData(session, { includeHistory: true })}
@@ -3510,30 +3514,34 @@ function resetLegBoards(nextPlayers: Player[]) {
                         ? "Zehn Darts auf Bull und Outer Bull, jeder Treffer zaehlt sofort."
                         : "Treffe die Ziele der Reihe nach von 1 bis Bull."
                 }
+                started={trainingStarted}
                 onReset={() => resetTraining()}
+                onStart={() => setTrainingStarted(true)}
                 onModeChange={switchTrainingMode}
               />
 
-              <CollapsibleFeedPanel
-                title="Training Feed"
-                subtitle="Die letzten Trainingsdarts deiner aktuellen Session."
-                open={trainingFeedOpen}
-                onToggle={() => setTrainingFeedOpen((prev) => !prev)}
-              >
-                <div className="space-y-3">
-                  {trainingSession.history.length > 0 ? (
-                    trainingSession.history.map((entry, index) => (
-                      <div key={`${entry}-${index}`} className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-stone-200">
-                        {entry}
+              {trainingStarted ? (
+                <CollapsibleFeedPanel
+                  title="Training Feed"
+                  subtitle="Die letzten Trainingsdarts deiner aktuellen Session."
+                  open={trainingFeedOpen}
+                  onToggle={() => setTrainingFeedOpen((prev) => !prev)}
+                >
+                  <div className="space-y-3">
+                    {trainingSession.history.length > 0 ? (
+                      trainingSession.history.map((entry, index) => (
+                        <div key={`${entry}-${index}`} className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-stone-200">
+                          {entry}
+                        </div>
+                      ))
+                    ) : (
+                      <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-4 text-sm text-stone-400">
+                        Noch keine Trainingswuerfe in dieser Session.
                       </div>
-                    ))
-                  ) : (
-                    <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-4 text-sm text-stone-400">
-                      Noch keine Trainingswuerfe in dieser Session.
-                    </div>
-                  )}
-                </div>
-              </CollapsibleFeedPanel>
+                    )}
+                  </div>
+                </CollapsibleFeedPanel>
+              ) : null}
 
               <section className="hidden rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur">
                 <div className="flex items-center justify-between gap-3">
@@ -3646,6 +3654,7 @@ function resetLegBoards(nextPlayers: Player[]) {
             </div>
 
             <div className="order-1 space-y-4 lg:order-1">
+              {trainingStarted ? (
               <section className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur sm:p-4">
                 <div className="flex items-center justify-between gap-3">
                   <div>
@@ -3666,29 +3675,32 @@ function resetLegBoards(nextPlayers: Player[]) {
                   />
                 </div>
               </section>
+              ) : null}
 
-              <SimpleStatsPanel
-                title="Live-Stats"
-                subtitle={`${getTrainingModeLabel(trainingSession.mode)} im Fokus`}
-                summary={[
-                  { label: "Sessions", value: stats.trainingSessions },
-                  { label: "Best Score", value: stats.bestTrainingScore },
-                  { label: "Treffer", value: trainingSession.hits },
-                  { label: "Darts", value: trainingSession.dartsThrown },
-                ]}
-                rows={[
-                  {
-                    name: "Training Score",
-                    meta: String(trainingSession.score),
-                    values: [
-                      { label: "Ziel", value: trainingTarget },
-                      { label: "Modus", value: getTrainingModeLabel(trainingSession.mode) },
-                      { label: "Hits", value: trainingSession.hits },
-                      { label: "Darts", value: trainingSession.dartsThrown },
-                    ],
-                  },
-                ]}
-              />
+              {trainingStarted ? (
+                <SimpleStatsPanel
+                  title="Live-Stats"
+                  subtitle={`${getTrainingModeLabel(trainingSession.mode)} im Fokus`}
+                  summary={[
+                    { label: "Sessions", value: stats.trainingSessions },
+                    { label: "Best Score", value: stats.bestTrainingScore },
+                    { label: "Treffer", value: trainingSession.hits },
+                    { label: "Darts", value: trainingSession.dartsThrown },
+                  ]}
+                  rows={[
+                    {
+                      name: "Training Score",
+                      meta: String(trainingSession.score),
+                      values: [
+                        { label: "Ziel", value: trainingTarget },
+                        { label: "Modus", value: getTrainingModeLabel(trainingSession.mode) },
+                        { label: "Hits", value: trainingSession.hits },
+                        { label: "Darts", value: trainingSession.dartsThrown },
+                      ],
+                    },
+                  ]}
+                />
+              ) : null}
 
               <section className="hidden rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur">
                 <div className="flex items-center justify-between gap-3">
