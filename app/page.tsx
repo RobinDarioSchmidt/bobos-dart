@@ -4,16 +4,18 @@ import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
+import { LiveBoardPanel, type LiveBoardSegment } from "@/components/live/board-panel";
+import { LiveHistoryPanel, LiveStatsPanel } from "@/components/live/match-panels";
 import {
   CollapsibleFeedPanel,
   LocalSetupPanel,
-  LocalVisitPanel,
   SimpleStatsPanel,
   TrainingSetupPanel,
 } from "@/components/local/session-panels";
 import { SignedInOverviewSection, SignedOutLandingSection } from "@/components/home/entry-sections";
 import { MobileAppNav } from "@/components/mobile-app-nav";
 import { getCheckoutSuggestions } from "@/lib/checkout-hints";
+import type { LiveBoardMarker, LiveDart, LiveMatchState, LiveVisit } from "@/lib/live-match";
 import { supabase, supabaseEnabled } from "@/lib/supabase";
 
 type AppMode = "match" | "training";
@@ -1124,6 +1126,7 @@ export default function Page() {
           average: Number(metrics.average),
           bestVisit: metrics.highestVisit,
           visits: player.visits.length,
+          dartsThrown: player.visits.reduce((sum, visit) => sum + visit.darts.length, 0),
           busts: player.visits.filter((visit) => visit.bust).length,
           checkouts: player.visits.filter((visit) => visit.checkout).length,
           scoredPoints: metrics.pointsScored,
@@ -1133,6 +1136,118 @@ export default function Page() {
   );
   const currentVisitTotal = currentDarts.reduce((sum, dart) => sum + dart, 0);
   const checkoutHints = currentPlayer.entered ? getCheckoutHints(currentPlayer.score, doubleOut) : [];
+  const localBoardMarkers = useMemo<LiveBoardMarker[]>(() => [], []);
+  const localPendingDarts = useMemo<LiveDart[]>(
+    () =>
+      currentLabels.map((label, index) => {
+        const parsed = parseThrowLabel(label, currentDarts[index] ?? 0);
+        return {
+          label: parsed.label,
+          score: parsed.score,
+          number: parsed.baseValue,
+          multiplier: (parsed.ring === "miss" ? 0 : parsed.multiplier) as 0 | 1 | 2 | 3,
+          ring:
+            parsed.ring === "double"
+              ? "double"
+              : parsed.ring === "triple"
+                ? "triple"
+                : parsed.ring === "outer-bull"
+                  ? "outer-bull"
+                  : parsed.ring === "bull"
+                    ? "bull"
+                    : parsed.ring === "miss"
+                      ? "miss"
+                      : "single-outer",
+          marker: null,
+        };
+      }),
+    [currentDarts, currentLabels],
+  );
+  const localLiveHistory = useMemo<LiveVisit[]>(
+    () =>
+      players.flatMap((player, playerIndex) =>
+        player.visits.map((visit, visitIndex) => ({
+          playerIndex,
+          playerName: player.name,
+          total: visit.darts.reduce((sum, dart) => sum + dart, 0),
+          scoreBefore: visit.scoreBefore,
+          scoreAfter: visit.bust ? visit.scoreBefore : visit.scoreAfter,
+          bust: visit.bust,
+          checkout: visit.checkout,
+          result: visit.checkout ? "checkout" : visit.bust ? "bust" : "ok",
+          darts: visit.labels,
+          note: visit.checkout ? "Checkout" : visit.bust ? "Bust" : "Visit",
+          createdAt: new Date(Date.UTC(2024, 0, 1, 0, playerIndex, visitIndex)).toISOString(),
+        })),
+      ),
+    [players],
+  );
+  const localLiveState = useMemo<LiveMatchState>(
+    () => ({
+      mode,
+      entryMode,
+      finishMode: doubleOut ? "double" : "single",
+      legsToWin,
+      setsToWin,
+      maxPlayers: players.length,
+      activePlayer,
+      legStartingPlayer,
+      legWinner,
+      matchWinner,
+      statusText,
+      bullOffEnabled: false,
+      bullOff: {
+        enabled: false,
+        completed: true,
+        currentPlayerIndex: null,
+        winnerIndex: null,
+        attempts: [],
+      },
+      players: players.map((player, index) => ({
+        name: player.name,
+        score: player.score,
+        legs: player.legs,
+        sets: player.sets,
+        joined: true,
+        profileId: session?.user.id && index === 0 ? session.user.id : null,
+        entered: player.entered,
+      })),
+      history: localLiveHistory,
+      pendingVisit:
+        localPendingDarts.length > 0
+          ? {
+              playerIndex: activePlayer,
+              playerName: currentPlayer.name,
+              darts: localPendingDarts,
+              updatedAt: new Date().toISOString(),
+            }
+          : null,
+      lastCallout: null,
+      cloudSync: {
+        sessionKey: "local-session",
+        persistedOwnerIds: [],
+        persistedAt: null,
+        deviceLocks: [],
+      },
+    }),
+    [
+      activePlayer,
+      currentPlayer.name,
+      doubleOut,
+      entryMode,
+      legStartingPlayer,
+      legWinner,
+      legsToWin,
+      localLiveHistory,
+      localPendingDarts,
+      matchWinner,
+      mode,
+      players,
+      session,
+      setsToWin,
+      statusText,
+    ],
+  );
 
   function saveSnapshot() {
     setUndoStack((prev) => [
@@ -2329,7 +2444,44 @@ function resetLegBoards(nextPlayers: Player[]) {
               </button>
             </div>
 
-        <section className="overflow-hidden rounded-[1.75rem] border border-white/10 bg-white/5 backdrop-blur">
+        <section className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-3 py-1 text-xs uppercase tracking-[0.28em] text-emerald-200">
+              {selectedFlow === "local" ? "Lokales Spiel" : "Training"}
+            </div>
+            <button
+              onClick={() => setAppMode("match")}
+              className={`rounded-2xl px-4 py-2 text-sm font-semibold transition ${
+                appMode === "match"
+                  ? "bg-white text-black"
+                  : "border border-white/10 bg-black/20 text-white hover:bg-white/10"
+              }`}
+            >
+              Match
+            </button>
+            <button
+              onClick={() => setAppMode("training")}
+              className={`rounded-2xl px-4 py-2 text-sm font-semibold transition ${
+                appMode === "training"
+                  ? "bg-amber-300 text-black"
+                  : "border border-white/10 bg-black/20 text-white hover:bg-white/10"
+              }`}
+            >
+              Training
+            </button>
+            <Link
+              href="/live"
+              className="rounded-2xl border border-emerald-300/30 bg-emerald-400/10 px-4 py-2 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-400/20"
+            >
+              Live-Match
+            </Link>
+            <div className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-sm text-stone-300">
+              {appMode === "match" ? statusText : trainingSession.message}
+            </div>
+          </div>
+        </section>
+
+        <section className="hidden overflow-hidden rounded-[1.75rem] border border-white/10 bg-white/5 backdrop-blur">
           <div className="grid gap-4 p-4 lg:grid-cols-[1.05fr_0.95fr] lg:p-5">
             <div className="space-y-5">
               <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-3 py-1 text-xs uppercase tracking-[0.28em] text-emerald-200">
@@ -2644,85 +2796,12 @@ function resetLegBoards(nextPlayers: Player[]) {
                 onSetsToWinChange={setSetsToWin}
                 onResetMatch={() => startFreshMatch(mode)}
               />
-              <LocalVisitPanel
-                heading={
-                  entryMode !== "single" && !currentPlayer.entered
-                    ? `${currentPlayer.name} sucht ${getEntryModeLabel(entryMode)}`
-                    : `${currentPlayer.name} ist dran`
-                }
-                subtitle={
-                  entryMode !== "single" && !currentPlayer.entered
-                    ? `${currentPlayer.name} sucht gerade ${getEntryModeLabel(entryMode)}.`
-                    : "Baue den aktuellen Besuch auf oder buche ihn direkt als Gesamtwert."
-                }
-                statusChip={legWinner !== null ? "Leg abgeschlossen" : null}
-                labels={currentLabels}
-                visitTotal={currentVisitTotal}
-                quickValues={QUICK_DARTS}
-                manualValue={manualDart}
-                onManualValueChange={setManualDart}
-                onAddManualValue={commitManualDart}
-                onQuickValue={addDartValue}
-                onFinishVisit={() => recordVisit(currentDarts, currentLabels)}
-                onUndo={undo}
-                onResetOrNext={matchWinner === null ? (legWinner !== null ? startNextLeg : () => startFreshMatch(mode)) : () => startFreshMatch(mode)}
-                resetLabel={matchWinner === null ? (legWinner !== null ? "Naechstes Leg" : "Neues Match") : "Rematch starten"}
-                finishDisabled={finishDisabled}
-                manualVisitValue={manualVisit}
-                onManualVisitValueChange={setManualVisit}
-                onManualVisit={submitManualVisit}
-                visitPresets={VISIT_PRESETS}
-                onVisitPreset={(preset) => recordVisit([preset], [`Visit ${preset}`])}
-              />
-              <CollapsibleFeedPanel
-                title="Live Historie"
-                subtitle="Besuche im laufenden Leg."
-                open={localHistoryOpen}
+              <LiveHistoryPanel
+                heading={`Live Historie${currentPlayer ? ` - ${currentPlayer.name} ist dran` : ""}`}
+                historyOpen={localHistoryOpen}
+                history={localLiveHistory}
                 onToggle={() => setLocalHistoryOpen((prev) => !prev)}
-              >
-                <div className="grid gap-4 xl:grid-cols-2">
-                  {players.map((player, playerIndex) => (
-                    <div key={`${player.name}-history-${playerIndex}`} className="rounded-2xl border border-white/10">
-                      <div className="border-b border-white/10 bg-black/20 px-4 py-3">
-                        <p className="font-semibold text-white">{player.name}</p>
-                      </div>
-                      <div className="max-h-[20rem] overflow-auto">
-                        <table className="min-w-full divide-y divide-white/10 text-left text-sm">
-                          <thead className="bg-black/10 text-stone-400">
-                            <tr>
-                              <th className="px-4 py-3 font-medium">#</th>
-                              <th className="px-4 py-3 font-medium">Wuerfe</th>
-                              <th className="px-4 py-3 font-medium">Vorher</th>
-                              <th className="px-4 py-3 font-medium">Nachher</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-white/5">
-                            {player.visits.length > 0 ? (
-                              player.visits
-                                .slice()
-                                .reverse()
-                                .map((visit, index) => (
-                                  <tr key={`${visit.scoreBefore}-${visit.scoreAfter}-${index}`} className="bg-white/[0.02]">
-                                    <td className="px-4 py-3 text-stone-300">{player.visits.length - index}</td>
-                                    <td className="px-4 py-3 text-white">{visit.labels.join(" / ")}</td>
-                                    <td className="px-4 py-3 text-stone-300">{visit.scoreBefore}</td>
-                                    <td className="px-4 py-3 text-stone-300">{visit.bust ? "Bust" : visit.scoreAfter}</td>
-                                  </tr>
-                                ))
-                            ) : (
-                              <tr>
-                                <td colSpan={4} className="px-4 py-6 text-center text-stone-400">
-                                  Noch keine Besuche fuer {player.name}.
-                                </td>
-                              </tr>
-                            )}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CollapsibleFeedPanel>
+              />
               <section className="hidden rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur sm:p-4">
                 <div className="mb-5 rounded-2xl border border-white/10 bg-white/5 p-4">
                   <p className="text-xs uppercase tracking-[0.22em] text-stone-400">Spiel-Setup</p>
@@ -3044,7 +3123,45 @@ function resetLegBoards(nextPlayers: Player[]) {
             </div>
 
             <div className="order-1 space-y-4 lg:order-1">
-              <section className="rounded-[2rem] border border-white/10 bg-white/5 p-5 backdrop-blur sm:p-6">
+              <LiveBoardPanel
+                liveState={localLiveState}
+                currentPlayerIndex={activePlayer}
+                currentUserId={session?.user.id ?? "local-player"}
+                boardHeading={
+                  entryMode !== "single" && !currentPlayer.entered
+                    ? `${currentPlayer.name} sucht ${getEntryModeLabel(entryMode)}`
+                    : `${currentPlayer.name} ist dran`
+                }
+                currentVisitTotal={currentVisitTotal}
+                compactVisitText={currentLabels.length > 0 ? currentLabels.join(", ") : "Noch kein Dart"}
+                calloutText={null}
+                canPlayFromThisDevice={true}
+                boardDisabledReason="Lokales Spiel"
+                loading={false}
+                boardMarkers={localBoardMarkers}
+                pendingLabels={currentLabels}
+                canControlLegTransition={legWinner !== null && matchWinner === null}
+                checkoutHints={checkoutHints}
+                currentPlayerName={currentPlayer.name}
+                onSegmentSelect={(segment: LiveBoardSegment) => addBoardSegment({
+                  label: segment.label,
+                  score: segment.score,
+                  number: segment.number,
+                  multiplier: segment.multiplier === 0 ? 1 : segment.multiplier,
+                })}
+                onMiss={() => addDartValue(0, "Miss")}
+                onRemoveLast={() => {
+                  setCurrentDarts((prev) => prev.slice(0, -1));
+                  setCurrentLabels((prev) => prev.slice(0, -1));
+                }}
+                onClearVisit={() => {
+                  setCurrentDarts([]);
+                  setCurrentLabels([]);
+                }}
+                onFinishVisit={() => recordVisit(currentDarts, currentLabels)}
+                onNextLeg={startNextLeg}
+              />
+              <section className="hidden rounded-[2rem] border border-white/10 bg-white/5 p-5 backdrop-blur sm:p-6">
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="text-xs uppercase tracking-[0.22em] text-stone-400">Board</p>
@@ -3087,29 +3204,10 @@ function resetLegBoards(nextPlayers: Player[]) {
                 </div>
               </section>
 
-              <SimpleStatsPanel
-                title="Live-Stats"
-                subtitle={
-                  currentPlayer.entered
-                    ? `${currentPlayer.name} im Fokus`
-                    : `${currentPlayer.name} sucht ${getEntryModeLabel(entryMode)}`
-                }
-                summary={[
-                  { label: "Average", value: currentPlayerMetrics.average },
-                  { label: "Best Visit", value: currentPlayerMetrics.highestVisit },
-                  { label: "Busts", value: currentPlayer.visits.filter((visit) => visit.bust).length },
-                  { label: "Checkouts", value: currentPlayer.visits.filter((visit) => visit.checkout).length },
-                ]}
-                rows={localPlayerStats.map((entry) => ({
-                  name: entry.name,
-                  meta: `${entry.average.toFixed(1)} Avg`,
-                  values: [
-                    { label: "Visits", value: entry.visits },
-                    { label: "Punkte", value: entry.scoredPoints },
-                    { label: "Best", value: entry.bestVisit },
-                    { label: "Busts", value: entry.busts },
-                  ],
-                }))}
+              <LiveStatsPanel
+                currentLiveStats={localPlayerStats.find((entry) => entry.name === currentPlayer.name) ?? null}
+                livePlayerStats={localPlayerStats}
+                currentPlayerName={currentPlayer.name}
               />
 
               <section className="hidden rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur">
