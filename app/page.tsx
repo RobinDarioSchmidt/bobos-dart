@@ -4,6 +4,13 @@ import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
+import {
+  CollapsibleFeedPanel,
+  LocalSetupPanel,
+  LocalVisitPanel,
+  SimpleStatsPanel,
+  TrainingSetupPanel,
+} from "@/components/local/session-panels";
 import { SignedInOverviewSection, SignedOutLandingSection } from "@/components/home/entry-sections";
 import { MobileAppNav } from "@/components/mobile-app-nav";
 import { getCheckoutSuggestions } from "@/lib/checkout-hints";
@@ -910,6 +917,7 @@ export default function Page() {
   const [localMatchHistory, setLocalMatchHistory] = useState<MatchHistoryEntry[]>([]);
   const [cloudMatchHistory, setCloudMatchHistory] = useState<MatchHistoryEntry[]>([]);
   const [localHistoryOpen, setLocalHistoryOpen] = useState(false);
+  const [trainingFeedOpen, setTrainingFeedOpen] = useState(false);
   const [undoStack, setUndoStack] = useState<UndoSnapshot[]>([]);
   const [session, setSession] = useState<Session | null>(null);
   const [profileName, setProfileName] = useState("");
@@ -2621,7 +2629,101 @@ function resetLegBoards(nextPlayers: Player[]) {
         {appMode === "match" ? (
           <section className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
             <div className="order-2 space-y-4 lg:order-2">
-              <section className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur sm:p-4">
+              <LocalSetupPanel
+                playerCount={players.length}
+                mode={mode}
+                entryMode={entryMode}
+                doubleOut={doubleOut}
+                legsToWin={legsToWin}
+                setsToWin={setsToWin}
+                onPlayerCountChange={setPlayerCount}
+                onModeChange={startFreshMatch}
+                onCycleEntryMode={cycleEntryMode}
+                onToggleDoubleOut={() => setDoubleOut((prev) => !prev)}
+                onLegsToWinChange={setLegsToWin}
+                onSetsToWinChange={setSetsToWin}
+                onResetMatch={() => startFreshMatch(mode)}
+              />
+              <LocalVisitPanel
+                heading={
+                  entryMode !== "single" && !currentPlayer.entered
+                    ? `${currentPlayer.name} sucht ${getEntryModeLabel(entryMode)}`
+                    : `${currentPlayer.name} ist dran`
+                }
+                subtitle={
+                  entryMode !== "single" && !currentPlayer.entered
+                    ? `${currentPlayer.name} sucht gerade ${getEntryModeLabel(entryMode)}.`
+                    : "Baue den aktuellen Besuch auf oder buche ihn direkt als Gesamtwert."
+                }
+                statusChip={legWinner !== null ? "Leg abgeschlossen" : null}
+                labels={currentLabels}
+                visitTotal={currentVisitTotal}
+                quickValues={QUICK_DARTS}
+                manualValue={manualDart}
+                onManualValueChange={setManualDart}
+                onAddManualValue={commitManualDart}
+                onQuickValue={addDartValue}
+                onFinishVisit={() => recordVisit(currentDarts, currentLabels)}
+                onUndo={undo}
+                onResetOrNext={matchWinner === null ? (legWinner !== null ? startNextLeg : () => startFreshMatch(mode)) : () => startFreshMatch(mode)}
+                resetLabel={matchWinner === null ? (legWinner !== null ? "Naechstes Leg" : "Neues Match") : "Rematch starten"}
+                finishDisabled={finishDisabled}
+                manualVisitValue={manualVisit}
+                onManualVisitValueChange={setManualVisit}
+                onManualVisit={submitManualVisit}
+                visitPresets={VISIT_PRESETS}
+                onVisitPreset={(preset) => recordVisit([preset], [`Visit ${preset}`])}
+              />
+              <CollapsibleFeedPanel
+                title="Live Historie"
+                subtitle="Besuche im laufenden Leg."
+                open={localHistoryOpen}
+                onToggle={() => setLocalHistoryOpen((prev) => !prev)}
+              >
+                <div className="grid gap-4 xl:grid-cols-2">
+                  {players.map((player, playerIndex) => (
+                    <div key={`${player.name}-history-${playerIndex}`} className="rounded-2xl border border-white/10">
+                      <div className="border-b border-white/10 bg-black/20 px-4 py-3">
+                        <p className="font-semibold text-white">{player.name}</p>
+                      </div>
+                      <div className="max-h-[20rem] overflow-auto">
+                        <table className="min-w-full divide-y divide-white/10 text-left text-sm">
+                          <thead className="bg-black/10 text-stone-400">
+                            <tr>
+                              <th className="px-4 py-3 font-medium">#</th>
+                              <th className="px-4 py-3 font-medium">Wuerfe</th>
+                              <th className="px-4 py-3 font-medium">Vorher</th>
+                              <th className="px-4 py-3 font-medium">Nachher</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-white/5">
+                            {player.visits.length > 0 ? (
+                              player.visits
+                                .slice()
+                                .reverse()
+                                .map((visit, index) => (
+                                  <tr key={`${visit.scoreBefore}-${visit.scoreAfter}-${index}`} className="bg-white/[0.02]">
+                                    <td className="px-4 py-3 text-stone-300">{player.visits.length - index}</td>
+                                    <td className="px-4 py-3 text-white">{visit.labels.join(" / ")}</td>
+                                    <td className="px-4 py-3 text-stone-300">{visit.scoreBefore}</td>
+                                    <td className="px-4 py-3 text-stone-300">{visit.bust ? "Bust" : visit.scoreAfter}</td>
+                                  </tr>
+                                ))
+                            ) : (
+                              <tr>
+                                <td colSpan={4} className="px-4 py-6 text-center text-stone-400">
+                                  Noch keine Besuche fuer {player.name}.
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CollapsibleFeedPanel>
+              <section className="hidden rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur sm:p-4">
                 <div className="mb-5 rounded-2xl border border-white/10 bg-white/5 p-4">
                   <p className="text-xs uppercase tracking-[0.22em] text-stone-400">Spiel-Setup</p>
                   <p className="mt-2 text-sm text-stone-400">Alles fuer dein lokales Match in einer Karte.</p>
@@ -2736,7 +2838,7 @@ function resetLegBoards(nextPlayers: Player[]) {
                 </div>
               </section>
 
-              <section className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur sm:p-4">
+              <section className="hidden rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur sm:p-4">
                 <div className="flex items-center justify-between gap-4">
                   <div>
                     <p className="text-xs uppercase tracking-[0.22em] text-stone-400">Aktueller Besuch</p>
@@ -2879,7 +2981,7 @@ function resetLegBoards(nextPlayers: Player[]) {
                 </details>
               </section>
 
-              <details className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur" open={localHistoryOpen}>
+              <details className="hidden rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur" open={localHistoryOpen}>
                 <summary
                   onClick={(event) => {
                     event.preventDefault();
@@ -2966,6 +3068,51 @@ function resetLegBoards(nextPlayers: Player[]) {
               </section>
 
               <section className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur">
+                <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                  {checkoutHints.length > 0 ? (
+                    <div className="flex flex-col gap-2">
+                      {checkoutHints.map((hint) => (
+                        <div key={hint} className="rounded-2xl bg-white/5 px-4 py-3 text-sm text-stone-200">
+                          {hint}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-stone-400">
+                      {currentPlayer.entered
+                        ? "Noch kein klassischer Checkout-Weg hinterlegt. Spiele auf einen komfortablen Finish-Bereich hin."
+                        : `Checkout-Hinweise erscheinen, sobald ${currentPlayer.name} mit ${getEntryModeLabel(entryMode)} im Spiel ist.`}
+                    </p>
+                  )}
+                </div>
+              </section>
+
+              <SimpleStatsPanel
+                title="Live-Stats"
+                subtitle={
+                  currentPlayer.entered
+                    ? `${currentPlayer.name} im Fokus`
+                    : `${currentPlayer.name} sucht ${getEntryModeLabel(entryMode)}`
+                }
+                summary={[
+                  { label: "Average", value: currentPlayerMetrics.average },
+                  { label: "Best Visit", value: currentPlayerMetrics.highestVisit },
+                  { label: "Busts", value: currentPlayer.visits.filter((visit) => visit.bust).length },
+                  { label: "Checkouts", value: currentPlayer.visits.filter((visit) => visit.checkout).length },
+                ]}
+                rows={localPlayerStats.map((entry) => ({
+                  name: entry.name,
+                  meta: `${entry.average.toFixed(1)} Avg`,
+                  values: [
+                    { label: "Visits", value: entry.visits },
+                    { label: "Punkte", value: entry.scoredPoints },
+                    { label: "Best", value: entry.bestVisit },
+                    { label: "Busts", value: entry.busts },
+                  ],
+                }))}
+              />
+
+              <section className="hidden rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur">
                 <p className="text-[11px] uppercase tracking-[0.22em] text-stone-400">Live-Stats</p>
                 {currentPlayer.entered ? (
                   <p className="mt-1 text-sm text-stone-400">
@@ -3114,7 +3261,53 @@ function resetLegBoards(nextPlayers: Player[]) {
         ) : (
           <section className="grid gap-4 lg:grid-cols-[1.08fr_0.92fr]">
             <div className="order-2 space-y-4 lg:order-2">
-              <section className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur">
+              <TrainingSetupPanel
+                currentMode={trainingSession.mode}
+                currentModeLabel={getTrainingModeLabel(trainingSession.mode)}
+                trainingTarget={trainingTarget}
+                dartsThrown={trainingSession.dartsThrown}
+                shanghaiProgress={
+                  trainingSession.mode === "shanghai"
+                    ? trainingSession.currentGoalHits.length > 0
+                      ? trainingSession.currentGoalHits.join("/")
+                      : "noch offen"
+                    : null
+                }
+                helperText={
+                  trainingSession.mode === "shanghai"
+                    ? "Treffe auf jedem Ziel Single, Double und Triple, bevor du weiter rueckst."
+                    : trainingSession.mode === "doubles-around"
+                      ? "Nur Doubles zaehlen. Arbeite dich ueber D1 bis Bull."
+                      : trainingSession.mode === "bull-drill"
+                        ? "Zehn Darts auf Bull und Outer Bull, jeder Treffer zaehlt sofort."
+                        : "Treffe die Ziele der Reihe nach von 1 bis Bull."
+                }
+                onReset={() => resetTraining()}
+                onModeChange={switchTrainingMode}
+              />
+
+              <CollapsibleFeedPanel
+                title="Training Feed"
+                subtitle="Die letzten Trainingsdarts deiner aktuellen Session."
+                open={trainingFeedOpen}
+                onToggle={() => setTrainingFeedOpen((prev) => !prev)}
+              >
+                <div className="space-y-3">
+                  {trainingSession.history.length > 0 ? (
+                    trainingSession.history.map((entry, index) => (
+                      <div key={`${entry}-${index}`} className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-stone-200">
+                        {entry}
+                      </div>
+                    ))
+                  ) : (
+                    <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-4 text-sm text-stone-400">
+                      Noch keine Trainingswuerfe in dieser Session.
+                    </div>
+                  )}
+                </div>
+              </CollapsibleFeedPanel>
+
+              <section className="hidden rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur">
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="text-xs uppercase tracking-[0.22em] text-stone-400">Training Setup</p>
@@ -3202,7 +3395,7 @@ function resetLegBoards(nextPlayers: Player[]) {
                 </div>
               </section>
 
-              <details className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur">
+              <details className="hidden rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur">
                 <summary className="cursor-pointer list-none text-lg font-semibold text-white">
                   Training Feed
                   <p className="mt-1 text-sm font-normal text-stone-400">Die letzten Trainingsdarts deiner aktuellen Session.</p>
@@ -3246,7 +3439,30 @@ function resetLegBoards(nextPlayers: Player[]) {
                 </div>
               </section>
 
-              <section className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur">
+              <SimpleStatsPanel
+                title="Live-Stats"
+                subtitle={`${getTrainingModeLabel(trainingSession.mode)} im Fokus`}
+                summary={[
+                  { label: "Sessions", value: stats.trainingSessions },
+                  { label: "Best Score", value: stats.bestTrainingScore },
+                  { label: "Treffer", value: trainingSession.hits },
+                  { label: "Darts", value: trainingSession.dartsThrown },
+                ]}
+                rows={[
+                  {
+                    name: "Training Score",
+                    meta: String(trainingSession.score),
+                    values: [
+                      { label: "Ziel", value: trainingTarget },
+                      { label: "Modus", value: getTrainingModeLabel(trainingSession.mode) },
+                      { label: "Hits", value: trainingSession.hits },
+                      { label: "Darts", value: trainingSession.dartsThrown },
+                    ],
+                  },
+                ]}
+              />
+
+              <section className="hidden rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur">
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="text-[11px] uppercase tracking-[0.22em] text-stone-400">Live-Stats</p>
