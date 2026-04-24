@@ -2621,7 +2621,7 @@ function resetLegBoards(nextPlayers: Player[]) {
         {appMode === "match" ? (
           <section className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
             <div className="order-2 space-y-4 lg:order-2">
-              <section className="rounded-[2rem] border border-white/10 bg-white/5 p-5 backdrop-blur sm:p-6">
+              <section className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur sm:p-4">
                 <div className="mb-5 rounded-2xl border border-white/10 bg-white/5 p-4">
                   <p className="text-xs uppercase tracking-[0.22em] text-stone-400">Spiel-Setup</p>
                   <p className="mt-2 text-sm text-stone-400">Alles fuer dein lokales Match in einer Karte.</p>
@@ -2736,7 +2736,7 @@ function resetLegBoards(nextPlayers: Player[]) {
                 </div>
               </section>
 
-              <section className="rounded-[2rem] border border-white/10 bg-white/5 p-5 backdrop-blur sm:p-6">
+              <section className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur sm:p-4">
                 <div className="flex items-center justify-between gap-4">
                   <div>
                     <p className="text-xs uppercase tracking-[0.22em] text-stone-400">Aktueller Besuch</p>
@@ -2965,7 +2965,7 @@ function resetLegBoards(nextPlayers: Player[]) {
                 </div>
               </section>
 
-              <section className="rounded-[2rem] border border-white/10 bg-white/5 p-6 backdrop-blur">
+              <section className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur">
                 <p className="text-[11px] uppercase tracking-[0.22em] text-stone-400">Live-Stats</p>
                 {currentPlayer.entered ? (
                   <p className="mt-1 text-sm text-stone-400">
@@ -3052,7 +3052,7 @@ function resetLegBoards(nextPlayers: Player[]) {
                 </div>
               </section>
 
-              <section className="rounded-[2rem] border border-white/10 bg-white/5 p-6 backdrop-blur">
+              <section className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur">
                 <h2 className="text-2xl font-semibold text-white">Langzeit-Stats</h2>
                 <div className="mt-5 grid gap-3 sm:grid-cols-2">
                   <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
@@ -3074,7 +3074,7 @@ function resetLegBoards(nextPlayers: Player[]) {
                 </div>
               </section>
 
-              <section className="rounded-[2rem] border border-white/10 bg-white/5 p-6 backdrop-blur">
+              <section className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur">
                 <div className="flex items-center justify-between gap-3">
                   <h2 className="text-2xl font-semibold text-white">Archiv</h2>
                   <div className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs uppercase tracking-[0.22em] text-stone-300">
@@ -3225,7 +3225,7 @@ function resetLegBoards(nextPlayers: Player[]) {
             </div>
 
             <div className="order-1 space-y-4 lg:order-1">
-              <section className="rounded-[2rem] border border-white/10 bg-white/5 p-5 backdrop-blur sm:p-6">
+              <section className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur sm:p-4">
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="text-xs uppercase tracking-[0.22em] text-stone-400">Board</p>
