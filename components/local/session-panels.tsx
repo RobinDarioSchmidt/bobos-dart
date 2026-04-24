@@ -26,32 +26,42 @@ function getFinishLabel(doubleOut: boolean) {
 
 export function LocalSetupPanel({
   playerCount,
+  playerNames,
   mode,
   entryMode,
   doubleOut,
+  bullOffEnabled,
   legsToWin,
   setsToWin,
   onPlayerCountChange,
+  onPlayerNameChange,
   onModeChange,
   onCycleEntryMode,
   onToggleDoubleOut,
+  onToggleBullOff,
   onLegsToWinChange,
   onSetsToWinChange,
-  onResetMatch,
+  onStartMatch,
+  startDisabled,
 }: {
   playerCount: number;
+  playerNames: string[];
   mode: 301 | 501;
   entryMode: EntryMode;
   doubleOut: boolean;
+  bullOffEnabled: boolean;
   legsToWin: number;
   setsToWin: number;
   onPlayerCountChange: (value: number) => void;
+  onPlayerNameChange: (index: number, value: string) => void;
   onModeChange: (value: 301 | 501) => void;
   onCycleEntryMode: () => void;
   onToggleDoubleOut: () => void;
+  onToggleBullOff: () => void;
   onLegsToWinChange: (value: number) => void;
   onSetsToWinChange: (value: number) => void;
-  onResetMatch: () => void;
+  onStartMatch: () => void;
+  startDisabled: boolean;
 }) {
   return (
     <section className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur">
@@ -62,15 +72,27 @@ export function LocalSetupPanel({
         </span>
       </div>
 
-      <div className="mt-3 grid grid-cols-3 gap-2">
-        {[2, 3, 4].map((option) => (
+      <div className="mt-3 grid grid-cols-4 gap-2">
+        {[1, 2, 3, 4].map((option) => (
           <button
             key={option}
             onClick={() => onPlayerCountChange(option)}
-            className={`${optionButton} ${playerCount === option ? "border-white bg-white text-black hover:bg-white" : ""}`}
+            className={`${optionButton} ${playerCount === option ? "border-emerald-400 bg-emerald-400 text-black hover:bg-emerald-400" : ""}`}
           >
             {option}P
           </button>
+        ))}
+      </div>
+
+      <div className="mt-3 space-y-2">
+        {playerNames.map((name, index) => (
+          <input
+            key={`local-player-name-${index}`}
+            value={name}
+            onChange={(event) => onPlayerNameChange(index, event.target.value)}
+            placeholder={`Spieler ${index + 1}`}
+            className="h-12 w-full rounded-2xl border border-white/10 bg-black/20 px-4 text-white outline-none placeholder:text-stone-500"
+          />
         ))}
       </div>
 
@@ -89,7 +111,7 @@ export function LocalSetupPanel({
         </button>
       </div>
 
-      <div className="mt-3 grid grid-cols-2 gap-2">
+      <div className={`mt-3 grid gap-2 ${playerCount > 1 ? "grid-cols-3" : "grid-cols-2"}`}>
         <button onClick={onCycleEntryMode} className={optionButton}>
           {getEntryLabel(entryMode)}
         </button>
@@ -99,6 +121,16 @@ export function LocalSetupPanel({
         >
           {getFinishLabel(doubleOut)}
         </button>
+        {playerCount > 1 ? (
+          <button
+            onClick={onToggleBullOff}
+            className={`${optionButton} ${
+              bullOffEnabled ? "border-amber-300/30 bg-amber-300/10 text-amber-100 hover:bg-amber-300/10" : ""
+            }`}
+          >
+            {bullOffEnabled ? "Bull-Off An" : "Bull-Off Aus"}
+          </button>
+        ) : null}
       </div>
 
       <div className="mt-3 grid grid-cols-2 gap-2">
@@ -110,8 +142,12 @@ export function LocalSetupPanel({
         </button>
       </div>
 
-      <button onClick={onResetMatch} className="mt-3 w-full rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-black shadow-lg shadow-white/10">
-        Match neu aufsetzen
+      <button
+        onClick={onStartMatch}
+        disabled={startDisabled}
+        className="mt-3 w-full rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-black shadow-lg shadow-white/10 disabled:opacity-40"
+      >
+        Match starten
       </button>
     </section>
   );

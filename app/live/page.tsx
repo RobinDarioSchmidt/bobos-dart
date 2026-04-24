@@ -14,7 +14,6 @@ import { LiveRoomCreatePanel, LiveRoomJoinPanel, LiveRoomStatusPanel } from "@/c
 import { MobileAppNav } from "@/components/mobile-app-nav";
 import {
   addPendingDart,
-  clearPendingVisit,
   finalizePendingVisit,
   getPreferredDisplayName,
   isLiveDeviceLockActive,
@@ -922,24 +921,6 @@ export default function LivePage() {
     await pushRoomState(nextState, "undo_dart");
   }
 
-  async function handleClearVisit() {
-    if (!liveState) {
-      return;
-    }
-
-    if (loading) {
-      return;
-    }
-
-    if (!canPlayFromThisDevice) {
-      setMessage(hasDeviceControl ? "Du kannst diesen Besuch gerade nicht bearbeiten." : "Dieses Geraet darf den Account gerade nicht steuern.");
-      return;
-    }
-
-    const nextState = clearPendingVisit(liveState);
-    await pushRoomState(nextState, "clear_visit");
-  }
-
   async function handleFinishVisit() {
     if (!liveState) {
       return;
@@ -1202,7 +1183,6 @@ export default function LivePage() {
                     onSegmentSelect={handleBoardSegment}
                     onMiss={() => void handleMiss()}
                     onRemoveLast={() => void handleRemoveLast()}
-                    onClearVisit={() => void handleClearVisit()}
                     onFinishVisit={() => void handleFinishVisit()}
                     onNextLeg={() => void handleNextLeg()}
                   />

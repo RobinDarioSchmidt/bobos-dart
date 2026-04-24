@@ -196,17 +196,25 @@ export function LiveStatsPanel({
   currentLiveStats,
   livePlayerStats,
   currentPlayerName,
+  title,
+  subtitle,
 }: {
   currentLiveStats: LivePlayerStat | null;
   livePlayerStats: LivePlayerStat[];
   currentPlayerName: string | null;
+  title?: string;
+  subtitle?: string | null;
 }) {
   return (
     <section className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-[11px] uppercase tracking-[0.22em] text-stone-400">Live-Stats</p>
-          <p className="text-xs text-stone-400">{currentLiveStats ? `${currentLiveStats.name} im Fokus` : "Noch keine Statline"}</p>
+          <p className="text-[11px] uppercase tracking-[0.22em] text-stone-400">{title ?? "Live-Stats"}</p>
+          {subtitle !== undefined ? (
+            subtitle ? <p className="text-xs text-stone-400">{subtitle}</p> : null
+          ) : (
+            <p className="text-xs text-stone-400">{currentLiveStats ? `${currentLiveStats.name} im Fokus` : "Noch keine Statline"}</p>
+          )}
         </div>
       </div>
       {currentLiveStats ? (

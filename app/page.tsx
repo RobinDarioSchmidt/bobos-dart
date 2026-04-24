@@ -903,9 +903,24 @@ export default function Page() {
   const [mode, setMode] = useState<GameMode>(501);
   const [entryMode, setEntryMode] = useState<EntryMode>("single");
   const [doubleOut, setDoubleOut] = useState(true);
+  const [localBullOffEnabled, setLocalBullOffEnabled] = useState(false);
+  const [localMatchStarted, setLocalMatchStarted] = useState(false);
   const [legsToWin, setLegsToWin] = useState(3);
   const [setsToWin, setSetsToWin] = useState(1);
   const [players, setPlayers] = useState<Player[]>(() => createPlayers(501, ["Bobo", "Guest"], "single"));
+  const [localBullOff, setLocalBullOff] = useState<{
+    enabled: boolean;
+    completed: boolean;
+    currentPlayerIndex: number | null;
+    winnerIndex: number | null;
+    attempts: Array<{ playerIndex: number; playerName: string; dart: LiveDart; rank: number; createdAt: string }>;
+  }>({
+    enabled: false,
+    completed: true,
+    currentPlayerIndex: null,
+    winnerIndex: null,
+    attempts: [],
+  });
   const [activePlayer, setActivePlayer] = useState(0);
   const [legStartingPlayer, setLegStartingPlayer] = useState(0);
   const [currentDarts, setCurrentDarts] = useState<number[]>([]);
@@ -1116,6 +1131,9 @@ export default function Page() {
   ]);
 
   const currentPlayer = players[activePlayer];
+  const boardPlayerIndex =
+    localBullOff.enabled && !localBullOff.completed ? (localBullOff.currentPlayerIndex ?? activePlayer) : activePlayer;
+  const boardPlayer = players[boardPlayerIndex] ?? currentPlayer;
   const currentPlayerMetrics = useMemo(() => getPlayerMetrics(currentPlayer), [currentPlayer]);
   const localPlayerStats = useMemo(
     () =>
@@ -1136,7 +1154,14 @@ export default function Page() {
   );
   const currentVisitTotal = currentDarts.reduce((sum, dart) => sum + dart, 0);
   const checkoutHints = currentPlayer.entered ? getCheckoutHints(currentPlayer.score, doubleOut) : [];
-  const localBoardMarkers = useMemo<LiveBoardMarker[]>(() => [], []);
+  const localStartDisabled = players.some((player) => !player.name.trim());
+  const localBoardMarkers = useMemo<LiveBoardMarker[]>(
+    () =>
+      localBullOff.enabled && !localBullOff.completed
+        ? localBullOff.attempts.map((attempt) => attempt.dart.marker).filter((marker): marker is LiveBoardMarker => Boolean(marker))
+        : [],
+    [localBullOff],
+  );
   const localPendingDarts = useMemo<LiveDart[]>(
     () =>
       currentLabels.map((label, index) => {
@@ -1195,14 +1220,8 @@ export default function Page() {
       legWinner,
       matchWinner,
       statusText,
-      bullOffEnabled: false,
-      bullOff: {
-        enabled: false,
-        completed: true,
-        currentPlayerIndex: null,
-        winnerIndex: null,
-        attempts: [],
-      },
+      bullOffEnabled: localBullOff.enabled,
+      bullOff: localBullOff,
       players: players.map((player, index) => ({
         name: player.name,
         score: player.score,
@@ -1238,6 +1257,7 @@ export default function Page() {
       legStartingPlayer,
       legWinner,
       legsToWin,
+      localBullOff,
       localLiveHistory,
       localPendingDarts,
       matchWinner,
@@ -1827,9 +1847,28 @@ function resetLegBoards(nextPlayers: Player[]) {
   }));
 }
 
+  function createLocalBullOffState(nextPlayers: Player[], enabled: boolean) {
+    return {
+      enabled,
+      completed: !enabled,
+      currentPlayerIndex: enabled ? 0 : null,
+      winnerIndex: null,
+      attempts: [] as Array<{ playerIndex: number; playerName: string; dart: LiveDart; rank: number; createdAt: string }>,
+    };
+  }
+
+  function getBullOffRank(dart: LiveDart) {
+    if (!dart.marker) {
+      return Number.NEGATIVE_INFINITY;
+    }
+
+    return -Math.hypot(dart.marker.x - 200, dart.marker.y - 200);
+  }
+
   function startFreshMatch(nextMode = mode) {
-    const names = players.map((player) => player.name);
+    const names = players.map((player, index) => player.name.trim() || `Spieler ${index + 1}`);
     const nextPlayers = createPlayers(nextMode, names, entryMode);
+    const nextBullOffEnabled = localBullOffEnabled && nextPlayers.length > 1;
     setMode(nextMode);
     setPlayers(nextPlayers);
     setActivePlayer(0);
@@ -1840,21 +1879,36 @@ function resetLegBoards(nextPlayers: Player[]) {
     setManualVisit("");
     setLegWinner(null);
     setMatchWinner(null);
+    setLocalMatchStarted(true);
+    setLocalBullOff(createLocalBullOffState(nextPlayers, nextBullOffEnabled));
     setStatusText(
-      entryMode === "single"
+      nextBullOffEnabled
+        ? `${nextPlayers[0].name} wirft fuer das Bull-Off.`
+        : entryMode === "single"
         ? `Neues Match bereit. ${nextPlayers[0].name} beginnt.`
         : `Neues Match bereit. ${nextPlayers[0].name} sucht ${getEntryModeLabel(entryMode)}.`,
     );
     setUndoStack([]);
   }
 
+  function startConfiguredLocalMatch() {
+    if (players.some((player) => !player.name.trim())) {
+      return;
+    }
+
+    startFreshMatch(mode);
+  }
+
   function setPlayerCount(nextCount: number) {
     const nextNames = Array.from(
       { length: nextCount },
-      (_, index) => players[index]?.name ?? `Spieler ${index + 1}`,
+      (_, index) => players[index]?.name ?? "",
     );
     const nextPlayers = createPlayers(mode, nextNames, entryMode);
     setPlayers(nextPlayers);
+    if (nextCount === 1) {
+      setLocalBullOffEnabled(false);
+    }
     setActivePlayer(0);
     setLegStartingPlayer(0);
     setCurrentDarts([]);
@@ -1863,11 +1917,9 @@ function resetLegBoards(nextPlayers: Player[]) {
     setManualVisit("");
     setLegWinner(null);
     setMatchWinner(null);
-    setStatusText(
-      entryMode === "single"
-        ? `Neues Match bereit. ${nextPlayers[0].name} beginnt.`
-        : `Neues Match bereit. ${nextPlayers[0].name} sucht ${getEntryModeLabel(entryMode)}.`,
-    );
+    setLocalMatchStarted(false);
+    setLocalBullOff(createLocalBullOffState(nextPlayers, false));
+    setStatusText("Match Setup bereit.");
     setUndoStack([]);
   }
 
@@ -1886,11 +1938,9 @@ function resetLegBoards(nextPlayers: Player[]) {
     setManualVisit("");
     setLegWinner(null);
     setMatchWinner(null);
-    setStatusText(
-      nextEntryMode === "single"
-        ? `Neues Match bereit. ${nextPlayers[0].name} beginnt.`
-        : `Neues Match bereit. ${nextPlayers[0].name} sucht ${getEntryModeLabel(nextEntryMode)}.`,
-    );
+    setLocalMatchStarted(false);
+    setLocalBullOff(createLocalBullOffState(nextPlayers, false));
+    setStatusText("Match Setup bereit.");
     setUndoStack([]);
   }
 
@@ -1922,7 +1972,7 @@ function resetLegBoards(nextPlayers: Player[]) {
         playerIndex === index
           ? {
               ...player,
-              name: name.trimStart() || `Spieler ${index + 1}`,
+              name: name.trimStart(),
             }
           : player,
       ),
@@ -1945,6 +1995,55 @@ function resetLegBoards(nextPlayers: Player[]) {
 
   function addBoardSegment(segment: Segment) {
     addDartValue(segment.score, segment.label);
+  }
+
+  function registerLocalBullOffDart(dart: LiveDart) {
+    if (!localBullOff.enabled || localBullOff.completed) {
+      return;
+    }
+
+    const currentIndex = localBullOff.currentPlayerIndex ?? 0;
+    const nextAttempts = [
+      ...localBullOff.attempts,
+      {
+        playerIndex: currentIndex,
+        playerName: players[currentIndex]?.name ?? `Spieler ${currentIndex + 1}`,
+        dart,
+        rank: getBullOffRank(dart),
+        createdAt: new Date().toISOString(),
+      },
+    ];
+
+    const nextPlayerIndex = currentIndex + 1 < players.length ? currentIndex + 1 : null;
+    if (nextPlayerIndex !== null) {
+      setLocalBullOff({
+        ...localBullOff,
+        attempts: nextAttempts,
+        currentPlayerIndex: nextPlayerIndex,
+      });
+      setStatusText(`${players[nextPlayerIndex]?.name ?? `Spieler ${nextPlayerIndex + 1}`} wirft fuer das Bull-Off.`);
+      return;
+    }
+
+    const sortedAttempts = [...nextAttempts].sort((left, right) => {
+      if (right.rank !== left.rank) {
+        return right.rank - left.rank;
+      }
+
+      return right.dart.score - left.dart.score;
+    });
+    const winner = sortedAttempts[0];
+    const winnerIndex = winner?.playerIndex ?? 0;
+    setLocalBullOff({
+      enabled: true,
+      completed: true,
+      currentPlayerIndex: null,
+      winnerIndex,
+      attempts: nextAttempts,
+    });
+    setActivePlayer(winnerIndex);
+    setLegStartingPlayer(winnerIndex);
+    setStatusText(`${players[winnerIndex]?.name ?? "Spieler"} gewinnt das Bull-Off und beginnt.`);
   }
 
   function commitManualDart() {
@@ -2403,6 +2502,7 @@ function resetLegBoards(nextPlayers: Player[]) {
             onSaveProfile={() => void saveProfileDraft()}
             onStartLocal={() => {
               setAppMode("match");
+              setLocalMatchStarted(false);
               setSelectedFlow("local");
             }}
             onStartTraining={() => {
@@ -2432,7 +2532,7 @@ function resetLegBoards(nextPlayers: Player[]) {
                 <div className="min-w-0">
                   <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-100">Bobo&apos;s Dart</p>
                   <h1 className="mt-1 truncate text-2xl font-semibold text-white sm:text-3xl">
-                    {selectedFlow === "local" ? "Lokales Match" : "Training"}
+                    {selectedFlow === "local" ? "Lokal" : "Training"}
                   </h1>
                 </div>
               </div>
@@ -2440,15 +2540,12 @@ function resetLegBoards(nextPlayers: Player[]) {
                 onClick={() => setSelectedFlow("overview")}
                 className="rounded-2xl border border-white/10 bg-black/20 px-4 py-2 text-sm font-semibold text-white"
               >
-                Zur Auswahl
+                Zurueck
               </button>
             </div>
 
         <section className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur">
           <div className="flex flex-wrap items-center gap-3">
-            <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-3 py-1 text-xs uppercase tracking-[0.28em] text-emerald-200">
-              {selectedFlow === "local" ? "Lokales Spiel" : "Training"}
-            </div>
             <button
               onClick={() => setAppMode("match")}
               className={`rounded-2xl px-4 py-2 text-sm font-semibold transition ${
@@ -2781,27 +2878,36 @@ function resetLegBoards(nextPlayers: Player[]) {
         {appMode === "match" ? (
           <section className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
             <div className="order-2 space-y-4 lg:order-2">
-              <LocalSetupPanel
-                playerCount={players.length}
-                mode={mode}
-                entryMode={entryMode}
-                doubleOut={doubleOut}
-                legsToWin={legsToWin}
-                setsToWin={setsToWin}
-                onPlayerCountChange={setPlayerCount}
-                onModeChange={startFreshMatch}
-                onCycleEntryMode={cycleEntryMode}
-                onToggleDoubleOut={() => setDoubleOut((prev) => !prev)}
-                onLegsToWinChange={setLegsToWin}
-                onSetsToWinChange={setSetsToWin}
-                onResetMatch={() => startFreshMatch(mode)}
-              />
-              <LiveHistoryPanel
-                heading={`Live Historie${currentPlayer ? ` - ${currentPlayer.name} ist dran` : ""}`}
-                historyOpen={localHistoryOpen}
-                history={localLiveHistory}
-                onToggle={() => setLocalHistoryOpen((prev) => !prev)}
-              />
+              {!localMatchStarted ? (
+                <LocalSetupPanel
+                  playerCount={players.length}
+                  playerNames={players.map((player) => player.name)}
+                  mode={mode}
+                  entryMode={entryMode}
+                  doubleOut={doubleOut}
+                  bullOffEnabled={localBullOffEnabled}
+                  legsToWin={legsToWin}
+                  setsToWin={setsToWin}
+                  onPlayerCountChange={setPlayerCount}
+                  onPlayerNameChange={updatePlayerName}
+                  onModeChange={setMode}
+                  onCycleEntryMode={cycleEntryMode}
+                  onToggleDoubleOut={() => setDoubleOut((prev) => !prev)}
+                  onToggleBullOff={() => setLocalBullOffEnabled((prev) => !prev)}
+                  onLegsToWinChange={setLegsToWin}
+                  onSetsToWinChange={setSetsToWin}
+                  onStartMatch={startConfiguredLocalMatch}
+                  startDisabled={localStartDisabled}
+                />
+              ) : null}
+              {localMatchStarted ? (
+                <LiveHistoryPanel
+                  heading={`Live Historie${boardPlayer ? ` - ${boardPlayer.name} ist dran` : ""}`}
+                  historyOpen={localHistoryOpen}
+                  history={localLiveHistory}
+                  onToggle={() => setLocalHistoryOpen((prev) => !prev)}
+                />
+              ) : null}
               <section className="hidden rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur sm:p-4">
                 <div className="mb-5 rounded-2xl border border-white/10 bg-white/5 p-4">
                   <p className="text-xs uppercase tracking-[0.22em] text-stone-400">Spiel-Setup</p>
@@ -3123,44 +3229,70 @@ function resetLegBoards(nextPlayers: Player[]) {
             </div>
 
             <div className="order-1 space-y-4 lg:order-1">
-              <LiveBoardPanel
-                liveState={localLiveState}
-                currentPlayerIndex={activePlayer}
-                currentUserId={session?.user.id ?? "local-player"}
-                boardHeading={
-                  entryMode !== "single" && !currentPlayer.entered
-                    ? `${currentPlayer.name} sucht ${getEntryModeLabel(entryMode)}`
-                    : `${currentPlayer.name} ist dran`
-                }
-                currentVisitTotal={currentVisitTotal}
-                compactVisitText={currentLabels.length > 0 ? currentLabels.join(", ") : "Noch kein Dart"}
-                calloutText={null}
-                canPlayFromThisDevice={true}
-                boardDisabledReason="Lokales Spiel"
-                loading={false}
-                boardMarkers={localBoardMarkers}
-                pendingLabels={currentLabels}
-                canControlLegTransition={legWinner !== null && matchWinner === null}
-                checkoutHints={checkoutHints}
-                currentPlayerName={currentPlayer.name}
-                onSegmentSelect={(segment: LiveBoardSegment) => addBoardSegment({
-                  label: segment.label,
-                  score: segment.score,
-                  number: segment.number,
-                  multiplier: segment.multiplier === 0 ? 1 : segment.multiplier,
-                })}
-                onMiss={() => addDartValue(0, "Miss")}
-                onRemoveLast={() => {
-                  setCurrentDarts((prev) => prev.slice(0, -1));
-                  setCurrentLabels((prev) => prev.slice(0, -1));
-                }}
-                onClearVisit={() => {
-                  setCurrentDarts([]);
-                  setCurrentLabels([]);
-                }}
-                onFinishVisit={() => recordVisit(currentDarts, currentLabels)}
-                onNextLeg={startNextLeg}
-              />
+              {localMatchStarted ? (
+                <LiveBoardPanel
+                  liveState={localLiveState}
+                  currentPlayerIndex={boardPlayerIndex}
+                  currentUserId={session?.user.id ?? "local-player"}
+                  boardHeading={
+                    localBullOff.enabled && !localBullOff.completed
+                      ? `${boardPlayer.name} wirft Bull-Off`
+                      : entryMode !== "single" && !currentPlayer.entered
+                        ? `${currentPlayer.name} sucht ${getEntryModeLabel(entryMode)}`
+                        : `${currentPlayer.name} ist dran`
+                  }
+                  currentVisitTotal={currentVisitTotal}
+                  compactVisitText={currentLabels.length > 0 ? currentLabels.join(", ") : "Noch kein Dart"}
+                  calloutText={null}
+                  canPlayFromThisDevice={true}
+                  boardDisabledReason="Lokales Spiel"
+                  loading={false}
+                  boardMarkers={localBoardMarkers}
+                  pendingLabels={currentLabels}
+                  canControlLegTransition={legWinner !== null && matchWinner === null}
+                  checkoutHints={checkoutHints}
+                  currentPlayerName={boardPlayer.name}
+                  onSegmentSelect={(segment: LiveBoardSegment) => {
+                    if (localBullOff.enabled && !localBullOff.completed) {
+                      registerLocalBullOffDart({
+                        label: segment.label,
+                        score: segment.score,
+                        number: segment.number,
+                        multiplier: segment.multiplier,
+                        ring: segment.ring,
+                        marker: segment.marker,
+                      });
+                      return;
+                    }
+                    addBoardSegment({
+                      label: segment.label,
+                      score: segment.score,
+                      number: segment.number,
+                      multiplier: segment.multiplier === 0 ? 1 : segment.multiplier,
+                    });
+                  }}
+                  onMiss={() => {
+                    if (localBullOff.enabled && !localBullOff.completed) {
+                      registerLocalBullOffDart({
+                        label: "Miss",
+                        score: 0,
+                        number: 0,
+                        multiplier: 0,
+                        ring: "miss",
+                        marker: null,
+                      });
+                      return;
+                    }
+                    addDartValue(0, "Miss");
+                  }}
+                  onRemoveLast={() => {
+                    setCurrentDarts((prev) => prev.slice(0, -1));
+                    setCurrentLabels((prev) => prev.slice(0, -1));
+                  }}
+                  onFinishVisit={() => recordVisit(currentDarts, currentLabels)}
+                  onNextLeg={startNextLeg}
+                />
+              ) : null}
               <section className="hidden rounded-[2rem] border border-white/10 bg-white/5 p-5 backdrop-blur sm:p-6">
                 <div className="flex items-center justify-between gap-3">
                   <div>
@@ -3184,31 +3316,29 @@ function resetLegBoards(nextPlayers: Player[]) {
                 </div>
               </section>
 
+              {localMatchStarted && checkoutHints.length > 0 ? (
               <section className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur">
                 <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                  {checkoutHints.length > 0 ? (
-                    <div className="flex flex-col gap-2">
-                      {checkoutHints.map((hint) => (
-                        <div key={hint} className="rounded-2xl bg-white/5 px-4 py-3 text-sm text-stone-200">
-                          {hint}
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-stone-400">
-                      {currentPlayer.entered
-                        ? "Noch kein klassischer Checkout-Weg hinterlegt. Spiele auf einen komfortablen Finish-Bereich hin."
-                        : `Checkout-Hinweise erscheinen, sobald ${currentPlayer.name} mit ${getEntryModeLabel(entryMode)} im Spiel ist.`}
-                    </p>
-                  )}
+                  <div className="flex flex-col gap-2">
+                    {checkoutHints.map((hint) => (
+                      <div key={hint} className="rounded-2xl bg-white/5 px-4 py-3 text-sm text-stone-200">
+                        {hint}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </section>
+              ) : null}
 
-              <LiveStatsPanel
-                currentLiveStats={localPlayerStats.find((entry) => entry.name === currentPlayer.name) ?? null}
-                livePlayerStats={localPlayerStats}
-                currentPlayerName={currentPlayer.name}
-              />
+              {localMatchStarted ? (
+                <LiveStatsPanel
+                  currentLiveStats={localPlayerStats.find((entry) => entry.name === boardPlayer.name) ?? null}
+                  livePlayerStats={localPlayerStats}
+                  currentPlayerName={boardPlayer.name}
+                  title={`LIVE-STATS von ${boardPlayer.name}`}
+                  subtitle=""
+                />
+              ) : null}
 
               <section className="hidden rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur">
                 <p className="text-[11px] uppercase tracking-[0.22em] text-stone-400">Live-Stats</p>
@@ -3297,7 +3427,7 @@ function resetLegBoards(nextPlayers: Player[]) {
                 </div>
               </section>
 
-              <section className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur">
+              <section className="hidden rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur">
                 <h2 className="text-2xl font-semibold text-white">Langzeit-Stats</h2>
                 <div className="mt-5 grid gap-3 sm:grid-cols-2">
                   <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
@@ -3319,7 +3449,7 @@ function resetLegBoards(nextPlayers: Player[]) {
                 </div>
               </section>
 
-              <section className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur">
+              <section className="hidden rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur">
                 <div className="flex items-center justify-between gap-3">
                   <h2 className="text-2xl font-semibold text-white">Archiv</h2>
                   <div className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs uppercase tracking-[0.22em] text-stone-300">

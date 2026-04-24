@@ -417,7 +417,7 @@ function LiveDartboard({
           disabled={disabled || loading}
           className="rounded-2xl border border-red-400/30 bg-red-400/10 px-4 py-2 text-sm font-semibold text-red-100 disabled:opacity-40"
         >
-          No score
+          Miss
         </button>
         {hoveredSegment ? (
           <div className="min-h-[3.25rem] min-w-[8.5rem] rounded-2xl border border-amber-300/30 bg-amber-300/10 px-3 py-2 text-right">
@@ -716,7 +716,6 @@ export function LiveBoardPanel({
   onSegmentSelect,
   onMiss,
   onRemoveLast,
-  onClearVisit,
   onFinishVisit,
   onNextLeg,
 }: {
@@ -738,7 +737,6 @@ export function LiveBoardPanel({
   onSegmentSelect: (segment: LiveBoardSegment) => void;
   onMiss: () => void;
   onRemoveLast: () => void;
-  onClearVisit: () => void;
   onFinishVisit: () => void;
   onNextLeg: () => void;
 }) {
@@ -844,21 +842,14 @@ export function LiveBoardPanel({
               disabled={!canPlayFromThisDevice || pendingLabels.length === 0}
               className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white disabled:opacity-40"
             >
-              Letzten Dart l?schen
-            </button>
-            <button
-              onClick={onClearVisit}
-              disabled={!canPlayFromThisDevice || pendingLabels.length === 0}
-              className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white disabled:opacity-40"
-            >
-              Board leeren
+              Korrektur
             </button>
             <button
               onClick={onFinishVisit}
               disabled={!canPlayFromThisDevice || pendingLabels.length === 0}
               className="rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-black disabled:opacity-40"
             >
-              Visit abschliessen
+              Visit loggen
             </button>
           </div>
         ) : null}
