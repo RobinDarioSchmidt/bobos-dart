@@ -70,6 +70,8 @@ create table if not exists public.dart_events (
   is_hit boolean not null default true,
   is_checkout_dart boolean not null default false,
   target_label text,
+  board_x double precision,
+  board_y double precision,
   created_at timestamptz not null default now(),
   constraint dart_events_context_check
     check (

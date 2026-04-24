@@ -28,6 +28,7 @@ type SegmentRing = "single" | "double" | "triple" | "outer-bull" | "bull" | "mis
 type Visit = {
   darts: number[];
   labels: string[];
+  markers: Array<LiveBoardMarker | null>;
   scoreBefore: number;
   scoreAfter: number;
   bust: boolean;
@@ -80,6 +81,7 @@ type Segment = {
   score: number;
   number: number;
   multiplier: 1 | 2 | 3;
+  marker: LiveBoardMarker | null;
 };
 
 type StoredThrow = {
@@ -91,6 +93,7 @@ type StoredThrow = {
   hit: boolean;
   checkout: boolean;
   target: string | null;
+  marker: LiveBoardMarker | null;
 };
 
 type CloudMatchRow = {
@@ -356,6 +359,7 @@ function clonePlayers(players: Player[]) {
       ...visit,
       darts: [...visit.darts],
       labels: [...visit.labels],
+      markers: [...visit.markers],
     })),
   }));
 }
@@ -373,6 +377,7 @@ function parseThrowLabel(label: string, fallbackScore = 0): StoredThrow {
       hit: true,
       checkout: true,
       target: null,
+      marker: null,
     };
   }
 
@@ -386,6 +391,7 @@ function parseThrowLabel(label: string, fallbackScore = 0): StoredThrow {
       hit: true,
       checkout: false,
       target: null,
+      marker: null,
     };
   }
 
@@ -402,6 +408,7 @@ function parseThrowLabel(label: string, fallbackScore = 0): StoredThrow {
       hit: true,
       checkout: multiplier === 2,
       target: null,
+      marker: null,
     };
   }
 
@@ -416,6 +423,7 @@ function parseThrowLabel(label: string, fallbackScore = 0): StoredThrow {
       hit: numeric > 0,
       checkout: false,
       target: null,
+      marker: null,
     };
   }
 
@@ -428,6 +436,7 @@ function parseThrowLabel(label: string, fallbackScore = 0): StoredThrow {
     hit: fallbackScore > 0,
     checkout: false,
     target: null,
+    marker: null,
   };
 }
 
@@ -452,6 +461,7 @@ function segmentToStoredThrow(segment: Segment, target: string | null = null): S
     hit: segment.score > 0,
     checkout: ring === "double" || ring === "bull",
     target,
+    marker: segment.marker,
   };
 }
 
@@ -679,6 +689,54 @@ function describeSlice(innerRadius: number, outerRadius: number, startAngle: num
   ].join(" ");
 }
 
+function createBoardMarker(
+  x: number,
+  y: number,
+  label: string,
+  ring: import("@/lib/live-match").LiveSegmentRing,
+): LiveBoardMarker {
+  return { x, y, label, ring };
+}
+
+function createCenteredSegment(value: number, midAngle: number, multiplier: 1 | 2 | 3): Segment {
+  const radius =
+    multiplier === 3
+      ? (BOARD_RADIUS.tripleInner + BOARD_RADIUS.tripleOuter) / 2
+      : multiplier === 2
+        ? (BOARD_RADIUS.doubleInner + BOARD_RADIUS.doubleOuter) / 2
+        : (BOARD_RADIUS.bullOuter + BOARD_RADIUS.doubleInner) / 2;
+  const point = polarToCartesian(radius, midAngle);
+  const prefix = multiplier === 2 ? "D" : multiplier === 3 ? "T" : "S";
+  const ring = multiplier === 3 ? "triple" : multiplier === 2 ? "double" : "single-outer";
+  return {
+    label: `${prefix}${value}`,
+    score: value * multiplier,
+    number: value,
+    multiplier,
+    marker: createBoardMarker(point.x, point.y, `${prefix}${value}`, ring),
+  };
+}
+
+function withExactSegmentMarker(segment: Segment, x: number, y: number): Segment {
+  return {
+    ...segment,
+    marker: createBoardMarker(
+      x,
+      y,
+      segment.label,
+      segment.number === 25 && segment.multiplier === 2
+        ? "bull"
+        : segment.number === 25
+          ? "outer-bull"
+          : segment.multiplier === 3
+            ? "triple"
+            : segment.multiplier === 2
+              ? "double"
+              : "single-outer",
+    ),
+  };
+}
+
 function handleBoardKeyDown(
   event: React.KeyboardEvent<SVGGElement>,
   onSegmentSelect: (segment: Segment) => void,
@@ -698,6 +756,28 @@ function Dartboard({
   caption: string;
 }) {
   const [hoveredSegment, setHoveredSegment] = useState<Segment | null>(null);
+
+  function getBoardPointFromSvgClick(event: React.MouseEvent<SVGElement>) {
+    const svg = event.currentTarget.ownerSVGElement ?? event.currentTarget.closest("svg");
+    if (!svg) {
+      return null;
+    }
+
+    const rect = svg.getBoundingClientRect();
+    if (!rect.width || !rect.height) {
+      return null;
+    }
+
+    return {
+      x: ((event.clientX - rect.left) / rect.width) * 400,
+      y: ((event.clientY - rect.top) / rect.height) * 400,
+    };
+  }
+
+  function handleSegmentClick(event: React.MouseEvent<SVGElement>, segment: Segment) {
+    const point = getBoardPointFromSvgClick(event);
+    onSegmentSelect(point ? withExactSegmentMarker(segment, point.x, point.y) : segment);
+  }
 
   return (
     <div className="rounded-[2rem] border border-white/10 bg-black/20 p-4">
@@ -744,25 +824,25 @@ function Dartboard({
               key: `double-${value}`,
               fill: doubleTripleColor,
               path: describeSlice(BOARD_RADIUS.doubleInner, BOARD_RADIUS.doubleOuter, startAngle, endAngle),
-              segment: { label: `D${value}`, score: value * 2, number: value, multiplier: 2 },
+              segment: createCenteredSegment(value, midAngle, 2),
             },
             {
               key: `outer-single-${value}`,
               fill: singleColor,
               path: describeSlice(BOARD_RADIUS.tripleOuter, BOARD_RADIUS.doubleInner, startAngle, endAngle),
-              segment: { label: `S${value}`, score: value, number: value, multiplier: 1 },
+              segment: createCenteredSegment(value, midAngle, 1),
             },
             {
               key: `triple-${value}`,
               fill: doubleTripleColor,
               path: describeSlice(BOARD_RADIUS.tripleInner, BOARD_RADIUS.tripleOuter, startAngle, endAngle),
-              segment: { label: `T${value}`, score: value * 3, number: value, multiplier: 3 },
+              segment: createCenteredSegment(value, midAngle, 3),
             },
             {
               key: `inner-single-${value}`,
               fill: singleColor,
               path: describeSlice(BOARD_RADIUS.bullOuter, BOARD_RADIUS.tripleInner, startAngle, endAngle),
-              segment: { label: `S${value}`, score: value, number: value, multiplier: 1 },
+              segment: createCenteredSegment(value, midAngle, 1),
             },
           ];
 
@@ -774,7 +854,7 @@ function Dartboard({
                   role="button"
                   tabIndex={0}
                   aria-label={segment.label}
-                  onClick={() => onSegmentSelect(segment)}
+                  onClick={(event) => handleSegmentClick(event, segment)}
                   onKeyDown={(event) => handleBoardKeyDown(event, onSegmentSelect, segment)}
                   className="cursor-pointer outline-none"
                 >
@@ -810,13 +890,22 @@ function Dartboard({
           role="button"
           tabIndex={0}
           aria-label="Outer Bull"
-          onClick={() => onSegmentSelect({ label: "Outer Bull", score: 25, number: 25, multiplier: 1 })}
+          onClick={(event) =>
+            handleSegmentClick(event, {
+              label: "Outer Bull",
+              score: 25,
+              number: 25,
+              multiplier: 1,
+              marker: createBoardMarker(200, 200, "Outer Bull", "outer-bull"),
+            })
+          }
           onKeyDown={(event) =>
             handleBoardKeyDown(event, onSegmentSelect, {
               label: "Outer Bull",
               score: 25,
               number: 25,
               multiplier: 1,
+              marker: createBoardMarker(200, 200, "Outer Bull", "outer-bull"),
             })
           }
           className="cursor-pointer outline-none"
@@ -829,10 +918,24 @@ function Dartboard({
             stroke="#0a0a0a"
             strokeWidth="2"
             onMouseEnter={() =>
-              setHoveredSegment({ label: "Outer Bull", score: 25, number: 25, multiplier: 1 })
+              setHoveredSegment({
+                label: "Outer Bull",
+                score: 25,
+                number: 25,
+                multiplier: 1,
+                marker: createBoardMarker(200, 200, "Outer Bull", "outer-bull"),
+              })
             }
             onMouseLeave={() => setHoveredSegment((current) => (current?.label === "Outer Bull" ? null : current))}
-            onFocus={() => setHoveredSegment({ label: "Outer Bull", score: 25, number: 25, multiplier: 1 })}
+            onFocus={() =>
+              setHoveredSegment({
+                label: "Outer Bull",
+                score: 25,
+                number: 25,
+                multiplier: 1,
+                marker: createBoardMarker(200, 200, "Outer Bull", "outer-bull"),
+              })
+            }
             onBlur={() => setHoveredSegment((current) => (current?.label === "Outer Bull" ? null : current))}
             className="transition duration-150 hover:brightness-125 focus:brightness-125"
           />
@@ -841,13 +944,22 @@ function Dartboard({
           role="button"
           tabIndex={0}
           aria-label="Bull"
-          onClick={() => onSegmentSelect({ label: "Bull", score: 50, number: 25, multiplier: 2 })}
+          onClick={(event) =>
+            handleSegmentClick(event, {
+              label: "Bull",
+              score: 50,
+              number: 25,
+              multiplier: 2,
+              marker: createBoardMarker(200, 200, "Bull", "bull"),
+            })
+          }
           onKeyDown={(event) =>
             handleBoardKeyDown(event, onSegmentSelect, {
               label: "Bull",
               score: 50,
               number: 25,
               multiplier: 2,
+              marker: createBoardMarker(200, 200, "Bull", "bull"),
             })
           }
           className="cursor-pointer outline-none"
@@ -859,9 +971,25 @@ function Dartboard({
             fill="#b91c1c"
             stroke="#0a0a0a"
             strokeWidth="2"
-            onMouseEnter={() => setHoveredSegment({ label: "Bull", score: 50, number: 25, multiplier: 2 })}
+            onMouseEnter={() =>
+              setHoveredSegment({
+                label: "Bull",
+                score: 50,
+                number: 25,
+                multiplier: 2,
+                marker: createBoardMarker(200, 200, "Bull", "bull"),
+              })
+            }
             onMouseLeave={() => setHoveredSegment((current) => (current?.label === "Bull" ? null : current))}
-            onFocus={() => setHoveredSegment({ label: "Bull", score: 50, number: 25, multiplier: 2 })}
+            onFocus={() =>
+              setHoveredSegment({
+                label: "Bull",
+                score: 50,
+                number: 25,
+                multiplier: 2,
+                marker: createBoardMarker(200, 200, "Bull", "bull"),
+              })
+            }
             onBlur={() => setHoveredSegment((current) => (current?.label === "Bull" ? null : current))}
             className="transition duration-150 hover:brightness-125 focus:brightness-125"
           />
@@ -911,6 +1039,7 @@ export default function Page() {
   const [legStartingPlayer, setLegStartingPlayer] = useState(0);
   const [currentDarts, setCurrentDarts] = useState<number[]>([]);
   const [currentLabels, setCurrentLabels] = useState<string[]>([]);
+  const [currentMarkers, setCurrentMarkers] = useState<Array<LiveBoardMarker | null>>([]);
   const [legWinner, setLegWinner] = useState<number | null>(null);
   const [matchWinner, setMatchWinner] = useState<number | null>(null);
   const [statusText, setStatusText] = useState("Match bereit. Bobo beginnt.");
@@ -966,6 +1095,7 @@ export default function Page() {
     setLegStartingPlayer(0);
     setCurrentDarts([]);
     setCurrentLabels([]);
+    setCurrentMarkers([]);
     setLegWinner(null);
     setMatchWinner(null);
 
@@ -1160,13 +1290,13 @@ export default function Page() {
                   ? "outer-bull"
                   : parsed.ring === "bull"
                     ? "bull"
-                    : parsed.ring === "miss"
-                      ? "miss"
-                      : "single-outer",
-          marker: null,
+                : parsed.ring === "miss"
+                  ? "miss"
+                  : "single-outer",
+          marker: currentMarkers[index] ?? parsed.marker,
         };
       }),
-    [currentDarts, currentLabels],
+    [currentDarts, currentLabels, currentMarkers],
   );
   const localLiveHistory = useMemo<LiveVisit[]>(
     () =>
@@ -1181,6 +1311,28 @@ export default function Page() {
           checkout: visit.checkout,
           result: visit.checkout ? "checkout" : visit.bust ? "bust" : "ok",
           darts: visit.labels,
+          dartDetails: visit.labels.map((label, dartIndex) => {
+            const parsed = parseThrowLabel(label, visit.darts[dartIndex] ?? 0);
+            return {
+              label: parsed.label,
+              score: parsed.score,
+              number: parsed.baseValue,
+              multiplier: (parsed.ring === "miss" ? 0 : parsed.multiplier) as 0 | 1 | 2 | 3,
+              ring:
+                parsed.ring === "double"
+                  ? "double"
+                  : parsed.ring === "triple"
+                    ? "triple"
+                    : parsed.ring === "outer-bull"
+                      ? "outer-bull"
+                      : parsed.ring === "bull"
+                        ? "bull"
+                        : parsed.ring === "miss"
+                          ? "miss"
+                          : "single-outer",
+              marker: visit.markers[dartIndex] ?? parsed.marker,
+            };
+          }),
           note: visit.checkout ? "Checkout" : visit.bust ? "Bust" : "Visit",
           createdAt: new Date(Date.UTC(2024, 0, 1, 0, playerIndex, visitIndex)).toISOString(),
         })),
@@ -1713,6 +1865,7 @@ export default function Page() {
       player.visits.flatMap((visit, visitIndex) =>
         visit.labels.map((label, dartIndex) => {
           const parsed = parseThrowLabel(label, visit.darts[dartIndex] ?? 0);
+          const marker = visit.markers[dartIndex] ?? null;
           const isLastDart = dartIndex === visit.labels.length - 1;
 
           return {
@@ -1732,6 +1885,8 @@ export default function Page() {
             is_hit: parsed.hit,
             is_checkout_dart: visit.checkout && isLastDart,
             target_label: null,
+            board_x: marker?.x ?? null,
+            board_y: marker?.y ?? null,
           };
         }),
       ),
@@ -1787,6 +1942,8 @@ export default function Page() {
         is_hit: entry.hit,
         is_checkout_dart: false,
         target_label: entry.target,
+        board_x: entry.marker?.x ?? null,
+        board_y: entry.marker?.y ?? null,
       }));
 
       const { error: dartsError } = await supabase.from("dart_events").insert(dartRows);
@@ -1837,6 +1994,7 @@ function resetLegBoards(nextPlayers: Player[]) {
     setLegStartingPlayer(0);
     setCurrentDarts([]);
     setCurrentLabels([]);
+    setCurrentMarkers([]);
     setLegWinner(null);
     setMatchWinner(null);
     setLocalMatchStarted(true);
@@ -1872,6 +2030,7 @@ function resetLegBoards(nextPlayers: Player[]) {
     setLegStartingPlayer(0);
     setCurrentDarts([]);
     setCurrentLabels([]);
+    setCurrentMarkers([]);
     setLegWinner(null);
     setMatchWinner(null);
     setLocalMatchStarted(false);
@@ -1890,6 +2049,7 @@ function resetLegBoards(nextPlayers: Player[]) {
     setLegStartingPlayer(0);
     setCurrentDarts([]);
     setCurrentLabels([]);
+    setCurrentMarkers([]);
     setLegWinner(null);
     setMatchWinner(null);
     setLocalMatchStarted(false);
@@ -1908,6 +2068,7 @@ function resetLegBoards(nextPlayers: Player[]) {
     setLegStartingPlayer(nextStarter);
     setCurrentDarts([]);
     setCurrentLabels([]);
+    setCurrentMarkers([]);
     setLegWinner(null);
     setStatusText(
       entryMode === "single"
@@ -1929,7 +2090,7 @@ function resetLegBoards(nextPlayers: Player[]) {
     );
   }
 
-  function addDartValue(value: number, label?: string) {
+  function addDartValue(value: number, label?: string, marker: LiveBoardMarker | null = null) {
     if (legWinner !== null || matchWinner !== null || currentDarts.length >= 3) {
       return;
     }
@@ -1940,10 +2101,11 @@ function resetLegBoards(nextPlayers: Player[]) {
 
     setCurrentDarts((prev) => [...prev, value]);
     setCurrentLabels((prev) => [...prev, label ?? `${value}`]);
+    setCurrentMarkers((prev) => [...prev, marker]);
   }
 
   function addBoardSegment(segment: Segment) {
-    addDartValue(segment.score, segment.label);
+    addDartValue(segment.score, segment.label, segment.marker);
   }
 
   function registerLocalBullOffDart(dart: LiveDart) {
@@ -1995,7 +2157,7 @@ function resetLegBoards(nextPlayers: Player[]) {
     setStatusText(`${players[winnerIndex]?.name ?? "Spieler"} gewinnt das Bull-Off und beginnt.`);
   }
 
-  function recordVisit(darts: number[], labels = darts.map(String)) {
+  function recordVisit(darts: number[], labels = darts.map(String), markers: Array<LiveBoardMarker | null> = []) {
     if (legWinner !== null || matchWinner !== null || darts.length === 0) {
       return;
     }
@@ -2011,6 +2173,7 @@ function resetLegBoards(nextPlayers: Player[]) {
     const visit: Visit = {
       darts,
       labels,
+      markers,
       scoreBefore: player.score,
       scoreAfter: bust ? player.score : remaining,
       bust,
@@ -2024,6 +2187,7 @@ function resetLegBoards(nextPlayers: Player[]) {
     setPlayers(nextPlayers);
     setCurrentDarts([]);
     setCurrentLabels([]);
+    setCurrentMarkers([]);
 
     if (bust) {
       const nextPlayerIndex = (activePlayer + 1) % nextPlayers.length;
@@ -2503,6 +2667,7 @@ function resetLegBoards(nextPlayers: Player[]) {
                           score: segment.score,
                           number: segment.number,
                           multiplier: segment.multiplier === 0 ? 1 : segment.multiplier,
+                          marker: segment.marker,
                         });
                       }}
                       onMiss={() => {
@@ -2517,13 +2682,14 @@ function resetLegBoards(nextPlayers: Player[]) {
                           });
                           return;
                         }
-                        addDartValue(0, "Miss");
+                        addDartValue(0, "Miss", null);
                       }}
                       onRemoveLast={() => {
                         setCurrentDarts((prev) => prev.slice(0, -1));
                         setCurrentLabels((prev) => prev.slice(0, -1));
+                        setCurrentMarkers((prev) => prev.slice(0, -1));
                       }}
-                      onFinishVisit={() => recordVisit(currentDarts, currentLabels)}
+                      onFinishVisit={() => recordVisit(currentDarts, currentLabels, currentMarkers)}
                       onNextLeg={startNextLeg}
                     />
                   ) : null}

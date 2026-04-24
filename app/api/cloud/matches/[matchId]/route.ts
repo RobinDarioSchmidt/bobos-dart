@@ -35,7 +35,7 @@ export async function GET(
       .order("seat_index", { ascending: true }),
     adminClient
       .from("dart_events")
-      .select("player_name, player_seat_index, visit_index, dart_index, segment_label, ring, score, is_hit, is_checkout_dart, created_at")
+      .select("player_name, player_seat_index, visit_index, dart_index, segment_label, ring, score, is_hit, is_checkout_dart, board_x, board_y, created_at")
       .eq("owner_id", user.id)
       .eq("source_type", "match")
       .eq("match_id", matchId),

@@ -237,6 +237,7 @@ async function persistCompletedLiveMatch(adminClient: ReturnType<typeof getSupab
       visitIndexByPlayer.set(visit.playerIndex, playerVisitIndex + 1);
       return visit.darts.map((label, dartIndex) => {
         const parsed = parseLiveThrowLabel(label);
+        const marker = visit.dartDetails?.[dartIndex]?.marker ?? null;
         const isLastDart = dartIndex === visit.darts.length - 1;
         return {
           owner_id: ownerId,
@@ -255,6 +256,8 @@ async function persistCompletedLiveMatch(adminClient: ReturnType<typeof getSupab
           is_hit: parsed.hit,
           is_checkout_dart: visit.checkout && isLastDart,
           target_label: null,
+          board_x: marker?.x ?? null,
+          board_y: marker?.y ?? null,
         };
       });
     });

@@ -36,6 +36,7 @@ export type LiveVisit = {
   checkout: boolean;
   result: "ok" | "bust" | "checkout" | "leg-win";
   darts: string[];
+  dartDetails?: LiveDart[];
   note: string;
   createdAt: string;
 };
@@ -612,6 +613,7 @@ export function finalizePendingVisit(previousState: LiveMatchState) {
     checkout: evaluation.checkout,
     result: evaluation.bust ? "bust" : evaluation.checkout ? "checkout" : "ok",
     darts: usedLabels,
+    dartDetails: evaluation.usedDarts,
     note: evaluation.bust
       ? "Bust"
       : evaluation.checkout
@@ -656,6 +658,7 @@ export function finalizePendingVisit(previousState: LiveMatchState) {
       checkout: true,
       result: "leg-win",
       darts: usedLabels,
+      dartDetails: evaluation.usedDarts,
       note: `${player.name} gewinnt das Leg`,
       createdAt: new Date().toISOString(),
     });

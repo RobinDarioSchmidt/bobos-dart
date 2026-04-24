@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { KeyboardEvent, PointerEvent as ReactPointerEvent } from "react";
+import type { KeyboardEvent, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
 import type { LiveBoardMarker, LiveMatchState, LiveSegmentRing } from "@/lib/live-match";
 
 export type LiveBoardSegment = {
@@ -118,6 +118,18 @@ function buildSegment(value: number, midAngle: number, ring: LiveSegmentRing): L
     multiplier,
     ring,
     marker: createMarker(markerRadiusByRing[ring], midAngle, `${prefix}${value}`, ring),
+  };
+}
+
+function withExactMarker(segment: LiveBoardSegment, x: number, y: number): LiveBoardSegment {
+  return {
+    ...segment,
+    marker: {
+      x,
+      y,
+      label: segment.label,
+      ring: segment.ring,
+    },
   };
 }
 
@@ -278,6 +290,7 @@ function LiveDartboard({
   const suppressClickRef = useRef(false);
   const touchPreviewActiveRef = useRef(false);
   const [touchMaskEnabled, setTouchMaskEnabled] = useState(false);
+  const svgRef = useRef<SVGSVGElement | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
@@ -321,13 +334,36 @@ function LiveDartboard({
     };
   }
 
+  function getBoardPointFromSvgEvent(event: ReactMouseEvent<SVGElement>) {
+    const svg = svgRef.current;
+    if (!svg) {
+      return null;
+    }
+
+    const rect = svg.getBoundingClientRect();
+    if (!rect.width || !rect.height) {
+      return null;
+    }
+
+    const boardX = ((event.clientX - rect.left) / rect.width) * 400;
+    const boardY = ((event.clientY - rect.top) / rect.height) * 400;
+    const dx = boardX - 200;
+    const dy = boardY - 200;
+    if (Math.sqrt(dx * dx + dy * dy) > BOARD_RADIUS.doubleOuter) {
+      return null;
+    }
+
+    return { boardX, boardY };
+  }
+
   function updateTouchPreview(event: ReactPointerEvent<HTMLDivElement>) {
     const point = getBoardPointFromTouchMask(event);
     if (!point) {
       return null;
     }
 
-    const segment = getSegmentFromBoardPoint(point.boardX, point.boardY);
+    const baseSegment = getSegmentFromBoardPoint(point.boardX, point.boardY);
+    const segment = baseSegment ? withExactMarker(baseSegment, point.boardX, point.boardY) : null;
     if (!segment && !touchPreviewActiveRef.current) {
       return null;
     }
@@ -397,12 +433,13 @@ function LiveDartboard({
     }, 180);
   }
 
-  function handleSegmentClick(segment: LiveBoardSegment) {
+  function handleSegmentClick(event: ReactMouseEvent<SVGElement>, segment: LiveBoardSegment) {
     if (disabled || suppressClickRef.current) {
       return;
     }
 
-    onSegmentSelect(segment);
+    const point = getBoardPointFromSvgEvent(event);
+    onSegmentSelect(point ? withExactMarker(segment, point.boardX, point.boardY) : segment);
   }
 
   return (
@@ -435,6 +472,7 @@ function LiveDartboard({
 
       <div className="relative">
         <svg
+          ref={svgRef}
           viewBox="0 0 400 400"
           className={`mx-auto w-full max-w-[35rem] drop-shadow-[0_18px_40px_rgba(0,0,0,0.45)] ${disabled ? "pointer-events-none" : ""}`}
         >
@@ -512,7 +550,7 @@ function LiveDartboard({
                     role="button"
                     tabIndex={disabled ? -1 : 0}
                     aria-label={segment.label}
-                    onClick={() => handleSegmentClick(segment)}
+                    onClick={(event) => handleSegmentClick(event, segment)}
                     onKeyDown={(event) => !disabled && handleBoardKeyDown(event, onSegmentSelect, segment)}
                     className="cursor-pointer outline-none"
                   >
@@ -548,7 +586,7 @@ function LiveDartboard({
             role="button"
             tabIndex={disabled ? -1 : 0}
             aria-label="Outer Bull"
-            onClick={() => handleSegmentClick(buildSegment(25, 0, "outer-bull"))}
+            onClick={(event) => handleSegmentClick(event, buildSegment(25, 0, "outer-bull"))}
             onKeyDown={(event) =>
               !disabled &&
               handleBoardKeyDown(event, onSegmentSelect, buildSegment(25, 0, "outer-bull"))
@@ -593,7 +631,7 @@ function LiveDartboard({
             role="button"
             tabIndex={disabled ? -1 : 0}
             aria-label="Bull"
-            onClick={() => handleSegmentClick(buildSegment(25, 0, "bull"))}
+            onClick={(event) => handleSegmentClick(event, buildSegment(25, 0, "bull"))}
             onKeyDown={(event) =>
               !disabled &&
               handleBoardKeyDown(event, onSegmentSelect, buildSegment(25, 0, "bull"))

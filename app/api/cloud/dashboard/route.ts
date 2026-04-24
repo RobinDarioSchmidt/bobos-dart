@@ -63,6 +63,8 @@ type DartEventRow = {
   is_hit: boolean;
   is_checkout_dart: boolean;
   target_label: string | null;
+  board_x?: number | null;
+  board_y?: number | null;
   source_type: "match" | "training";
   created_at?: string;
 };
@@ -105,7 +107,7 @@ export async function GET(request: Request) {
       ,
     adminClient
       .from("dart_events")
-      .select("match_id, player_name, player_seat_index, visit_index, dart_index, segment_label, base_value, multiplier, ring, score, is_hit, is_checkout_dart, target_label, source_type, created_at")
+      .select("match_id, player_name, player_seat_index, visit_index, dart_index, segment_label, base_value, multiplier, ring, score, is_hit, is_checkout_dart, target_label, board_x, board_y, source_type, created_at")
       .eq("owner_id", user.id),
     adminClient.from("profiles").select("id, display_name"),
     adminClient
