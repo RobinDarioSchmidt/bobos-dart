@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import type { ReactNode } from "react";
 
 type EntryMode = "single" | "double" | "master";
@@ -149,6 +150,65 @@ export function LocalSetupPanel({
       >
         Match starten
       </button>
+    </section>
+  );
+}
+
+export function SessionFlowHeader({
+  title,
+  onBack,
+}: {
+  title: string;
+  onBack: () => void;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <div className="flex min-w-0 items-center gap-3">
+        <Image
+          src="/icons/bobo-logo.jpg"
+          alt="Bobo mit Dart"
+          width={72}
+          height={72}
+          className="h-[4.5rem] w-[4.5rem] rounded-2xl border border-emerald-300/30 object-cover shadow-lg shadow-emerald-950/40"
+        />
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-100">Bobo&apos;s Dart</p>
+          <h1 className="mt-1 truncate text-2xl font-semibold text-white sm:text-3xl">{title}</h1>
+        </div>
+      </div>
+      <button
+        onClick={onBack}
+        className="rounded-2xl border border-white/10 bg-black/20 px-4 py-2 text-sm font-semibold text-white"
+      >
+        Zurueck
+      </button>
+    </div>
+  );
+}
+
+export function BoardPreviewPanel({
+  heading,
+  badge,
+  children,
+}: {
+  heading: string;
+  badge?: string | null;
+  children: ReactNode;
+}) {
+  return (
+    <section className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur sm:p-4">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-xs uppercase tracking-[0.22em] text-stone-400">Board</p>
+          <h2 className="mt-1 text-2xl font-semibold text-white">{heading}</h2>
+        </div>
+        {badge ? (
+          <div className="rounded-full border border-white/10 bg-black/20 px-3 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-stone-300">
+            {badge}
+          </div>
+        ) : null}
+      </div>
+      <div className="mt-5">{children}</div>
     </section>
   );
 }

@@ -1,14 +1,14 @@
 "use client";
 
-import Image from "next/image";
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { LiveBoardPanel, type LiveBoardSegment } from "@/components/live/board-panel";
 import { LiveHistoryPanel, LiveStatsPanel } from "@/components/live/match-panels";
 import {
+  BoardPreviewPanel,
   CollapsibleFeedPanel,
   LocalSetupPanel,
+  SessionFlowHeader,
   SimpleStatsPanel,
   TrainingSetupPanel,
 } from "@/components/local/session-panels";
@@ -60,17 +60,6 @@ type MatchHistoryEntry = {
   mode: GameMode;
   doubleOut: boolean;
   sets: string;
-};
-
-type UndoSnapshot = {
-  players: Player[];
-  activePlayer: number;
-  legStartingPlayer: number;
-  legWinner: number | null;
-  matchWinner: number | null;
-  statusText: string;
-  stats: StoredStats;
-  history: MatchHistoryEntry[];
 };
 
 type TrainingSession = {
@@ -243,11 +232,8 @@ type LocalStoredState = CloudAppSettings & {
 const STORAGE_KEY = "bobos-dart-state-v3";
 
 const BOARD_ORDER = [20, 1, 18, 4, 13, 6, 10, 15, 2, 17, 3, 19, 7, 16, 8, 11, 14, 9, 12, 5];
-const QUICK_DARTS = [0, 1, 5, 10, 20, 25, 50, 60];
-const VISIT_PRESETS = [26, 41, 45, 60, 81, 85, 95, 100, 121, 140, 180];
 const LEGS_OPTIONS = [2, 3, 5];
 const SETS_OPTIONS = [1, 2, 3];
-const PLAYER_COUNT_OPTIONS = [2, 3, 4];
 const TRAINING_TARGETS = [...Array.from({ length: 20 }, (_, index) => index + 1), 25];
 const SHANGHAI_TARGETS = Array.from({ length: 20 }, (_, index) => index + 1);
 const BOARD_START_ANGLE = -9;
@@ -925,18 +911,15 @@ export default function Page() {
   const [legStartingPlayer, setLegStartingPlayer] = useState(0);
   const [currentDarts, setCurrentDarts] = useState<number[]>([]);
   const [currentLabels, setCurrentLabels] = useState<string[]>([]);
-  const [manualDart, setManualDart] = useState("");
-  const [manualVisit, setManualVisit] = useState("");
   const [legWinner, setLegWinner] = useState<number | null>(null);
   const [matchWinner, setMatchWinner] = useState<number | null>(null);
   const [statusText, setStatusText] = useState("Match bereit. Bobo beginnt.");
   const [stats, setStats] = useState<StoredStats>(emptyStats);
   const [localMatchHistory, setLocalMatchHistory] = useState<MatchHistoryEntry[]>([]);
-  const [cloudMatchHistory, setCloudMatchHistory] = useState<MatchHistoryEntry[]>([]);
+  const [, setCloudMatchHistory] = useState<MatchHistoryEntry[]>([]);
   const [localHistoryOpen, setLocalHistoryOpen] = useState(false);
   const [trainingFeedOpen, setTrainingFeedOpen] = useState(false);
   const [trainingStarted, setTrainingStarted] = useState(false);
-  const [undoStack, setUndoStack] = useState<UndoSnapshot[]>([]);
   const [session, setSession] = useState<Session | null>(null);
   const [profileName, setProfileName] = useState("");
   const [profileDraft, setProfileDraft] = useState("");
@@ -948,7 +931,7 @@ export default function Page() {
   const [cloudStats, setCloudStats] = useState<CloudDashboardStats | null>(null);
   const [playerPresence, setPlayerPresence] = useState<CloudPlayerPresence[]>([]);
   const [recentMilestones, setRecentMilestones] = useState<CloudRecentMilestone[]>([]);
-  const [recentTrainingSessions, setRecentTrainingSessions] = useState<TrainingCloudRow[]>([]);
+  const [, setRecentTrainingSessions] = useState<TrainingCloudRow[]>([]);
   const [trainingSession, setTrainingSession] = useState<TrainingSession>(() =>
     createTrainingSession("around-the-clock"),
   );
@@ -983,11 +966,8 @@ export default function Page() {
     setLegStartingPlayer(0);
     setCurrentDarts([]);
     setCurrentLabels([]);
-    setManualDart("");
-    setManualVisit("");
     setLegWinner(null);
     setMatchWinner(null);
-    setUndoStack([]);
 
     if (parsed.appMode === "match" || parsed.appMode === "training") {
       setAppMode(parsed.appMode);
@@ -1135,7 +1115,6 @@ export default function Page() {
   const boardPlayerIndex =
     localBullOff.enabled && !localBullOff.completed ? (localBullOff.currentPlayerIndex ?? activePlayer) : activePlayer;
   const boardPlayer = players[boardPlayerIndex] ?? currentPlayer;
-  const currentPlayerMetrics = useMemo(() => getPlayerMetrics(currentPlayer), [currentPlayer]);
   const localPlayerStats = useMemo(
     () =>
       players.map((player) => {
@@ -1269,22 +1248,6 @@ export default function Page() {
       statusText,
     ],
   );
-
-  function saveSnapshot() {
-    setUndoStack((prev) => [
-      ...prev,
-      {
-        players: clonePlayers(players),
-        activePlayer,
-        legStartingPlayer,
-        legWinner,
-        matchWinner,
-        statusText,
-        stats: { ...stats },
-        history: [...localMatchHistory],
-      },
-    ]);
-  }
 
   const ensureProfile = useCallback(async (nextSession: Session) => {
     if (!supabase || !nextSession.user.email) {
@@ -1567,11 +1530,9 @@ export default function Page() {
       } else {
         setProfileName("");
         setProfileDraft("");
-        setCloudMatchHistory([]);
         setCloudStats(null);
         setPlayerPresence([]);
         setRecentMilestones([]);
-        setRecentTrainingSessions([]);
         setCloudSettingsReady(false);
         setSelectedFlow("overview");
       }
@@ -1887,7 +1848,6 @@ function resetLegBoards(nextPlayers: Player[]) {
         ? `Neues Match bereit. ${nextPlayers[0].name} beginnt.`
         : `Neues Match bereit. ${nextPlayers[0].name} sucht ${getEntryModeLabel(entryMode)}.`,
     );
-    setUndoStack([]);
   }
 
   function startConfiguredLocalMatch() {
@@ -1917,7 +1877,6 @@ function resetLegBoards(nextPlayers: Player[]) {
     setLocalMatchStarted(false);
     setLocalBullOff(createLocalBullOffState(nextPlayers, false));
     setStatusText("Match Setup bereit.");
-    setUndoStack([]);
   }
 
   function cycleEntryMode() {
@@ -1936,7 +1895,6 @@ function resetLegBoards(nextPlayers: Player[]) {
     setLocalMatchStarted(false);
     setLocalBullOff(createLocalBullOffState(nextPlayers, false));
     setStatusText("Match Setup bereit.");
-    setUndoStack([]);
   }
 
   function startNextLeg() {
@@ -1950,15 +1908,12 @@ function resetLegBoards(nextPlayers: Player[]) {
     setLegStartingPlayer(nextStarter);
     setCurrentDarts([]);
     setCurrentLabels([]);
-    setManualDart("");
-    setManualVisit("");
     setLegWinner(null);
     setStatusText(
       entryMode === "single"
         ? `Nächstes Leg gestartet. ${players[nextStarter].name} ist am Zug.`
         : `Nächstes Leg gestartet. ${players[nextStarter].name} sucht ${getEntryModeLabel(entryMode)}.`,
     );
-    setUndoStack([]);
   }
 
   function updatePlayerName(index: number, name: string) {
@@ -1985,7 +1940,6 @@ function resetLegBoards(nextPlayers: Player[]) {
 
     setCurrentDarts((prev) => [...prev, value]);
     setCurrentLabels((prev) => [...prev, label ?? `${value}`]);
-    setManualDart("");
   }
 
   function addBoardSegment(segment: Segment) {
@@ -2041,21 +1995,10 @@ function resetLegBoards(nextPlayers: Player[]) {
     setStatusText(`${players[winnerIndex]?.name ?? "Spieler"} gewinnt das Bull-Off und beginnt.`);
   }
 
-  function commitManualDart() {
-    const value = Number(manualDart);
-    if (Number.isNaN(value)) {
-      return;
-    }
-
-    addDartValue(value);
-  }
-
   function recordVisit(darts: number[], labels = darts.map(String)) {
     if (legWinner !== null || matchWinner !== null || darts.length === 0) {
       return;
     }
-
-    saveSnapshot();
 
     const nextPlayers = clonePlayers(players);
     const player = nextPlayers[activePlayer];
@@ -2165,42 +2108,6 @@ function resetLegBoards(nextPlayers: Player[]) {
     }
 
     setStatusText(`${player.name} stellt ${remaining}. ${nextPlayers[nextPlayerIndex].name} ist dran.`);
-  }
-
-  function submitManualVisit() {
-    const total = Number(manualVisit);
-    if (Number.isNaN(total) || total < 0 || total > 180) {
-      return;
-    }
-
-    recordVisit([total], [`Visit ${total}`]);
-  }
-
-  function undo() {
-    if (currentDarts.length > 0) {
-      setCurrentDarts((prev) => prev.slice(0, -1));
-      setCurrentLabels((prev) => prev.slice(0, -1));
-      return;
-    }
-
-    const snapshot = undoStack[undoStack.length - 1];
-    if (!snapshot) {
-      return;
-    }
-
-    setPlayers(snapshot.players);
-    setActivePlayer(snapshot.activePlayer);
-    setLegStartingPlayer(snapshot.legStartingPlayer);
-    setLegWinner(snapshot.legWinner);
-    setMatchWinner(snapshot.matchWinner);
-    setStatusText(snapshot.statusText);
-    setStats(snapshot.stats);
-    setLocalMatchHistory(snapshot.history);
-    setUndoStack((prev) => prev.slice(0, -1));
-    setCurrentDarts([]);
-    setCurrentLabels([]);
-    setManualDart("");
-    setManualVisit("");
   }
 
   function resetTraining(modeOverride = trainingSession.mode) {
@@ -2452,7 +2359,6 @@ function resetLegBoards(nextPlayers: Player[]) {
     }
   }
 
-  const finishDisabled = currentDarts.length === 0 || legWinner !== null || matchWinner !== null;
   const trainingTarget = getCurrentTrainingTarget(trainingSession);
 
   return (
@@ -2516,1227 +2422,234 @@ function resetLegBoards(nextPlayers: Player[]) {
           />
         ) : (
           <>
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex min-w-0 items-center gap-3">
-                <Image
-                  src="/icons/bobo-logo.jpg"
-                  alt="Bobo mit Dart"
-                  width={72}
-                  height={72}
-                  className="h-[4.5rem] w-[4.5rem] rounded-2xl border border-emerald-300/30 object-cover shadow-lg shadow-emerald-950/40"
-                />
-                <div className="min-w-0">
-                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-100">Bobo&apos;s Dart</p>
-                  <h1 className="mt-1 truncate text-2xl font-semibold text-white sm:text-3xl">
-                    {selectedFlow === "local" ? "Lokal" : "Training"}
-                  </h1>
-                </div>
-              </div>
-              <button
-                onClick={() => setSelectedFlow("overview")}
-                className="rounded-2xl border border-white/10 bg-black/20 px-4 py-2 text-sm font-semibold text-white"
-              >
-                Zurueck
-              </button>
-            </div>
+            <SessionFlowHeader
+              title={selectedFlow === "local" ? "Lokal" : "Training"}
+              onBack={() => setSelectedFlow("overview")}
+            />
 
-        {false ? <section className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur">
-          <div className="flex flex-wrap items-center gap-3">
-            <button
-              onClick={() => setAppMode("match")}
-              className={`rounded-2xl px-4 py-2 text-sm font-semibold transition ${
-                appMode === "match"
-                  ? "bg-white text-black"
-                  : "border border-white/10 bg-black/20 text-white hover:bg-white/10"
-              }`}
-            >
-              Match
-            </button>
-            <button
-              onClick={() => setAppMode("training")}
-              className={`rounded-2xl px-4 py-2 text-sm font-semibold transition ${
-                appMode === "training"
-                  ? "bg-amber-300 text-black"
-                  : "border border-white/10 bg-black/20 text-white hover:bg-white/10"
-              }`}
-            >
-              Training
-            </button>
-            <Link
-              href="/live"
-              className="rounded-2xl border border-emerald-300/30 bg-emerald-400/10 px-4 py-2 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-400/20"
-            >
-              Live-Match
-            </Link>
-            <div className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-sm text-stone-300">
-              {appMode === "match" ? statusText : trainingSession.message}
-            </div>
-          </div>
-        </section> : null}
-
-        <section className="hidden overflow-hidden rounded-[1.75rem] border border-white/10 bg-white/5 backdrop-blur">
-          <div className="grid gap-4 p-4 lg:grid-cols-[1.05fr_0.95fr] lg:p-5">
-            <div className="space-y-5">
-              <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-3 py-1 text-xs uppercase tracking-[0.28em] text-emerald-200">
-                {selectedFlow === "local" ? "Lokales Spiel" : "Training"}
-              </div>
-              <div className="space-y-3">
-                <h1 className="max-w-3xl text-3xl font-semibold tracking-tight text-white sm:text-4xl">
-                  {appMode === "match" ? "Alles bereit fuer das naechste Leg." : getTrainingModeLabel(trainingSession.mode)}
-                </h1>
-                <p className="max-w-2xl text-sm leading-6 text-stone-300 sm:text-base">
-                  Wechsle zwischen lokalem Match-Modus und Training, erfasse Würfe als Segmente
-                  mit `S`, `D`, `T` oder Bulls und speichere Fortschritt direkt im Browser.
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-3 text-sm text-stone-300">
-                <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1">{players.length} Spieler</span>
-                <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1">{mode}</span>
-                <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1">
-                  {appMode === "match" ? `${getEntryModeLabel(entryMode)} · ${doubleOut ? "Double-Out" : "Straight-Out"}` : trainingTarget}
-                </span>
-              </div>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setAppMode("match")}
-                  className={`rounded-2xl px-5 py-3 font-semibold transition ${
-                    appMode === "match"
-                      ? "bg-white text-black"
-                      : "border border-white/10 bg-black/20 text-white hover:bg-white/10"
-                  }`}
-                >
-                  Match
-                </button>
-                <button
-                  onClick={() => setAppMode("training")}
-                  className={`rounded-2xl px-5 py-3 font-semibold transition ${
-                    appMode === "training"
-                      ? "bg-amber-300 text-black"
-                      : "border border-white/10 bg-black/20 text-white hover:bg-white/10"
-                  }`}
-                >
-                  Training
-                </button>
-                <Link
-                  href="/live"
-                  className="rounded-2xl border border-emerald-300/30 bg-emerald-400/10 px-5 py-3 font-semibold text-emerald-100 transition hover:bg-emerald-400/20"
-                >
-                  Live-Match
-                </Link>
-              </div>
-            </div>
-
-            <div className="rounded-[1.75rem] border border-white/10 bg-black/20 p-5">
-              {appMode === "match" ? (
-                <>
-                  <p className="text-xs uppercase tracking-[0.24em] text-stone-400">Match Uebersicht</p>
-                  <p className="mt-2 text-lg font-medium text-white">{statusText}</p>
-                  <div className="mt-5 grid gap-4 sm:grid-cols-2">
-                    {players.map((player, index) => {
-                      const metrics = getPlayerMetrics(player);
-                      const isActive = activePlayer === index && legWinner === null && matchWinner === null;
-
-                      return (
-                        <div
-                          key={`${player.name}-${index}`}
-                          className={`rounded-[1.5rem] border p-4 transition ${
-                            isActive
-                              ? "border-emerald-300/40 bg-emerald-300/10"
-                              : "border-white/10 bg-white/5"
-                          }`}
-                        >
-                          <input
-                            value={player.name}
-                            onChange={(event) => updatePlayerName(index, event.target.value)}
-                            className="w-full border-none bg-transparent text-lg font-semibold text-white outline-none"
-                          />
-                          {entryMode !== "single" && !player.entered ? (
-                            <p className="mt-2 text-xs font-medium text-amber-200">{getEntryModeLabel(entryMode)} offen</p>
-                          ) : null}
-                          <p className="mt-3 text-5xl font-semibold leading-none text-white">{player.score}</p>
-                          <div className="mt-4 grid grid-cols-3 gap-2 text-sm">
-                            <div className="rounded-2xl bg-black/20 p-3">
-                              <p className="text-stone-400">Sets</p>
-                              <p className="mt-1 text-xl font-semibold text-white">{player.sets}</p>
-                            </div>
-                            <div className="rounded-2xl bg-black/20 p-3">
-                              <p className="text-stone-400">Legs</p>
-                              <p className="mt-1 text-xl font-semibold text-white">{player.legs}</p>
-                            </div>
-                            <div className="rounded-2xl bg-black/20 p-3">
-                              <p className="text-stone-400">Avg</p>
-                              <p className="mt-1 text-xl font-semibold text-white">{metrics.average}</p>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </>
-              ) : (
-                <>
-                  <p className="text-xs uppercase tracking-[0.24em] text-stone-400">Training Status</p>
-                  <p className="mt-2 text-lg font-medium text-white">{trainingSession.message}</p>
-                  <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                    <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                      <p className="text-xs uppercase tracking-[0.2em] text-stone-400">Modus</p>
-                      <p className="mt-2 text-2xl font-semibold text-white">
-                        {getTrainingModeLabel(trainingSession.mode)}
-                      </p>
-                    </div>
-                    <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                      <p className="text-xs uppercase tracking-[0.2em] text-stone-400">Aktuelles Ziel</p>
-                      <p className="mt-2 text-2xl font-semibold text-amber-200">{trainingTarget}</p>
-                    </div>
-                    <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                      <p className="text-xs uppercase tracking-[0.2em] text-stone-400">Training Score</p>
-                      <p className="mt-2 text-2xl font-semibold text-white">{trainingSession.score}</p>
-                    </div>
-                    <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                      <p className="text-xs uppercase tracking-[0.2em] text-stone-400">Treffer</p>
-                      <p className="mt-2 text-2xl font-semibold text-white">{trainingSession.hits}</p>
-                    </div>
-                  </div>
-                </>
-              )}
-
-              <div className="mt-5 rounded-2xl border border-white/10 bg-white/5 p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <p className="text-xs uppercase tracking-[0.24em] text-stone-400">Cloud Sync</p>
-                  <div
-                    className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                      session
-                        ? "bg-emerald-400/20 text-emerald-200"
-                        : "bg-white/10 text-stone-300"
-                    }`}
-                  >
-                    {session ? "Verbunden" : supabaseEnabled ? "Nicht eingeloggt" : "Nicht konfiguriert"}
-                  </div>
-                </div>
-
-                {supabaseEnabled ? (
-                  session ? (
-                    <div className="mt-3 space-y-3">
-                      <div className="text-sm text-stone-300">
-                        <p>{session.user.email}</p>
-                        {profileName ? <p className="text-stone-400">Profilname: {profileName}</p> : null}
-                        <p className="mt-1 text-stone-400">
-                          Match-Historie, Training und deine App-Einstellungen werden für eingeloggte Nutzer in der Cloud gehalten.
-                        </p>
-                      </div>
-                      <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
-                        <input
-                          value={profileDraft}
-                          onChange={(event) => setProfileDraft(event.target.value)}
-                          placeholder="Profilname"
-                          className="h-11 rounded-2xl border border-white/10 bg-black/20 px-4 text-white outline-none placeholder:text-stone-500"
-                        />
-                        <button
-                          onClick={() => void saveProfileDraft()}
-                          className="rounded-2xl bg-emerald-400 px-4 py-2 text-sm font-semibold text-black"
-                        >
-                          Profil speichern
-                        </button>
-                      </div>
-                      <div className="flex flex-wrap gap-3">
-                        <button
-                          onClick={() => void loadCloudMatches(session)}
-                          className="rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-black"
-                        >
-                          Cloud-Historie laden
-                        </button>
-                        <Link
-                          href="/profile"
-                          className="rounded-2xl border border-white/10 bg-black/20 px-4 py-2 text-sm font-semibold text-white"
-                        >
-                          Profilseite
-                        </Link>
-                        <button
-                          onClick={() => void loadCloudDashboard(session)}
-                          className="rounded-2xl border border-white/10 bg-black/20 px-4 py-2 text-sm font-semibold text-white"
-                        >
-                          Cloud-Statistik laden
-                        </button>
-                        {isAdmin ? (
-                          <Link
-                            href="/admin"
-                            className="rounded-2xl bg-amber-300 px-4 py-2 text-sm font-semibold text-black"
-                          >
-                            Admin-Nutzer
-                          </Link>
-                        ) : null}
-                        <button
-                          onClick={() => void handleSignOut()}
-                          className="rounded-2xl border border-white/10 bg-black/20 px-4 py-2 text-sm font-semibold text-white"
-                        >
-                          Logout
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="mt-3 space-y-3">
-                      <p className="text-sm text-stone-400">
-                        Konten werden manuell vom Admin angelegt. Hier ist nur der Login offen.
-                      </p>
-                      <input
-                        type="email"
-                        value={email}
-                        onChange={(event) => setEmail(event.target.value)}
-                        placeholder="E-Mail"
-                        className="h-11 w-full rounded-2xl border border-white/10 bg-black/20 px-4 text-white outline-none placeholder:text-stone-500"
-                      />
-                      <input
-                        type="password"
-                        value={password}
-                        onChange={(event) => setPassword(event.target.value)}
-                        placeholder="Passwort"
-                        className="h-11 w-full rounded-2xl border border-white/10 bg-black/20 px-4 text-white outline-none placeholder:text-stone-500"
-                      />
-                      <button
-                        onClick={() => void handleAuthSubmit()}
-                        className="w-full rounded-2xl bg-emerald-400 px-4 py-3 text-sm font-semibold text-black"
-                      >
-                        Einloggen
-                      </button>
-                    </div>
-                  )
-                ) : (
-                  <p className="mt-3 text-sm text-stone-400">
-                    Trage erst `NEXT_PUBLIC_SUPABASE_URL` und `NEXT_PUBLIC_SUPABASE_ANON_KEY` ein.
-                  </p>
-                )}
-
-                {authMessage ? <p className="mt-3 text-sm text-amber-200">{authMessage}</p> : null}
-                {cloudMessage ? <p className="mt-2 text-sm text-stone-300">{cloudMessage}</p> : null}
-                {cloudLoading ? <p className="mt-2 text-sm text-stone-500">Cloud-Historie wird geladen...</p> : null}
-
-                {session && cloudStats ? (
-                  <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-4">
-                    <p className="text-xs uppercase tracking-[0.24em] text-stone-400">Deine Cloud-Zahlen</p>
-                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                      <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
-                        <p className="text-xs uppercase tracking-[0.2em] text-stone-400">Matches</p>
-                        <p className="mt-2 text-2xl font-semibold text-white">
-                          {cloudStats.matchesWon} / {cloudStats.matchesPlayed}
-                        </p>
-                      </div>
-                      <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
-                        <p className="text-xs uppercase tracking-[0.2em] text-stone-400">Bestes Avg</p>
-                        <p className="mt-2 text-2xl font-semibold text-white">{cloudStats.bestAverage.toFixed(2)}</p>
-                      </div>
-                      <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
-                        <p className="text-xs uppercase tracking-[0.2em] text-stone-400">Best Visit</p>
-                        <p className="mt-2 text-2xl font-semibold text-white">{cloudStats.bestVisit}</p>
-                      </div>
-                      <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
-                        <p className="text-xs uppercase tracking-[0.2em] text-stone-400">Sets / Legs</p>
-                        <p className="mt-2 text-2xl font-semibold text-white">
-                          {cloudStats.totalSetsWon} / {cloudStats.totalLegsWon}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                      <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
-                        <p className="text-xs uppercase tracking-[0.2em] text-stone-400">Training</p>
-                        <p className="mt-2 text-xl font-semibold text-white">{cloudStats.trainingSessions}</p>
-                      </div>
-                      <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
-                        <p className="text-xs uppercase tracking-[0.2em] text-stone-400">Best Score</p>
-                        <p className="mt-2 text-xl font-semibold text-white">{cloudStats.bestTrainingScore}</p>
-                      </div>
-                      <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
-                        <p className="text-xs uppercase tracking-[0.2em] text-stone-400">Trainingsdarts</p>
-                        <p className="mt-2 text-xl font-semibold text-white">{cloudStats.totalTrainingDarts}</p>
-                      </div>
-                    </div>
-                    <div className="mt-4 space-y-2">
-                      <p className="text-xs uppercase tracking-[0.2em] text-stone-400">Letzte Trainingssessions</p>
-                      {recentTrainingSessions.length > 0 ? (
-                        recentTrainingSessions.slice(0, 3).map((entry, index) => (
-                          <div
-                            key={`${entry.played_at}-${index}`}
-                            className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-stone-300"
-                          >
-                            {new Date(entry.played_at).toLocaleString("de-DE")} · Score {entry.score} · Treffer {entry.hits} · Darts {entry.darts_thrown}
-                          </div>
-                        ))
-                      ) : (
-                        <p className="text-sm text-stone-400">Noch keine Trainingsdaten in der Cloud.</p>
-                      )}
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {appMode === "match" ? (
-          <section className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
-            <div className="order-2 space-y-4 lg:order-2">
-              {!localMatchStarted ? (
-                <LocalSetupPanel
-                  playerCount={players.length}
-                  playerNames={players.map((player) => player.name)}
-                  mode={mode}
-                  entryMode={entryMode}
-                  doubleOut={doubleOut}
-                  bullOffEnabled={localBullOffEnabled}
-                  legsToWin={legsToWin}
-                  setsToWin={setsToWin}
-                  onPlayerCountChange={setPlayerCount}
-                  onPlayerNameChange={updatePlayerName}
-                  onModeChange={setMode}
-                  onCycleEntryMode={cycleEntryMode}
-                  onToggleDoubleOut={() => setDoubleOut((prev) => !prev)}
-                  onToggleBullOff={() => setLocalBullOffEnabled((prev) => !prev)}
-                  onLegsToWinChange={setLegsToWin}
-                  onSetsToWinChange={setSetsToWin}
-                  onStartMatch={startConfiguredLocalMatch}
-                  startDisabled={localStartDisabled}
-                />
-              ) : null}
-              {localMatchStarted ? (
-                <LiveHistoryPanel
-                  heading={`Live Historie${boardPlayer ? ` - ${boardPlayer.name} ist dran` : ""}`}
-                  historyOpen={localHistoryOpen}
-                  history={localLiveHistory}
-                  onToggle={() => setLocalHistoryOpen((prev) => !prev)}
-                />
-              ) : null}
-              <section className="hidden rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur sm:p-4">
-                <div className="mb-5 rounded-2xl border border-white/10 bg-white/5 p-4">
-                  <p className="text-xs uppercase tracking-[0.22em] text-stone-400">Spiel-Setup</p>
-                  <p className="mt-2 text-sm text-stone-400">Alles fuer dein lokales Match in einer Karte.</p>
-                  <p className="mt-4 text-xs uppercase tracking-[0.22em] text-stone-400">Spielerzahl</p>
-                  <div className="mt-3 flex gap-2">
-                    {PLAYER_COUNT_OPTIONS.map((option) => (
-                      <button
-                        key={option}
-                        onClick={() => setPlayerCount(option)}
-                        className={`rounded-2xl px-4 py-3 transition ${
-                          players.length === option
-                            ? "bg-white text-black"
-                            : "border border-white/10 bg-black/20 text-white hover:bg-white/10"
-                        }`}
-                      >
-                        {option}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                    <p className="text-xs uppercase tracking-[0.22em] text-stone-400">Modus</p>
-                    <div className="mt-3 grid grid-cols-2 gap-2">
-                      <button
-                        onClick={() => startFreshMatch(301)}
-                        className={`rounded-2xl px-4 py-3 text-left transition ${
-                          mode === 301
-                            ? "bg-amber-400 text-black"
-                            : "border border-white/10 bg-black/20 text-white hover:bg-white/10"
-                        }`}
-                      >
-                        301
-                      </button>
-                      <button
-                        onClick={() => startFreshMatch(501)}
-                        className={`rounded-2xl px-4 py-3 text-left transition ${
-                          mode === 501
-                            ? "bg-emerald-400 text-black"
-                            : "border border-white/10 bg-black/20 text-white hover:bg-white/10"
-                        }`}
-                      >
-                        501
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                    <p className="text-xs uppercase tracking-[0.22em] text-stone-400">Start Regel</p>
-                    <button
-                      onClick={cycleEntryMode}
-                      className="mt-3 w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-left text-stone-200 transition hover:bg-white/10"
-                    >
-                      {getEntryModeLabel(entryMode)}
-                    </button>
-                  </div>
-
-                  <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                    <p className="text-xs uppercase tracking-[0.22em] text-stone-400">Finish Regel</p>
-                    <button
-                      onClick={() => setDoubleOut((prev) => !prev)}
-                      className={`mt-3 w-full rounded-2xl border px-4 py-3 text-left transition ${
-                        doubleOut
-                          ? "border-emerald-300/40 bg-emerald-300/10 text-emerald-100"
-                          : "border-white/10 bg-black/20 text-stone-300"
-                      }`}
-                    >
-                      {doubleOut ? "Double-Out aktiv" : "Straight-Out aktiv"}
-                    </button>
-                  </div>
-                </div>
-
-                <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                    <p className="text-xs uppercase tracking-[0.22em] text-stone-400">Legs zum Satz</p>
-                    <div className="mt-3 flex gap-2">
-                      {LEGS_OPTIONS.map((option) => (
-                        <button
-                          key={option}
-                          onClick={() => setLegsToWin(option)}
-                          className={`rounded-2xl px-4 py-3 transition ${
-                            legsToWin === option
-                              ? "bg-white text-black"
-                              : "border border-white/10 bg-black/20 text-white hover:bg-white/10"
-                          }`}
-                        >
-                          {option}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                    <p className="text-xs uppercase tracking-[0.22em] text-stone-400">SÃ¤tze zum Match</p>
-                    <div className="mt-3 flex gap-2">
-                      {SETS_OPTIONS.map((option) => (
-                        <button
-                          key={option}
-                          onClick={() => setSetsToWin(option)}
-                          className={`rounded-2xl px-4 py-3 transition ${
-                            setsToWin === option
-                              ? "bg-white text-black"
-                              : "border border-white/10 bg-black/20 text-white hover:bg-white/10"
-                          }`}
-                        >
-                          {option}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </section>
-
-              <section className="hidden rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur sm:p-4">
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.22em] text-stone-400">Aktueller Besuch</p>
-                    <h2 className="mt-1 text-2xl font-semibold text-white">
-                      {entryMode !== "single" && !currentPlayer.entered
-                        ? `${currentPlayer.name} sucht ${getEntryModeLabel(entryMode)}`
-                        : `${currentPlayer.name} ist dran`}
-                    </h2>
-                    <p className="mt-1 text-sm text-stone-400">
-                      {entryMode !== "single" && !currentPlayer.entered
-                        ? `${currentPlayer.name} sucht gerade ${getEntryModeLabel(entryMode)}.`
-                        : "Baue den aktuellen Besuch auf oder buche ihn direkt als Gesamtwert."}
-                    </p>
-                  </div>
-                  {legWinner !== null ? (
-                    <div className="rounded-full bg-emerald-400 px-4 py-2 text-sm font-semibold text-black">
-                      Leg abgeschlossen
-                    </div>
-                  ) : null}
-                </div>
-
-                <div className="mt-6 rounded-2xl border border-white/10 bg-black/20 p-4">
-                  <p className="text-xs uppercase tracking-[0.22em] text-stone-400">Laufender Besuch</p>
-                  <div className="mt-3 flex min-h-14 flex-wrap gap-2">
-                    {currentLabels.length > 0 ? (
-                      currentLabels.map((label, index) => (
-                        <span
-                          key={`${label}-${index}`}
-                          className="inline-flex h-11 min-w-11 items-center justify-center rounded-2xl bg-white/10 px-4 text-lg font-semibold"
-                        >
-                          {label}
-                        </span>
-                      ))
-                    ) : (
-                      <span className="self-center text-sm text-stone-400">Noch keine Darts erfasst.</span>
-                    )}
-                  </div>
-                  <p className="mt-3 text-sm text-stone-400">Summe dieses Besuchs: {currentVisitTotal}</p>
-                </div>
-
-                <div className="mt-6 grid gap-3 sm:grid-cols-4">
-                  {QUICK_DARTS.map((value) => (
-                    <button
-                      key={value}
-                      onClick={() => addDartValue(value)}
-                      className="rounded-2xl border border-white/10 bg-black/20 px-4 py-4 text-lg font-semibold text-white transition hover:border-emerald-300/40 hover:bg-emerald-300/10"
-                    >
-                      {value}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="mt-6 grid gap-3 sm:grid-cols-[1fr_auto]">
-                  <input
-                    type="number"
-                    min={0}
-                    max={60}
-                    value={manualDart}
-                    onChange={(event) => setManualDart(event.target.value)}
-                    placeholder="Dart 0-60"
-                    className="h-12 rounded-2xl border border-white/10 bg-black/20 px-4 text-white outline-none placeholder:text-stone-500 focus:border-emerald-300/40"
-                  />
-                  <button
-                    onClick={commitManualDart}
-                    className="h-12 rounded-2xl bg-emerald-400 px-5 font-semibold text-black transition hover:bg-emerald-300"
-                  >
-                    Dart hinzufügen
-                  </button>
-                </div>
-
-                <div className="mt-4 flex flex-wrap gap-3">
-                  <button
-                    onClick={() => recordVisit(currentDarts, currentLabels)}
-                    disabled={finishDisabled}
-                    className="rounded-2xl bg-white px-5 py-3 font-semibold text-black transition disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    Besuch abschlieÃen
-                  </button>
-                  <button
-                    onClick={undo}
-                    className="rounded-2xl border border-white/10 bg-black/20 px-5 py-3 font-semibold text-white transition hover:bg-white/10"
-                  >
-                    Undo
-                  </button>
-                  {matchWinner === null ? (
-                    <button
-                      onClick={legWinner !== null ? startNextLeg : () => startFreshMatch(mode)}
-                      className="rounded-2xl border border-red-400/30 bg-red-400/10 px-5 py-3 font-semibold text-red-100 transition hover:bg-red-400/20"
-                    >
-                      {legWinner !== null ? "Nächstes Leg" : "Neues Match"}
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => startFreshMatch(mode)}
-                      className="rounded-2xl border border-red-400/30 bg-red-400/10 px-5 py-3 font-semibold text-red-100 transition hover:bg-red-400/20"
-                    >
-                      Rematch starten
-                    </button>
-                  )}
-                </div>
-
-                <details className="mt-8 rounded-[1.5rem] border border-white/10 bg-black/20 p-4">
-                  <summary className="cursor-pointer list-none text-lg font-semibold text-white">
-                    Schnell buchen
-                    <span className="ml-2 text-sm font-normal text-stone-400">Für schnelle Eingaben ohne Einzeldarts</span>
-                  </summary>
-                  <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto]">
-                    <input
-                      type="number"
-                      min={0}
-                      max={180}
-                      value={manualVisit}
-                      onChange={(event) => setManualVisit(event.target.value)}
-                      placeholder="Besuch 0-180"
-                      className="h-12 rounded-2xl border border-white/10 bg-black/20 px-4 text-white outline-none placeholder:text-stone-500 focus:border-amber-300/40"
+            {appMode === "match" ? (
+              <section className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+                <div className="order-2 space-y-4 lg:order-2">
+                  {!localMatchStarted ? (
+                    <LocalSetupPanel
+                      playerCount={players.length}
+                      playerNames={players.map((player) => player.name)}
+                      mode={mode}
+                      entryMode={entryMode}
+                      doubleOut={doubleOut}
+                      bullOffEnabled={localBullOffEnabled}
+                      legsToWin={legsToWin}
+                      setsToWin={setsToWin}
+                      onPlayerCountChange={setPlayerCount}
+                      onPlayerNameChange={updatePlayerName}
+                      onModeChange={setMode}
+                      onCycleEntryMode={cycleEntryMode}
+                      onToggleDoubleOut={() => setDoubleOut((prev) => !prev)}
+                      onToggleBullOff={() => setLocalBullOffEnabled((prev) => !prev)}
+                      onLegsToWinChange={setLegsToWin}
+                      onSetsToWinChange={setSetsToWin}
+                      onStartMatch={startConfiguredLocalMatch}
+                      startDisabled={localStartDisabled}
                     />
-                    <button
-                      onClick={submitManualVisit}
-                      className="h-12 rounded-2xl bg-amber-300 px-5 font-semibold text-black transition hover:bg-amber-200"
-                    >
-                      Besuch buchen
-                    </button>
-                  </div>
-                  <div className="mt-4 grid gap-3 sm:grid-cols-3 lg:grid-cols-4">
-                    {VISIT_PRESETS.map((preset) => (
-                      <button
-                        key={preset}
-                        onClick={() =>
-                          recordVisit(
-                            [preset],
-                            [`Visit ${preset}`],
-                          )
-                        }
-                        className="rounded-2xl border border-white/10 bg-black/20 px-4 py-4 text-lg font-semibold text-white transition hover:border-amber-300/40 hover:bg-amber-300/10"
-                      >
-                        {preset}
-                      </button>
-                    ))}
-                  </div>
-                </details>
-              </section>
-
-              <details className="hidden rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur" open={localHistoryOpen}>
-                <summary
-                  onClick={(event) => {
-                    event.preventDefault();
-                    setLocalHistoryOpen((prev) => !prev);
-                  }}
-                  className="flex cursor-pointer list-none items-center justify-between gap-3"
-                >
-                  <div>
-                    <h2 className="text-lg font-semibold text-white">Live Historie</h2>
-                    <p className="mt-1 text-sm font-normal text-stone-400">Besuche im laufenden Leg.</p>
-                  </div>
-                  <span className="text-sm text-stone-400">{localHistoryOpen ? "Einklappen" : "Ausklappen"}</span>
-                </summary>
-
-                {localHistoryOpen ? <div className="mt-5 grid gap-4 xl:grid-cols-2">
-                  {players.map((player, playerIndex) => (
-                    <div key={`${player.name}-history-${playerIndex}`} className="rounded-2xl border border-white/10">
-                      <div className="border-b border-white/10 bg-black/20 px-4 py-3">
-                        <p className="font-semibold text-white">{player.name}</p>
-                      </div>
-                      <div className="max-h-[20rem] overflow-auto">
-                        <table className="min-w-full divide-y divide-white/10 text-left text-sm">
-                          <thead className="bg-black/10 text-stone-400">
-                            <tr>
-                              <th className="px-4 py-3 font-medium">#</th>
-                              <th className="px-4 py-3 font-medium">Würfe</th>
-                              <th className="px-4 py-3 font-medium">Vorher</th>
-                              <th className="px-4 py-3 font-medium">Nachher</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-white/5">
-                            {player.visits.length > 0 ? (
-                              player.visits
-                                .slice()
-                                .reverse()
-                                .map((visit, index) => (
-                                  <tr key={`${visit.scoreBefore}-${visit.scoreAfter}-${index}`} className="bg-white/[0.02]">
-                                    <td className="px-4 py-3 text-stone-300">{player.visits.length - index}</td>
-                                    <td className="px-4 py-3 text-white">{visit.labels.join(" / ")}</td>
-                                    <td className="px-4 py-3 text-stone-300">{visit.scoreBefore}</td>
-                                    <td className="px-4 py-3 text-stone-300">
-                                      {visit.bust ? "Bust" : visit.scoreAfter}
-                                    </td>
-                                  </tr>
-                                ))
-                            ) : (
-                              <tr>
-                                <td colSpan={4} className="px-4 py-6 text-center text-stone-400">
-                                  Noch keine Besuche für {player.name}.
-                                </td>
-                              </tr>
-                            )}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  ))}
-                </div> : null}
-              </details>
-            </div>
-
-            <div className="order-1 space-y-4 lg:order-1">
-              {localMatchStarted ? (
-                <LiveBoardPanel
-                  liveState={localLiveState}
-                  currentPlayerIndex={boardPlayerIndex}
-                  currentUserId={session?.user.id ?? "local-player"}
-                  boardHeading={
-                    localBullOff.enabled && !localBullOff.completed
-                      ? `${boardPlayer.name} wirft Bull-Off`
-                      : entryMode !== "single" && !currentPlayer.entered
-                        ? `${currentPlayer.name} sucht ${getEntryModeLabel(entryMode)}`
-                        : `${currentPlayer.name} ist dran`
-                  }
-                  currentVisitTotal={currentVisitTotal}
-                  compactVisitText={currentLabels.length > 0 ? currentLabels.join(", ") : "Noch kein Dart"}
-                  calloutText={null}
-                  canPlayFromThisDevice={true}
-                  boardDisabledReason="Lokales Spiel"
-                  loading={false}
-                  boardMarkers={localBoardMarkers}
-                  pendingLabels={currentLabels}
-                  canControlLegTransition={legWinner !== null && matchWinner === null}
-                  checkoutHints={checkoutHints}
-                  currentPlayerName={boardPlayer.name}
-                  onSegmentSelect={(segment: LiveBoardSegment) => {
-                    if (localBullOff.enabled && !localBullOff.completed) {
-                      registerLocalBullOffDart({
-                        label: segment.label,
-                        score: segment.score,
-                        number: segment.number,
-                        multiplier: segment.multiplier,
-                        ring: segment.ring,
-                        marker: segment.marker,
-                      });
-                      return;
-                    }
-                    addBoardSegment({
-                      label: segment.label,
-                      score: segment.score,
-                      number: segment.number,
-                      multiplier: segment.multiplier === 0 ? 1 : segment.multiplier,
-                    });
-                  }}
-                  onMiss={() => {
-                    if (localBullOff.enabled && !localBullOff.completed) {
-                      registerLocalBullOffDart({
-                        label: "Miss",
-                        score: 0,
-                        number: 0,
-                        multiplier: 0,
-                        ring: "miss",
-                        marker: null,
-                      });
-                      return;
-                    }
-                    addDartValue(0, "Miss");
-                  }}
-                  onRemoveLast={() => {
-                    setCurrentDarts((prev) => prev.slice(0, -1));
-                    setCurrentLabels((prev) => prev.slice(0, -1));
-                  }}
-                  onFinishVisit={() => recordVisit(currentDarts, currentLabels)}
-                  onNextLeg={startNextLeg}
-                />
-              ) : null}
-              <section className="hidden rounded-[2rem] border border-white/10 bg-white/5 p-5 backdrop-blur sm:p-6">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.22em] text-stone-400">Board</p>
-                    <h2 className="mt-1 text-2xl font-semibold text-white">{currentPlayer.name} zielt auf den nächsten Besuch</h2>
-                    <p className="mt-1 text-sm text-stone-400">
-                      {entryMode !== "single" && !currentPlayer.entered
-                        ? `Öffne zuerst mit ${getEntryModeLabel(entryMode)}. Erst danach zählt der Score.`
-                        : "Tippe Singles, Doubles, Triples oder Bulls für den laufenden Besuch."}
-                    </p>
-                  </div>
-                  <div className="rounded-full border border-white/10 bg-black/20 px-3 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-stone-300">
-                    {getEntryModeLabel(entryMode)} · {doubleOut ? "Double-Out" : "Straight-Out"}
-                  </div>
-                </div>
-                <div className="mt-5">
-                  <Dartboard
-                    onSegmentSelect={addBoardSegment}
-                    caption="Jeder Ring und jedes Feld ist direkt anklickbar."
-                  />
-                </div>
-              </section>
-
-              {localMatchStarted && checkoutHints.length > 0 ? (
-              <section className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur">
-                <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                  <div className="flex flex-col gap-2">
-                    {checkoutHints.map((hint) => (
-                      <div key={hint} className="rounded-2xl bg-white/5 px-4 py-3 text-sm text-stone-200">
-                        {hint}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </section>
-              ) : null}
-
-              {localMatchStarted ? (
-                <LiveStatsPanel
-                  currentLiveStats={localPlayerStats.find((entry) => entry.name === boardPlayer.name) ?? null}
-                  livePlayerStats={localPlayerStats}
-                  currentPlayerName={boardPlayer.name}
-                  title={`LIVE-STATS von ${boardPlayer.name}`}
-                  subtitle=""
-                />
-              ) : null}
-
-              <section className="hidden rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur">
-                <p className="text-[11px] uppercase tracking-[0.22em] text-stone-400">Live-Stats</p>
-                {currentPlayer.entered ? (
-                  <p className="mt-1 text-sm text-stone-400">
-                    Empfehlungen für {currentPlayer.name} bei Restscore {currentPlayer.score}.
-                  </p>
-                ) : (
-                  <p className="mt-1 text-sm text-stone-400">
-                    Checkout-Hinweise erscheinen, sobald {currentPlayer.name} mit {getEntryModeLabel(entryMode)} im Spiel ist.
-                  </p>
-                )}
-
-                <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-4">
-                  {checkoutHints.length > 0 ? (
-                    <div className="flex flex-col gap-2">
-                      {checkoutHints.map((hint) => (
-                        <div key={hint} className="rounded-2xl bg-white/5 px-4 py-3 text-sm text-stone-200">
-                          {hint}
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-stone-400">
-                      Noch kein klassischer Checkout-Weg hinterlegt. Spiele auf einen komfortablen
-                      Finish-Bereich hin.
-                    </p>
-                  )}
-                </div>
-
-                <div className="mt-5 grid grid-cols-2 gap-2">
-                  <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                    <p className="text-stone-400">Average</p>
-                    <p className="mt-1 text-lg font-semibold text-white">{currentPlayerMetrics.average}</p>
-                  </div>
-                  <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                    <p className="text-stone-400">Best Visit</p>
-                    <p className="mt-1 text-lg font-semibold text-white">{currentPlayerMetrics.highestVisit}</p>
-                  </div>
-                  <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                    <p className="text-stone-400">Busts</p>
-                    <p className="mt-1 text-lg font-semibold text-white">
-                      {currentPlayer.visits.filter((visit) => visit.bust).length}
-                    </p>
-                  </div>
-                  <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                    <p className="text-stone-400">Checkouts</p>
-                    <p className="mt-1 text-lg font-semibold text-white">
-                      {currentPlayer.visits.filter((visit) => visit.checkout).length}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-3 space-y-2">
-                  {localPlayerStats.map((entry) => (
-                    <div
-                      key={`local-stat-${entry.name}`}
-                      className={`rounded-2xl border p-3 ${
-                        currentPlayer.name === entry.name ? "border-emerald-300/25 bg-emerald-400/12" : "border-white/10 bg-white/5"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <p className="text-sm font-semibold text-white">{entry.name}</p>
-                        <p className="text-sm text-stone-300">{entry.average.toFixed(1)} Avg</p>
-                      </div>
-                      <div className="mt-2 grid grid-cols-4 gap-2 text-center text-xs">
-                        <div>
-                          <p className="text-stone-400">Visits</p>
-                          <p className="mt-1 font-semibold text-white">{entry.visits}</p>
-                        </div>
-                        <div>
-                          <p className="text-stone-400">Punkte</p>
-                          <p className="mt-1 font-semibold text-white">{entry.scoredPoints}</p>
-                        </div>
-                        <div>
-                          <p className="text-stone-400">Best</p>
-                          <p className="mt-1 font-semibold text-white">{entry.bestVisit}</p>
-                        </div>
-                        <div>
-                          <p className="text-stone-400">Busts</p>
-                          <p className="mt-1 font-semibold text-white">{entry.busts}</p>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </section>
-
-              <section className="hidden rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur">
-                <h2 className="text-2xl font-semibold text-white">Langzeit-Stats</h2>
-                <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                    <p className="text-xs uppercase tracking-[0.22em] text-stone-400">Legs beendet</p>
-                    <p className="mt-2 text-3xl font-semibold text-white">{stats.legsFinished}</p>
-                  </div>
-                  <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                    <p className="text-xs uppercase tracking-[0.22em] text-stone-400">Matches beendet</p>
-                    <p className="mt-2 text-3xl font-semibold text-white">{stats.matchesFinished}</p>
-                  </div>
-                  <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                    <p className="text-xs uppercase tracking-[0.22em] text-stone-400">Bestes Finish</p>
-                    <p className="mt-2 text-3xl font-semibold text-white">{stats.bestCheckout}</p>
-                  </div>
-                  <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                    <p className="text-xs uppercase tracking-[0.22em] text-stone-400">Bestes Avg</p>
-                    <p className="mt-2 text-3xl font-semibold text-white">{stats.bestAverage.toFixed(2)}</p>
-                  </div>
-                </div>
-              </section>
-
-              <section className="hidden rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur">
-                <div className="flex items-center justify-between gap-3">
-                  <h2 className="text-2xl font-semibold text-white">Archiv</h2>
-                  <div className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs uppercase tracking-[0.22em] text-stone-300">
-                    {session ? "Cloud" : "Lokal"}
-                  </div>
-                </div>
-                <p className="mt-2 text-sm text-stone-400">
-                  {session
-                    ? "Angemeldet: Es wird die Cloud-Historie deines Kontos angezeigt."
-                    : "Nicht eingeloggt: Es wird nur die lokale Browser-Historie angezeigt."}
-                </p>
-                <div className="mt-5 space-y-3">
-                  {(session ? cloudMatchHistory : localMatchHistory).length > 0 ? (
-                    (session ? cloudMatchHistory : localMatchHistory).map((entry) => (
-                      <div
-                        key={entry.id}
-                        className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm"
-                      >
-                        <p className="font-semibold text-white">
-                          {entry.winner} gewinnt gegen {entry.opponents}
-                        </p>
-                        <p className="mt-1 text-stone-400">
-                          {entry.playedAt} · {entry.mode} · {entry.doubleOut ? "Double-Out" : "Straight-Out"} ·
-                          {" "}SÃ¤tze {entry.sets}
-                        </p>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-4 text-sm text-stone-400">
-                      Noch keine abgeschlossenen Matches gespeichert.
-                    </div>
-                  )}
-                </div>
-              </section>
-            </div>
-          </section>
-        ) : (
-          <section className="grid gap-4 lg:grid-cols-[1.08fr_0.92fr]">
-            <div className="order-2 space-y-4 lg:order-2">
-              <TrainingSetupPanel
-                currentMode={trainingSession.mode}
-                currentModeLabel={getTrainingModeLabel(trainingSession.mode)}
-                trainingTarget={trainingTarget}
-                dartsThrown={trainingSession.dartsThrown}
-                shanghaiProgress={
-                  trainingSession.mode === "shanghai"
-                    ? trainingSession.currentGoalHits.length > 0
-                      ? trainingSession.currentGoalHits.join("/")
-                      : "noch offen"
-                    : null
-                }
-                helperText={
-                  trainingSession.mode === "shanghai"
-                    ? "Treffe auf jedem Ziel Single, Double und Triple, bevor du weiter rueckst."
-                    : trainingSession.mode === "doubles-around"
-                      ? "Nur Doubles zaehlen. Arbeite dich ueber D1 bis Bull."
-                      : trainingSession.mode === "bull-drill"
-                        ? "Zehn Darts auf Bull und Outer Bull, jeder Treffer zaehlt sofort."
-                        : "Treffe die Ziele der Reihe nach von 1 bis Bull."
-                }
-                started={trainingStarted}
-                onReset={() => resetTraining()}
-                onStart={() => setTrainingStarted(true)}
-                onModeChange={switchTrainingMode}
-              />
-
-              {trainingStarted ? (
-                <CollapsibleFeedPanel
-                  title="Training Feed"
-                  subtitle="Die letzten Trainingsdarts deiner aktuellen Session."
-                  open={trainingFeedOpen}
-                  onToggle={() => setTrainingFeedOpen((prev) => !prev)}
-                >
-                  <div className="space-y-3">
-                    {trainingSession.history.length > 0 ? (
-                      trainingSession.history.map((entry, index) => (
-                        <div key={`${entry}-${index}`} className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-stone-200">
-                          {entry}
-                        </div>
-                      ))
-                    ) : (
-                      <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-4 text-sm text-stone-400">
-                        Noch keine Trainingswuerfe in dieser Session.
-                      </div>
-                    )}
-                  </div>
-                </CollapsibleFeedPanel>
-              ) : null}
-
-              <section className="hidden rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.22em] text-stone-400">Training Setup</p>
-                    <h2 className="mt-1 text-2xl font-semibold text-white">{getTrainingModeLabel(trainingSession.mode)}</h2>
-                    <p className="mt-1 text-sm text-stone-400">
-                      Wähle einen Modus und trage danach jeden Dart über das Segment Board ein.
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => resetTraining()}
-                    className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-black transition hover:bg-stone-200"
-                  >
-                    Reset
-                  </button>
-                </div>
-
-                <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                  <button
-                    onClick={() => switchTrainingMode("around-the-clock")}
-                    className={`rounded-2xl px-5 py-4 text-left transition ${
-                      trainingSession.mode === "around-the-clock"
-                        ? "bg-white text-black"
-                        : "border border-white/10 bg-black/20 text-white hover:bg-white/10"
-                    }`}
-                  >
-                    <span className="block text-xs uppercase tracking-[0.22em]">Training</span>
-                    <span className="text-xl font-semibold">Around the Clock</span>
-                  </button>
-                  <button
-                    onClick={() => switchTrainingMode("bull-drill")}
-                    className={`rounded-2xl px-5 py-4 text-left transition ${
-                      trainingSession.mode === "bull-drill"
-                        ? "bg-amber-300 text-black"
-                        : "border border-white/10 bg-black/20 text-white hover:bg-white/10"
-                    }`}
-                  >
-                    <span className="block text-xs uppercase tracking-[0.22em]">Training</span>
-                    <span className="text-xl font-semibold">Bull Drill</span>
-                  </button>
-                  <button
-                    onClick={() => switchTrainingMode("shanghai")}
-                    className={`rounded-2xl px-5 py-4 text-left transition ${
-                      trainingSession.mode === "shanghai"
-                        ? "bg-emerald-400 text-black"
-                        : "border border-white/10 bg-black/20 text-white hover:bg-white/10"
-                    }`}
-                  >
-                    <span className="block text-xs uppercase tracking-[0.22em]">Training</span>
-                    <span className="text-xl font-semibold">Shanghai</span>
-                  </button>
-                  <button
-                    onClick={() => switchTrainingMode("doubles-around")}
-                    className={`rounded-2xl px-5 py-4 text-left transition ${
-                      trainingSession.mode === "doubles-around"
-                        ? "bg-fuchsia-400 text-black"
-                        : "border border-white/10 bg-black/20 text-white hover:bg-white/10"
-                    }`}
-                  >
-                    <span className="block text-xs uppercase tracking-[0.22em]">Training</span>
-                    <span className="text-xl font-semibold">Doubles Around</span>
-                  </button>
-                </div>
-
-                <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                  <div className="rounded-2xl border border-white/10 bg-black/20 px-5 py-3 text-sm text-stone-300">
-                    Ziel: {trainingTarget}
-                  </div>
-                  <div className="rounded-2xl border border-white/10 bg-black/20 px-5 py-3 text-sm text-stone-300">
-                    Darts: {trainingSession.dartsThrown}
-                  </div>
-                  {trainingSession.mode === "shanghai" ? (
-                    <div className="rounded-2xl border border-white/10 bg-black/20 px-5 py-3 text-sm text-stone-300">
-                      Shanghai: {trainingSession.currentGoalHits.length > 0 ? trainingSession.currentGoalHits.join("/") : "noch offen"}
-                    </div>
+                  ) : null}
+                  {localMatchStarted ? (
+                    <LiveHistoryPanel
+                      heading={`Live Historie${boardPlayer ? ` - ${boardPlayer.name} ist dran` : ""}`}
+                      historyOpen={localHistoryOpen}
+                      history={localLiveHistory}
+                      onToggle={() => setLocalHistoryOpen((prev) => !prev)}
+                    />
                   ) : null}
                 </div>
-                <div className="mt-4 rounded-[1.5rem] border border-white/10 bg-black/20 p-4 text-sm text-stone-300">
-                  {trainingSession.mode === "shanghai"
-                    ? "Treffe auf jedem Ziel Single, Double und Triple, bevor du weiterrÃ¼ckst."
-                    : trainingSession.mode === "doubles-around"
-                      ? "Nur Doubles zählen. Arbeite dich über D1 bis Bull."
-                      : trainingSession.mode === "bull-drill"
-                        ? "Zehn Darts auf Bull und Outer Bull, jeder Treffer z?hlt sofort."
-                        : "Treffe die Ziele der Reihe nach von 1 bis Bull."}
-                </div>
-              </section>
 
-              <details className="hidden rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur">
-                <summary className="cursor-pointer list-none text-lg font-semibold text-white">
-                  Training Feed
-                  <p className="mt-1 text-sm font-normal text-stone-400">Die letzten Trainingsdarts deiner aktuellen Session.</p>
-                </summary>
+                <div className="order-1 space-y-4 lg:order-1">
+                  {localMatchStarted ? (
+                    <LiveBoardPanel
+                      liveState={localLiveState}
+                      currentPlayerIndex={boardPlayerIndex}
+                      currentUserId={session?.user.id ?? "local-player"}
+                      boardHeading={
+                        localBullOff.enabled && !localBullOff.completed
+                          ? `${boardPlayer.name} wirft Bull-Off`
+                          : entryMode !== "single" && !currentPlayer.entered
+                            ? `${currentPlayer.name} sucht ${getEntryModeLabel(entryMode)}`
+                            : `${currentPlayer.name} ist dran`
+                      }
+                      currentVisitTotal={currentVisitTotal}
+                      compactVisitText={currentLabels.length > 0 ? currentLabels.join(", ") : "Noch kein Dart"}
+                      calloutText={null}
+                      canPlayFromThisDevice={true}
+                      boardDisabledReason="Lokales Spiel"
+                      loading={false}
+                      boardMarkers={localBoardMarkers}
+                      pendingLabels={currentLabels}
+                      canControlLegTransition={legWinner !== null && matchWinner === null}
+                      checkoutHints={checkoutHints}
+                      currentPlayerName={boardPlayer.name}
+                      onSegmentSelect={(segment: LiveBoardSegment) => {
+                        if (localBullOff.enabled && !localBullOff.completed) {
+                          registerLocalBullOffDart({
+                            label: segment.label,
+                            score: segment.score,
+                            number: segment.number,
+                            multiplier: segment.multiplier,
+                            ring: segment.ring,
+                            marker: segment.marker,
+                          });
+                          return;
+                        }
+                        addBoardSegment({
+                          label: segment.label,
+                          score: segment.score,
+                          number: segment.number,
+                          multiplier: segment.multiplier === 0 ? 1 : segment.multiplier,
+                        });
+                      }}
+                      onMiss={() => {
+                        if (localBullOff.enabled && !localBullOff.completed) {
+                          registerLocalBullOffDart({
+                            label: "Miss",
+                            score: 0,
+                            number: 0,
+                            multiplier: 0,
+                            ring: "miss",
+                            marker: null,
+                          });
+                          return;
+                        }
+                        addDartValue(0, "Miss");
+                      }}
+                      onRemoveLast={() => {
+                        setCurrentDarts((prev) => prev.slice(0, -1));
+                        setCurrentLabels((prev) => prev.slice(0, -1));
+                      }}
+                      onFinishVisit={() => recordVisit(currentDarts, currentLabels)}
+                      onNextLeg={startNextLeg}
+                    />
+                  ) : null}
 
-                <div className="mt-5 space-y-3">
-                  {trainingSession.history.length > 0 ? (
-                    trainingSession.history.map((entry, index) => (
-                      <div key={`${entry}-${index}`} className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-stone-200">
-                        {entry}
+                  {localMatchStarted && checkoutHints.length > 0 ? (
+                    <section className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur">
+                      <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                        <div className="flex flex-col gap-2">
+                          {checkoutHints.map((hint) => (
+                            <div key={hint} className="rounded-2xl bg-white/5 px-4 py-3 text-sm text-stone-200">
+                              {hint}
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                    ))
-                  ) : (
-                    <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-4 text-sm text-stone-400">
-                      Noch keine Trainingswürfe in dieser Session.
-                    </div>
-                  )}
-                </div>
-              </details>
-            </div>
+                    </section>
+                  ) : null}
 
-            <div className="order-1 space-y-4 lg:order-1">
-              {trainingStarted ? (
-              <section className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur sm:p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.22em] text-stone-400">Board</p>
-                    <h2 className="mt-1 text-2xl font-semibold text-white">{getTrainingModeLabel(trainingSession.mode)} live spielen</h2>
-                    <p className="mt-1 text-sm text-stone-400">
-                      Nutze die Segmente wie auf einem echten Board. Im Training wird jeder Dart direkt gewertet.
-                    </p>
-                  </div>
-                  <div className="rounded-full border border-white/10 bg-black/20 px-3 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-stone-300">
-                    Ziel {trainingTarget}
-                  </div>
+                  {localMatchStarted ? (
+                    <LiveStatsPanel
+                      currentLiveStats={localPlayerStats.find((entry) => entry.name === boardPlayer.name) ?? null}
+                      livePlayerStats={localPlayerStats}
+                      currentPlayerName={boardPlayer.name}
+                      title={`LIVE-STATS von ${boardPlayer.name}`}
+                      subtitle=""
+                    />
+                  ) : null}
                 </div>
-                <div className="mt-5">
-                  <Dartboard
-                    onSegmentSelect={registerTrainingThrow}
-                    caption="Training reagiert direkt auf jeden Klick auf das Board."
+              </section>
+            ) : (
+              <section className="grid gap-4 lg:grid-cols-[1.08fr_0.92fr]">
+                <div className="order-2 space-y-4 lg:order-2">
+                  <TrainingSetupPanel
+                    currentMode={trainingSession.mode}
+                    currentModeLabel={getTrainingModeLabel(trainingSession.mode)}
+                    trainingTarget={trainingTarget}
+                    dartsThrown={trainingSession.dartsThrown}
+                    shanghaiProgress={
+                      trainingSession.mode === "shanghai"
+                        ? trainingSession.currentGoalHits.length > 0
+                          ? trainingSession.currentGoalHits.join("/")
+                          : "noch offen"
+                        : null
+                    }
+                    helperText={
+                      trainingSession.mode === "shanghai"
+                        ? "Treffe auf jedem Ziel Single, Double und Triple, bevor du weiter rueckst."
+                        : trainingSession.mode === "doubles-around"
+                          ? "Nur Doubles zaehlen. Arbeite dich ueber D1 bis Bull."
+                          : trainingSession.mode === "bull-drill"
+                            ? "Zehn Darts auf Bull und Outer Bull, jeder Treffer zaehlt sofort."
+                            : "Treffe die Ziele der Reihe nach von 1 bis Bull."
+                    }
+                    started={trainingStarted}
+                    onReset={() => resetTraining()}
+                    onStart={() => setTrainingStarted(true)}
+                    onModeChange={switchTrainingMode}
                   />
-                </div>
-              </section>
-              ) : null}
 
-              {trainingStarted ? (
-                <SimpleStatsPanel
-                  title="Live-Stats"
-                  subtitle={`${getTrainingModeLabel(trainingSession.mode)} im Fokus`}
-                  summary={[
-                    { label: "Sessions", value: stats.trainingSessions },
-                    { label: "Best Score", value: stats.bestTrainingScore },
-                    { label: "Treffer", value: trainingSession.hits },
-                    { label: "Darts", value: trainingSession.dartsThrown },
-                  ]}
-                  rows={[
-                    {
-                      name: "Training Score",
-                      meta: String(trainingSession.score),
-                      values: [
-                        { label: "Ziel", value: trainingTarget },
-                        { label: "Modus", value: getTrainingModeLabel(trainingSession.mode) },
-                        { label: "Hits", value: trainingSession.hits },
+                  {trainingStarted ? (
+                    <CollapsibleFeedPanel
+                      title="Training Feed"
+                      subtitle="Die letzten Trainingsdarts deiner aktuellen Session."
+                      open={trainingFeedOpen}
+                      onToggle={() => setTrainingFeedOpen((prev) => !prev)}
+                    >
+                      <div className="space-y-3">
+                        {trainingSession.history.length > 0 ? (
+                          trainingSession.history.map((entry, index) => (
+                            <div
+                              key={`${entry}-${index}`}
+                              className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-stone-200"
+                            >
+                              {entry}
+                            </div>
+                          ))
+                        ) : (
+                          <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-4 text-sm text-stone-400">
+                            Noch keine Trainingswuerfe in dieser Session.
+                          </div>
+                        )}
+                      </div>
+                    </CollapsibleFeedPanel>
+                  ) : null}
+                </div>
+
+                <div className="order-1 space-y-4 lg:order-1">
+                  {trainingStarted ? (
+                    <BoardPreviewPanel
+                      heading={`${getTrainingModeLabel(trainingSession.mode)} live spielen`}
+                      badge={`Ziel ${trainingTarget}`}
+                    >
+                      <Dartboard
+                        onSegmentSelect={registerTrainingThrow}
+                        caption="Training reagiert direkt auf jeden Klick auf das Board."
+                      />
+                    </BoardPreviewPanel>
+                  ) : null}
+
+                  {trainingStarted ? (
+                    <SimpleStatsPanel
+                      title="Live-Stats"
+                      subtitle={`${getTrainingModeLabel(trainingSession.mode)} im Fokus`}
+                      summary={[
+                        { label: "Sessions", value: stats.trainingSessions },
+                        { label: "Best Score", value: stats.bestTrainingScore },
+                        { label: "Treffer", value: trainingSession.hits },
                         { label: "Darts", value: trainingSession.dartsThrown },
-                      ],
-                    },
-                  ]}
-                />
-              ) : null}
-
-              <section className="hidden rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-[11px] uppercase tracking-[0.22em] text-stone-400">Live-Stats</p>
-                    <p className="text-xs text-stone-400">{getTrainingModeLabel(trainingSession.mode)} im Fokus</p>
-                  </div>
-                </div>
-                <div className="mt-3 grid grid-cols-2 gap-2">
-                  <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                    <p className="text-stone-400">Sessions</p>
-                    <p className="mt-1 text-lg font-semibold text-white">{stats.trainingSessions}</p>
-                  </div>
-                  <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                    <p className="text-stone-400">Best Score</p>
-                    <p className="mt-1 text-lg font-semibold text-white">{stats.bestTrainingScore}</p>
-                  </div>
-                  <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                    <p className="text-stone-400">Treffer</p>
-                    <p className="mt-1 text-lg font-semibold text-white">{trainingSession.hits}</p>
-                  </div>
-                  <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                    <p className="text-stone-400">Darts</p>
-                    <p className="mt-1 text-lg font-semibold text-white">{trainingSession.dartsThrown}</p>
-                  </div>
-                </div>
-                <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                  <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-sm font-semibold text-white">Training Score</p>
-                      <p className="text-sm text-stone-300">{trainingSession.score}</p>
-                    </div>
-                  </div>
-                  <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-sm font-semibold text-white">Ziel</p>
-                      <p className="text-sm text-stone-300">{trainingTarget}</p>
-                    </div>
-                  </div>
+                      ]}
+                      rows={[
+                        {
+                          name: "Training Score",
+                          meta: String(trainingSession.score),
+                          values: [
+                            { label: "Ziel", value: trainingTarget },
+                            { label: "Modus", value: getTrainingModeLabel(trainingSession.mode) },
+                            { label: "Hits", value: trainingSession.hits },
+                            { label: "Darts", value: trainingSession.dartsThrown },
+                          ],
+                        },
+                      ]}
+                    />
+                  ) : null}
                 </div>
               </section>
-            </div>
-          </section>
-        )}
+            )}
           </>
         )}
       </div>
