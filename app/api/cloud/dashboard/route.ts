@@ -69,6 +69,13 @@ type DartEventRow = {
   created_at?: string;
 };
 
+type HeatmapPoint = {
+  x: number;
+  y: number;
+  score: number;
+  ring: string;
+};
+
 export async function GET(request: Request) {
   const authResult = await authorizeSupabaseRequest(request);
   if (!authResult.ok) {
@@ -327,6 +334,15 @@ export async function GET(request: Request) {
     return acc;
   }, {});
   const heatmapMax = Math.max(0, ...Object.values(heatmapNumbers));
+  const heatmapPoints = countedBoardThrows
+    .filter((row) => typeof row.board_x === "number" && typeof row.board_y === "number")
+    .map((row) => ({
+      x: Number(row.board_x),
+      y: Number(row.board_y),
+      score: row.score,
+      ring: row.ring,
+    }))
+    .filter((point): point is HeatmapPoint => Number.isFinite(point.x) && Number.isFinite(point.y));
   const throwStats = {
     totalThrows: selfDartRows.length,
     boardThrows: countedBoardThrows.length,
@@ -988,6 +1004,8 @@ export async function GET(request: Request) {
       heatmap: {
         numbers: heatmapNumbers,
         max: heatmapMax,
+        points: heatmapPoints,
+        preciseCount: heatmapPoints.length,
       },
       monthlyMatches,
       monthlyTraining,

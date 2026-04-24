@@ -128,14 +128,74 @@ export function MeterCard({
   );
 }
 
-export function HeatmapBoard({ numbers, max }: { numbers: Record<string, number>; max: number }) {
+type HeatmapPoint = {
+  x: number;
+  y: number;
+  score: number;
+  ring: string;
+};
+
+function scaleBoardPoint(value: number) {
+  return (value / 400) * 240;
+}
+
+function heatPointColor(point: HeatmapPoint) {
+  if (point.ring === "bull") {
+    return "#facc15";
+  }
+  if (point.ring === "outer-bull") {
+    return "#fb7185";
+  }
+  if (point.ring === "triple") {
+    return "#f97316";
+  }
+  if (point.ring === "double") {
+    return "#38bdf8";
+  }
+  return "#f59e0b";
+}
+
+function heatPointRadius(point: HeatmapPoint) {
+  if (point.ring === "bull") {
+    return 9;
+  }
+  if (point.ring === "outer-bull") {
+    return 8;
+  }
+  if (point.ring === "triple" || point.ring === "double") {
+    return 7;
+  }
+  return 6;
+}
+
+export function HeatmapBoard({
+  numbers,
+  max,
+  points,
+  preciseCount,
+}: {
+  numbers: Record<string, number>;
+  max: number;
+  points: HeatmapPoint[];
+  preciseCount: number;
+}) {
+  const hasPrecisePoints = preciseCount > 0;
+  const renderedPoints = points.slice(-600);
+
   return (
     <div className="rounded-[1.25rem] border border-white/10 bg-black/20 p-4">
       <div className="flex items-center justify-between gap-3">
         <p className="text-[10px] uppercase tracking-[0.18em] text-stone-400">Board Heat</p>
-        <p className="text-xs text-stone-400">je heller, desto häufiger</p>
+        <p className="text-xs text-stone-400">
+          {hasPrecisePoints ? `${preciseCount} praezise Trefferpunkte` : "je heller, desto haeufiger"}
+        </p>
       </div>
       <svg viewBox="0 0 240 240" className="mx-auto mt-3 w-full max-w-[17rem]">
+        <defs>
+          <filter id="heat-blur">
+            <feGaussianBlur stdDeviation="4.5" />
+          </filter>
+        </defs>
         <circle cx="120" cy="120" r="113" fill="#0b1120" />
         {BOARD_ORDER.map((value, index) => {
           const startAngle = -9 + index * 18;
@@ -147,7 +207,7 @@ export function HeatmapBoard({ numbers, max }: { numbers: Record<string, number>
             <g key={value}>
               <path
                 d={describeSlice(34, 103, startAngle, endAngle)}
-                fill={heatColor(count, max)}
+                fill={hasPrecisePoints ? "#111827" : heatColor(count, max)}
                 stroke="#09090b"
                 strokeWidth="1.5"
               />
@@ -165,13 +225,62 @@ export function HeatmapBoard({ numbers, max }: { numbers: Record<string, number>
             </g>
           );
         })}
-        <circle cx="120" cy="120" r="18" fill={heatColor(numbers["Bull"] ?? 0, max)} stroke="#09090b" strokeWidth="2" />
-        <circle cx="120" cy="120" r="33" fill={heatColor(numbers["Outer Bull"] ?? 0, max)} stroke="#09090b" strokeWidth="2" />
+        <circle
+          cx="120"
+          cy="120"
+          r="18"
+          fill={hasPrecisePoints ? "#7f1d1d" : heatColor(numbers["Bull"] ?? 0, max)}
+          stroke="#09090b"
+          strokeWidth="2"
+        />
+        <circle
+          cx="120"
+          cy="120"
+          r="33"
+          fill={hasPrecisePoints ? "#14532d" : heatColor(numbers["Outer Bull"] ?? 0, max)}
+          stroke="#09090b"
+          strokeWidth="2"
+        />
+        {hasPrecisePoints ? (
+          <g filter="url(#heat-blur)">
+            {renderedPoints.map((point, index) => (
+              <circle
+                key={`${point.x}-${point.y}-${index}`}
+                cx={scaleBoardPoint(point.x)}
+                cy={scaleBoardPoint(point.y)}
+                r={heatPointRadius(point)}
+                fill={heatPointColor(point)}
+                opacity="0.16"
+              />
+            ))}
+          </g>
+        ) : null}
+        {hasPrecisePoints ? (
+          <g>
+            {renderedPoints.slice(-180).map((point, index) => (
+              <circle
+                key={`core-${point.x}-${point.y}-${index}`}
+                cx={scaleBoardPoint(point.x)}
+                cy={scaleBoardPoint(point.y)}
+                r="1.7"
+                fill="#fef3c7"
+                opacity="0.35"
+              />
+            ))}
+          </g>
+        ) : null}
       </svg>
       <div className="mt-3 grid grid-cols-2 gap-2">
         <StatPill label="Bull" value={String(numbers["Bull"] ?? 0)} />
         <StatPill label="Outer Bull" value={String(numbers["Outer Bull"] ?? 0)} />
+        {hasPrecisePoints ? <StatPill label="Punkte" value={String(preciseCount)} /> : null}
+        {hasPrecisePoints ? <StatPill label="Heatmap" value="Live" tone="border-amber-300/25 bg-amber-300/10 text-amber-100" /> : null}
       </div>
+      <p className="mt-3 text-xs text-stone-400">
+        {hasPrecisePoints
+          ? "Die Heatmap basiert jetzt auf echten Klick- und Touchpositionen deiner Darts."
+          : "Aeltere Wuerfe ohne Koordinaten werden vorerst noch als Zahlenfeld-Heatmap gezeigt."}
+      </p>
     </div>
   );
 }
@@ -295,7 +404,7 @@ export function MatchArchiveCard({
           href={`/profile/matches/${match.id}`}
           className="rounded-full border border-emerald-300/25 bg-emerald-400/12 px-3 py-1.5 text-sm font-semibold text-emerald-100"
         >
-          Öffnen
+          Oeffnen
         </Link>
       </div>
     </div>

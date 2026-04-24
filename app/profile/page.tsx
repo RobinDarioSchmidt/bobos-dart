@@ -109,6 +109,13 @@ type ProfileResponse = {
     heatmap: {
       numbers: Record<string, number>;
       max: number;
+      points: Array<{
+        x: number;
+        y: number;
+        score: number;
+        ring: string;
+      }>;
+      preciseCount: number;
     };
     monthlyMatches: Array<{
       period: string;
@@ -749,7 +756,12 @@ export default function ProfilePage() {
                   </div>
                 </div>
 
-                <HeatmapBoard numbers={data.insights.heatmap.numbers} max={data.insights.heatmap.max} />
+                <HeatmapBoard
+                  numbers={data.insights.heatmap.numbers}
+                  max={data.insights.heatmap.max}
+                  points={data.insights.heatmap.points}
+                  preciseCount={data.insights.heatmap.preciseCount}
+                />
 
                 <div className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4">
                   <h2 className="text-lg font-semibold text-white">Wurfmuster</h2>
