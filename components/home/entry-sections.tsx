@@ -63,20 +63,14 @@ export function SignedOutLandingSection({
               className="h-20 w-20 rounded-2xl border border-emerald-300/30 object-cover shadow-lg shadow-emerald-950/40"
             />
             <div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-3 py-1 text-xs uppercase tracking-[0.28em] text-emerald-200">
-                Dart Hub
-              </div>
-              <p className="mt-2 text-sm font-semibold text-emerald-100">Bobo ist bereit.</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-100">Bobo&apos;s Dart</p>
+              <p className="mt-2 text-sm font-semibold text-emerald-100">Dart Counter Web-App</p>
             </div>
           </div>
           <div className="space-y-3">
             <h1 className="max-w-3xl text-4xl font-semibold tracking-tight text-white sm:text-5xl">
-              Darts fÃ¼r Zuhause, Training und Online-Matches in einer klaren App.
+              Bobo&apos;s Dart
             </h1>
-            <p className="max-w-2xl text-sm leading-6 text-stone-300 sm:text-base">
-              Logge dich ein und entscheide danach, ob du lokal mit Gastspielern spielen,
-              online einen Raum Ã¶ffnen, trainieren oder direkt in deine Langzeitstatistiken gehen willst.
-            </p>
           </div>
           <div className="flex flex-wrap gap-3 text-sm text-stone-300">
             <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1">Lokales Spiel mit Gastnamen</span>

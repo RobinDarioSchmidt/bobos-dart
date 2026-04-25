@@ -478,42 +478,48 @@ export async function POST(request: Request) {
 
   if (body.action === "create") {
     const displayName = getPreferredDisplayName(authResult.user.email, body.displayName, adminEmail);
-    const roomCode = generateRoomCode();
-    let state: LiveMatchState = createEmptyLiveState({
-      mode: body.mode,
-      entryMode: body.entryMode,
-      finishMode: body.finishMode,
-      legsToWin: body.legsToWin,
-      setsToWin: body.setsToWin,
-      maxPlayers: body.maxPlayers,
-      ownerName: displayName,
-      ownerId: authResult.user.id,
-      bullOffEnabled: body.bullOffEnabled,
-    });
-    if (body.deviceId) {
-      state = withUpdatedDeviceLock(state, {
-        profileId: authResult.user.id,
-        deviceId: body.deviceId,
-        deviceLabel: body.deviceLabel ?? "Dieses Geraet",
-        lastSeenAt: new Date().toISOString(),
+    for (let attempt = 0; attempt < 12; attempt += 1) {
+      const roomCode = generateRoomCode();
+      let state: LiveMatchState = createEmptyLiveState({
+        mode: body.mode,
+        entryMode: body.entryMode,
+        finishMode: body.finishMode,
+        legsToWin: body.legsToWin,
+        setsToWin: body.setsToWin,
+        maxPlayers: body.maxPlayers,
+        ownerName: displayName,
+        ownerId: authResult.user.id,
+        bullOffEnabled: body.bullOffEnabled,
       });
+      if (body.deviceId) {
+        state = withUpdatedDeviceLock(state, {
+          profileId: authResult.user.id,
+          deviceId: body.deviceId,
+          deviceLabel: body.deviceLabel ?? "Dieses Geraet",
+          lastSeenAt: new Date().toISOString(),
+        });
+      }
+
+      const { data, error } = await adminClient
+        .from("live_matches")
+        .insert({
+          owner_id: authResult.user.id,
+          room_code: roomCode,
+          state,
+        })
+        .select("id, owner_id, room_code, state")
+        .single();
+
+      if (!error && data) {
+        return NextResponse.json({ match: data });
+      }
+
+      if (error?.code !== "23505") {
+        return NextResponse.json({ error: error?.message ?? "create_failed" }, { status: 400 });
+      }
     }
 
-    const { data, error } = await adminClient
-      .from("live_matches")
-      .insert({
-        owner_id: authResult.user.id,
-        room_code: roomCode,
-        state,
-      })
-      .select("id, owner_id, room_code, state")
-      .single();
-
-    if (error || !data) {
-      return NextResponse.json({ error: error?.message ?? "create_failed" }, { status: 400 });
-    }
-
-    return NextResponse.json({ match: data });
+    return NextResponse.json({ error: "room_code_pool_exhausted" }, { status: 503 });
   }
 
   if (body.action === "join") {

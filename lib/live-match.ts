@@ -768,6 +768,57 @@ export function startRematchLiveMatch(previousState: LiveMatchState) {
   return nextState;
 }
 
+const LIVE_ROOM_WORDS = [
+  "BONGO",
+  "PFEIL",
+  "BULLI",
+  "DARTS",
+  "WUMMS",
+  "TREFF",
+  "RINGE",
+  "ZOCKE",
+  "KNEIP",
+  "FLUKE",
+  "PENGO",
+  "MAMBO",
+  "BANJO",
+  "JOKER",
+  "NINJA",
+  "PANDA",
+  "TURBO",
+  "RADAR",
+  "MAMUT",
+  "KOBRA",
+  "TIGER",
+  "FALKE",
+  "WIKING",
+  "BOMBE",
+  "PINGU",
+  "PIRAT",
+  "KOMET",
+  "FUNKY",
+  "JUMBO",
+  "ZEBRA",
+  "KURVE",
+  "HONIG",
+  "MELON",
+  "KAKAO",
+  "DONUT",
+  "FLASH",
+  "RUMBA",
+  "SPASS",
+  "WOLKE",
+  "GRINS",
+  "KNALL",
+  "KRASS",
+  "FROST",
+  "KIOSK",
+  "MIXER",
+  "BUDDY",
+  "CHILI",
+  "MANGO",
+];
+
 export function generateRoomCode() {
-  return Math.random().toString(36).slice(2, 8).toUpperCase();
+  return LIVE_ROOM_WORDS[Math.floor(Math.random() * LIVE_ROOM_WORDS.length)] ?? "DARTS";
 }
