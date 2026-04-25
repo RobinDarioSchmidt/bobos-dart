@@ -1061,6 +1061,7 @@ export default function LivePage() {
       ? "Dieses Geraet schaut zu"
       : "Warte auf deinen Zug";
   const canPlayFromThisDevice = isCurrentUsersTurn && hasDeviceControl;
+  const isTurnHighlightActive = canPlayFromThisDevice;
 
   async function handleBoardSegment(segment: LiveBoardSegment) {
     if (!liveState) {
@@ -1304,8 +1305,17 @@ export default function LivePage() {
   }, [audioMode, latestScoredVisit]);
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top,_#1f2937,_#09090b_55%)] px-2 py-4 pb-28 text-stone-100 sm:px-4 sm:py-6 sm:pb-8">
-      <div className="mx-auto flex max-w-5xl flex-col gap-4">
+    <main className="relative min-h-screen bg-[radial-gradient(circle_at_top,_#1f2937,_#09090b_55%)] px-2 py-4 pb-28 text-stone-100 sm:px-4 sm:py-6 sm:pb-8">
+      {isTurnHighlightActive ? (
+        <div
+          className="pointer-events-none absolute inset-0 z-0"
+          style={{
+            background:
+              "radial-gradient(circle at center, rgba(0,0,0,0) 58%, rgba(34,197,94,0.14) 82%, rgba(34,197,94,0.34) 100%)",
+          }}
+        />
+      ) : null}
+      <div className="relative z-10 mx-auto flex max-w-5xl flex-col gap-4">
         <div className="flex items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-3">
             <Image

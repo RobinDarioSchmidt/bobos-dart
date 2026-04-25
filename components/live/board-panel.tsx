@@ -759,11 +759,21 @@ function LiveDartboard({
                 </div>
               </div>
             </div>
-            <div className="mt-2 rounded-full border border-white/10 bg-black/75 px-3 py-1 text-center shadow-lg">
-              <div className="text-sm font-semibold text-white">
+            <div
+              className={`mt-2 rounded-full px-3 py-1 text-center shadow-lg ${
+                touchPreview.cancelling
+                  ? "border border-red-400/30 bg-red-500/20"
+                  : "border border-white/10 bg-black/75"
+              }`}
+            >
+              <div className={`text-sm font-semibold ${touchPreview.cancelling ? "text-red-100" : "text-white"}`}>
                 {touchPreview.cancelling ? "Abbrechen" : touchPreview.segment?.label ?? "-"}
               </div>
-              <div className="text-[10px] uppercase tracking-[0.18em] text-amber-100">
+              <div
+                className={`text-[10px] uppercase tracking-[0.18em] ${
+                  touchPreview.cancelling ? "text-red-200" : "text-amber-100"
+                }`}
+              >
                 {touchPreview.cancelling ? "Loslassen bricht ab" : touchPreview.segment?.score ?? ""}
               </div>
             </div>
