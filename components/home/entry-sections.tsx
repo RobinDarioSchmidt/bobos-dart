@@ -250,19 +250,19 @@ export function SignedInOverviewSection({
         </div>
 
         <div className="grid grid-cols-2 gap-3 sm:gap-4">
-          <button
-            onClick={onStartLocal}
-            className="rounded-[1.5rem] border border-white/10 bg-[linear-gradient(135deg,rgba(16,185,129,0.18),rgba(15,23,42,0.82))] p-4 text-left transition hover:border-emerald-300/40 hover:bg-emerald-400/10 sm:p-5"
-          >
-            <h2 className="text-xs font-semibold uppercase tracking-[0.24em] text-emerald-100">Lokales Spiel</h2>
-          </button>
-
           <Link
             href="/live"
             className="rounded-[1.5rem] border border-white/10 bg-[linear-gradient(135deg,rgba(59,130,246,0.18),rgba(15,23,42,0.82))] p-4 transition hover:border-sky-300/40 hover:bg-sky-400/10 sm:p-5"
           >
             <h2 className="text-xs font-semibold uppercase tracking-[0.24em] text-sky-100">Online Spiel</h2>
           </Link>
+
+          <button
+            onClick={onStartLocal}
+            className="rounded-[1.5rem] border border-white/10 bg-[linear-gradient(135deg,rgba(16,185,129,0.18),rgba(15,23,42,0.82))] p-4 text-left transition hover:border-emerald-300/40 hover:bg-emerald-400/10 sm:p-5"
+          >
+            <h2 className="text-xs font-semibold uppercase tracking-[0.24em] text-emerald-100">Lokales Spiel</h2>
+          </button>
 
           <button
             onClick={onStartTraining}
@@ -337,11 +337,20 @@ export function SignedInOverviewSection({
                 {statCards.map((card) => (
                   <button
                     key={card.title}
-                    onClick={() => setActiveStatHint({ title: card.title, description: card.description })}
-                    className="rounded-2xl border border-white/10 bg-white/5 p-3 text-left transition hover:bg-white/10"
+                    onClick={() =>
+                      setActiveStatHint((current) =>
+                        current?.title === card.title ? null : { title: card.title, description: card.description },
+                      )
+                    }
+                    className="relative rounded-2xl border border-white/10 bg-white/5 p-3 text-left transition hover:bg-white/10"
                   >
                     <p className="text-xs text-stone-400">{card.title}</p>
                     <p className="mt-1 text-2xl font-semibold text-white">{card.value}</p>
+                    {activeStatHint?.title === card.title ? (
+                      <div className="absolute left-0 top-[calc(100%+0.5rem)] z-20 w-56 rounded-2xl border border-white/10 bg-[#0f172a] p-3 shadow-2xl shadow-black/40">
+                        <p className="text-sm text-stone-200">{card.description}</p>
+                      </div>
+                    ) : null}
                   </button>
                 ))}
               </div>
@@ -491,24 +500,6 @@ export function SignedInOverviewSection({
         </div>
       ) : null}
 
-      {activeStatHint ? (
-        <div className="fixed inset-0 z-[130] flex items-end justify-center bg-black/40 p-3 sm:items-center sm:p-6">
-          <div className="w-full max-w-md rounded-[1.5rem] border border-white/10 bg-[#0f172a] p-4 shadow-2xl shadow-black/40">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h3 className="text-lg font-semibold text-white">{activeStatHint.title}</h3>
-                <p className="mt-2 text-sm text-stone-300">{activeStatHint.description}</p>
-              </div>
-              <button
-                onClick={() => setActiveStatHint(null)}
-                className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-semibold text-white"
-              >
-                OK
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
     </section>
   );
 }
