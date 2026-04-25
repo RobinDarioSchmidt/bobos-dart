@@ -664,7 +664,7 @@ export function finalizePendingVisit(previousState: LiveMatchState) {
     darts: usedLabels,
     dartDetails: evaluation.usedDarts,
     note: evaluation.bust
-      ? "Bust"
+      ? "Miss"
       : evaluation.checkout
         ? "Checkout"
         : !evaluation.enteredAfterVisit
@@ -679,7 +679,7 @@ export function finalizePendingVisit(previousState: LiveMatchState) {
 
   if (evaluation.bust) {
     nextState.activePlayer = getNextJoinedPlayerIndex(nextState, nextState.activePlayer);
-    nextState.statusText = `${player.name} bustet. ${nextState.players[nextState.activePlayer].name} ist dran.`;
+    nextState.statusText = `${player.name} macht Miss. ${nextState.players[nextState.activePlayer].name} ist dran.`;
     return nextState;
   }
 

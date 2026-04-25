@@ -14,6 +14,67 @@ type LivePlayerStat = {
   checkouts: number;
 };
 
+type CelebrationKind = "leg" | "set" | "match";
+
+function getCelebrationCopy(kind: CelebrationKind, winnerName: string) {
+  const options =
+    kind === "leg"
+      ? [
+          {
+            badge: "Leg geholt",
+            title: `${winnerName} klaut sich das Leg`,
+            subtitle: "Sauber zugemacht. Die Scheibe darf kurz applaudieren.",
+          },
+          {
+            badge: "Leg gesnackt",
+            title: `${winnerName} serviert ein frisches Leg`,
+            subtitle: "Kurz gelacht, tief geatmet, weiter geht's.",
+          },
+          {
+            badge: "Leg im Sack",
+            title: `${winnerName} macht hier kurz Theater`,
+            subtitle: "Das war genau die richtige Mischung aus Timing und Frechheit.",
+          },
+        ]
+      : kind === "set"
+        ? [
+            {
+              badge: "Satz eingetuetet",
+              title: `${winnerName} schnappt sich den Satz`,
+              subtitle: "Die Stimmung kippt leicht Richtung Siegerpose.",
+            },
+            {
+              badge: "Satz gehoert dir",
+              title: `${winnerName} zieht den Satz auf seine Seite`,
+              subtitle: "Ganz schoen frech. Genau so soll es sein.",
+            },
+            {
+              badge: "Satz versenkt",
+              title: `${winnerName} macht den Satz dicht`,
+              subtitle: "Jetzt einmal kurz grinsen und dann nachladen.",
+            },
+          ]
+        : [
+            {
+              badge: "Match geholt",
+              title: `${winnerName} gewinnt das Match`,
+              subtitle: "Kurz verbeugen, Dartpfeile einsammeln, Euphorie mitnehmen.",
+            },
+            {
+              badge: "Match im Kuehlschrank",
+              title: `${winnerName} macht den Laden zu`,
+              subtitle: "Das war jetzt schon ziemlich launig anzusehen.",
+            },
+            {
+              badge: "Absoluter Endgegner",
+              title: `${winnerName} nimmt das Match mit`,
+              subtitle: "Ein bisschen Chaos, ein bisschen Klasse, genau richtig.",
+            },
+          ];
+
+  return options[winnerName.length % options.length] ?? options[0];
+}
+
 function getPlayerAwards(liveState: LiveMatchState, playerStats: LivePlayerStat[]) {
   const completedVisits = liveState.history.filter((entry) => entry.result !== "leg-win");
   const bestCheckoutVisit =
@@ -228,7 +289,7 @@ export function LiveStatsPanel({
             <p className="mt-1 text-lg font-semibold text-white">{currentLiveStats.bestVisit}</p>
           </div>
           <div className="rounded-2xl bg-white/5 p-2">
-            <p className="text-stone-400">Busts</p>
+            <p className="text-stone-400">Misses</p>
             <p className="mt-1 text-lg font-semibold text-white">{currentLiveStats.busts}</p>
           </div>
           <div className="rounded-2xl bg-white/5 p-2">
@@ -266,12 +327,52 @@ export function LiveStatsPanel({
                 <p className="mt-1 font-semibold text-white">{entry.bestVisit}</p>
               </div>
               <div>
-                <p className="text-stone-400">Busts</p>
+                <p className="text-stone-400">Misses</p>
                 <p className="mt-1 font-semibold text-white">{entry.busts}</p>
               </div>
             </div>
           </div>
         ))}
+      </div>
+    </section>
+  );
+}
+
+export function LiveCelebrationPanel({
+  kind,
+  winnerName,
+  scoreLine,
+  nextStep,
+}: {
+  kind: CelebrationKind;
+  winnerName: string;
+  scoreLine: string;
+  nextStep: string;
+}) {
+  const copy = getCelebrationCopy(kind, winnerName);
+
+  return (
+    <section className="rounded-[1.5rem] border border-emerald-300/20 bg-[linear-gradient(145deg,rgba(16,185,129,0.2),rgba(245,158,11,0.14),rgba(15,23,42,0.94))] p-4 backdrop-blur">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="text-[11px] uppercase tracking-[0.22em] text-emerald-100">{copy.badge}</p>
+          <h2 className="mt-1 text-2xl font-semibold text-white">{copy.title}</h2>
+          <p className="mt-2 text-sm text-emerald-50">{copy.subtitle}</p>
+        </div>
+        <div className="rounded-2xl border border-white/10 bg-black/25 px-3 py-2 text-right">
+          <p className="text-[10px] uppercase tracking-[0.18em] text-stone-400">Naechster Schritt</p>
+          <p className="mt-1 text-sm font-semibold text-white">{nextStep}</p>
+        </div>
+      </div>
+      <div className="mt-4 grid grid-cols-2 gap-2">
+        <div className="rounded-2xl border border-white/10 bg-black/25 p-3">
+          <p className="text-[10px] uppercase tracking-[0.18em] text-stone-400">Sieger</p>
+          <p className="mt-1 text-lg font-semibold text-white">{winnerName}</p>
+        </div>
+        <div className="rounded-2xl border border-white/10 bg-black/25 p-3">
+          <p className="text-[10px] uppercase tracking-[0.18em] text-stone-400">Scoreline</p>
+          <p className="mt-1 text-lg font-semibold text-white">{scoreLine}</p>
+        </div>
       </div>
     </section>
   );
@@ -339,6 +440,7 @@ export function LiveMatchSummaryPanel({
   const winner = liveState.players[winnerIndex];
   const winnerStats = playerStats.find((entry) => entry.name === winner?.name);
   const awards = getPlayerAwards(liveState, playerStats);
+  const copy = getCelebrationCopy("match", winner?.name ?? "Spieler");
   const sortedPlayers = [...liveState.players]
     .filter((player) => player.joined)
     .sort((left, right) => {
@@ -359,11 +461,11 @@ export function LiveMatchSummaryPanel({
     <section className="rounded-[1.5rem] border border-emerald-300/20 bg-[linear-gradient(145deg,rgba(16,185,129,0.18),rgba(8,47,73,0.4),rgba(9,9,11,0.95))] p-4 backdrop-blur">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <p className="text-[11px] uppercase tracking-[0.22em] text-emerald-100">Match beendet</p>
-          <h2 className="mt-1 text-2xl font-semibold text-white">{winner?.name ?? "Spieler"} gewinnt das Match</h2>
+          <p className="text-[11px] uppercase tracking-[0.22em] text-emerald-100">{copy.badge}</p>
+          <h2 className="mt-1 text-2xl font-semibold text-white">{copy.title}</h2>
           <p className="mt-1 text-sm text-stone-200">{liveState.statusText}</p>
           <p className="mt-2 text-sm text-emerald-100">
-            {winner?.name ?? "Der Sieger"} bringt {winnerStats?.average.toFixed(1) ?? "0.0"} Average,{" "}
+            {copy.subtitle} {winner?.name ?? "Der Sieger"} bringt {winnerStats?.average.toFixed(1) ?? "0.0"} Average,{" "}
             {winnerStats?.bestVisit ?? 0} als Best Visit und {winnerStats?.checkouts ?? 0} Checkout(s) ins Ziel.
           </p>
         </div>
@@ -463,7 +565,7 @@ export function LiveMatchSummaryPanel({
                   <p className="mt-1 font-semibold text-white">{stats?.checkouts ?? 0}</p>
                 </div>
                 <div>
-                  <p className="text-stone-400">Busts</p>
+                  <p className="text-stone-400">Misses</p>
                   <p className="mt-1 font-semibold text-white">{stats?.busts ?? 0}</p>
                 </div>
                 <div>

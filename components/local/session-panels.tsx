@@ -4,6 +4,7 @@ import Image from "next/image";
 import type { ReactNode } from "react";
 
 type EntryMode = "single" | "double" | "master";
+type FinishMode = "single" | "double" | "master";
 type TrainingMode = "around-the-clock" | "bull-drill" | "shanghai" | "doubles-around";
 
 const optionButton =
@@ -21,8 +22,16 @@ function getEntryLabel(entryMode: EntryMode) {
   return "Straight In";
 }
 
-function getFinishLabel(doubleOut: boolean) {
-  return doubleOut ? "Double Out" : "Straight Out";
+function getFinishLabel(finishMode: FinishMode) {
+  if (finishMode === "double") {
+    return "Double Out";
+  }
+
+  if (finishMode === "master") {
+    return "Masters Out";
+  }
+
+  return "Straight Out";
 }
 
 export function LocalSetupPanel({
@@ -30,7 +39,7 @@ export function LocalSetupPanel({
   playerNames,
   mode,
   entryMode,
-  doubleOut,
+  finishMode,
   bullOffEnabled,
   legsToWin,
   setsToWin,
@@ -38,7 +47,7 @@ export function LocalSetupPanel({
   onPlayerNameChange,
   onModeChange,
   onCycleEntryMode,
-  onToggleDoubleOut,
+  onCycleFinishMode,
   onToggleBullOff,
   onLegsToWinChange,
   onSetsToWinChange,
@@ -49,7 +58,7 @@ export function LocalSetupPanel({
   playerNames: string[];
   mode: 301 | 501;
   entryMode: EntryMode;
-  doubleOut: boolean;
+  finishMode: FinishMode;
   bullOffEnabled: boolean;
   legsToWin: number;
   setsToWin: number;
@@ -57,7 +66,7 @@ export function LocalSetupPanel({
   onPlayerNameChange: (index: number, value: string) => void;
   onModeChange: (value: 301 | 501) => void;
   onCycleEntryMode: () => void;
-  onToggleDoubleOut: () => void;
+  onCycleFinishMode: () => void;
   onToggleBullOff: () => void;
   onLegsToWinChange: (value: number) => void;
   onSetsToWinChange: (value: number) => void;
@@ -117,10 +126,12 @@ export function LocalSetupPanel({
           {getEntryLabel(entryMode)}
         </button>
         <button
-          onClick={onToggleDoubleOut}
-          className={`${optionButton} ${doubleOut ? "border-emerald-300/30 bg-emerald-300/10 text-emerald-100 hover:bg-emerald-300/10" : ""}`}
+          onClick={onCycleFinishMode}
+          className={`${optionButton} ${
+            finishMode !== "single" ? "border-emerald-300/30 bg-emerald-300/10 text-emerald-100 hover:bg-emerald-300/10" : ""
+          }`}
         >
-          {getFinishLabel(doubleOut)}
+          {getFinishLabel(finishMode)}
         </button>
         {playerCount > 1 ? (
           <button

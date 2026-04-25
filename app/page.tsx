@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { LiveBoardPanel, type LiveBoardSegment } from "@/components/live/board-panel";
-import { LiveHistoryPanel, LiveStatsPanel } from "@/components/live/match-panels";
+import { LiveCelebrationPanel, LiveHistoryPanel, LiveMatchSummaryPanel, LiveStatsPanel } from "@/components/live/match-panels";
 import {
   BoardPreviewPanel,
   CollapsibleFeedPanel,
@@ -22,6 +22,7 @@ type AppMode = "match" | "training";
 type SelectedFlow = "overview" | "local" | "training";
 type GameMode = 301 | 501;
 type EntryMode = "single" | "double" | "master";
+type FinishMode = "single" | "double" | "master";
 type TrainingMode = "around-the-clock" | "bull-drill" | "shanghai" | "doubles-around";
 type SegmentRing = "single" | "double" | "triple" | "outer-bull" | "bull" | "miss" | "unknown";
 
@@ -185,6 +186,7 @@ type CloudAppSettings = {
   mode: GameMode;
   entryMode: EntryMode;
   doubleOut: boolean;
+  finishMode?: FinishMode;
   legsToWin: number;
   setsToWin: number;
   playerNames: string[];
@@ -507,13 +509,17 @@ function canStartLocalWithLabel(label: string, entryMode: EntryMode) {
   return parsed.multiplier === 2 || parsed.multiplier === 3;
 }
 
-function canFinishLocalWithLabel(label: string, doubleOut: boolean) {
-  if (!doubleOut) {
+function canFinishLocalWithLabel(label: string, finishMode: FinishMode) {
+  if (finishMode === "single") {
     return true;
   }
 
   const parsed = parseThrowLabel(label);
-  return parsed.multiplier === 2;
+  if (finishMode === "double") {
+    return parsed.multiplier === 2;
+  }
+
+  return parsed.multiplier === 2 || parsed.multiplier === 3;
 }
 
 function getEntryModeLabel(entryMode: EntryMode) {
@@ -546,7 +552,7 @@ function evaluateLocalVisit(
   labels: string[],
   enteredBefore: boolean,
   entryMode: EntryMode,
-  doubleOut: boolean,
+  finishMode: FinishMode,
 ) {
   let remaining = scoreBefore;
   let enteredAfter = enteredBefore;
@@ -577,7 +583,7 @@ function evaluateLocalVisit(
       };
     }
 
-    if (doubleOut && remaining === 1) {
+    if (finishMode !== "single" && remaining === 1) {
       return {
         scoreAfter: scoreBefore,
         countedTotal,
@@ -587,7 +593,7 @@ function evaluateLocalVisit(
       };
     }
 
-    if (remaining === 0 && !canFinishLocalWithLabel(label, doubleOut)) {
+    if (remaining === 0 && !canFinishLocalWithLabel(label, finishMode)) {
       return {
         scoreAfter: scoreBefore,
         countedTotal,
@@ -615,8 +621,8 @@ function formatAverage(pointsScored: number, dartsThrown: number) {
   return ((pointsScored / dartsThrown) * 3).toFixed(2);
 }
 
-function getCheckoutHints(score: number, doubleOut: boolean) {
-  return getCheckoutSuggestions(score, doubleOut ? "double" : "single");
+function getCheckoutHints(score: number, finishMode: FinishMode) {
+  return getCheckoutSuggestions(score, finishMode);
 }
 
 function getPlayerMetrics(player: Player) {
@@ -1045,7 +1051,7 @@ export default function Page() {
   const [selectedFlow, setSelectedFlow] = useState<SelectedFlow>("overview");
   const [mode, setMode] = useState<GameMode>(501);
   const [entryMode, setEntryMode] = useState<EntryMode>("single");
-  const [doubleOut, setDoubleOut] = useState(true);
+  const [finishMode, setFinishMode] = useState<FinishMode>("double");
   const [localBullOffEnabled, setLocalBullOffEnabled] = useState(false);
   const [localMatchStarted, setLocalMatchStarted] = useState(false);
   const [legsToWin, setLegsToWin] = useState(3);
@@ -1104,6 +1110,7 @@ export default function Page() {
   const [cloudSettingsReady, setCloudSettingsReady] = useState(false);
   const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL ?? "";
   const isAdmin = Boolean(session?.user.email && adminEmail && session.user.email === adminEmail);
+  const doubleOut = finishMode === "double";
 
   const applyStoredState = useCallback((parsed: Partial<LocalStoredState>) => {
     const parsedMode = parsed.mode === 301 || parsed.mode === 501 ? parsed.mode : 501;
@@ -1111,6 +1118,14 @@ export default function Page() {
       parsed.entryMode === "single" || parsed.entryMode === "double" || parsed.entryMode === "master"
         ? parsed.entryMode
         : "single";
+    const parsedFinishMode =
+      parsed.finishMode === "single" || parsed.finishMode === "double" || parsed.finishMode === "master"
+        ? parsed.finishMode
+        : typeof parsed.doubleOut === "boolean"
+          ? parsed.doubleOut
+            ? "double"
+            : "single"
+          : "double";
     const names =
       parsed.playerNames && parsed.playerNames.length >= 1 && parsed.playerNames.length <= 4
         ? parsed.playerNames
@@ -1118,6 +1133,7 @@ export default function Page() {
 
     setMode(parsedMode);
     setEntryMode(parsedEntryMode);
+    setFinishMode(parsedFinishMode);
     setPlayers(createPlayers(parsedMode, names, parsedEntryMode));
     setStatusText(`Match bereit. ${names[0]} beginnt.`);
     setActivePlayer(0);
@@ -1130,10 +1146,6 @@ export default function Page() {
 
     if (parsed.appMode === "match" || parsed.appMode === "training") {
       setAppMode(parsed.appMode);
-    }
-
-    if (typeof parsed.doubleOut === "boolean") {
-      setDoubleOut(parsed.doubleOut);
     }
 
     if (typeof parsed.legsToWin === "number" && LEGS_OPTIONS.includes(parsed.legsToWin)) {
@@ -1220,6 +1232,7 @@ export default function Page() {
         mode: GameMode;
         appMode: AppMode;
         entryMode: EntryMode;
+        finishMode: FinishMode;
         doubleOut: boolean;
         legsToWin: number;
         setsToWin: number;
@@ -1247,6 +1260,7 @@ export default function Page() {
         appMode,
         mode,
         entryMode,
+        finishMode,
         doubleOut,
         legsToWin,
         setsToWin,
@@ -1259,6 +1273,7 @@ export default function Page() {
   }, [
     appMode,
     doubleOut,
+    finishMode,
     entryMode,
     hydrated,
     legsToWin,
@@ -1292,7 +1307,7 @@ export default function Page() {
     [players],
   );
   const currentVisitTotal = currentDarts.reduce((sum, dart) => sum + dart, 0);
-  const checkoutHints = currentPlayer.entered ? getCheckoutHints(currentPlayer.score, doubleOut) : [];
+  const checkoutHints = currentPlayer.entered ? getCheckoutHints(currentPlayer.score, finishMode) : [];
   const localStartDisabled = players.some((player) => !player.name.trim());
   const localBoardMarkers = useMemo<LiveBoardMarker[]>(
     () =>
@@ -1362,7 +1377,7 @@ export default function Page() {
               marker: visit.markers[dartIndex] ?? parsed.marker,
             };
           }),
-          note: visit.checkout ? "Checkout" : visit.bust ? "Bust" : "Visit",
+          note: visit.checkout ? "Checkout" : visit.bust ? "Miss" : "Visit",
           createdAt: new Date(Date.UTC(2024, 0, 1, 0, playerIndex, visitIndex)).toISOString(),
         })),
       ),
@@ -1373,7 +1388,7 @@ export default function Page() {
       revision: 0,
       mode,
       entryMode,
-      finishMode: doubleOut ? "double" : "single",
+      finishMode,
       legsToWin,
       setsToWin,
       maxPlayers: players.length,
@@ -1415,8 +1430,8 @@ export default function Page() {
     [
       activePlayer,
       currentPlayer.name,
-      doubleOut,
       entryMode,
+      finishMode,
       legStartingPlayer,
       legWinner,
       legsToWin,
@@ -1431,6 +1446,24 @@ export default function Page() {
       statusText,
     ],
   );
+  const localCelebration = useMemo(() => {
+    if (legWinner === null || matchWinner !== null) {
+      return null;
+    }
+
+    const winner = players[legWinner];
+    if (!winner) {
+      return null;
+    }
+
+    const setWon = winner.legs === 0 && winner.sets > 0;
+    return {
+      kind: setWon ? ("set" as const) : ("leg" as const),
+      winnerName: winner.name,
+      scoreLine: `${winner.sets} Sets - ${winner.legs} Legs`,
+      nextStep: setWon ? "Naechster Satz wartet" : "Naechstes Leg wartet",
+    };
+  }, [legWinner, matchWinner, players]);
 
   const ensureProfile = useCallback(async (nextSession: Session) => {
     if (!supabase || !nextSession.user.email) {
@@ -1442,6 +1475,7 @@ export default function Page() {
       appMode,
       mode,
       entryMode,
+      finishMode,
       doubleOut,
       legsToWin,
       setsToWin,
@@ -1456,7 +1490,7 @@ export default function Page() {
       app_settings: appSettings,
       updated_at: new Date().toISOString(),
     });
-  }, [adminEmail, appMode, doubleOut, entryMode, legsToWin, mode, players, setsToWin, trainingSession.mode]);
+  }, [adminEmail, appMode, doubleOut, entryMode, finishMode, legsToWin, mode, players, setsToWin, trainingSession.mode]);
 
   const loadCloudProfile = useCallback(async (nextSession: Session) => {
     if (!supabase) {
@@ -1772,6 +1806,7 @@ export default function Page() {
       appMode,
       mode,
       entryMode,
+      finishMode,
       doubleOut,
       legsToWin,
       setsToWin,
@@ -1786,7 +1821,7 @@ export default function Page() {
         updated_at: new Date().toISOString(),
       })
       .eq("id", session.user.id);
-  }, [appMode, cloudSettingsReady, doubleOut, entryMode, legsToWin, mode, players, session, setsToWin, trainingSession.mode]);
+  }, [appMode, cloudSettingsReady, doubleOut, entryMode, finishMode, legsToWin, mode, players, session, setsToWin, trainingSession.mode]);
 
   useEffect(() => {
     if (!session || typeof window === "undefined") {
@@ -1864,7 +1899,7 @@ export default function Page() {
       .insert({
         owner_id: session.user.id,
         mode: String(mode),
-        double_out: doubleOut,
+        double_out: finishMode !== "single",
         legs_to_win: legsToWin,
         sets_to_win: setsToWin,
         winner_profile_id: winnerIndex === 0 ? session.user.id : null,
@@ -2202,7 +2237,7 @@ function resetLegBoards(nextPlayers: Player[]) {
 
     const nextPlayers = clonePlayers(players);
     const player = nextPlayers[activePlayer];
-    const evaluation = evaluateLocalVisit(player.score, darts, labels, player.entered, entryMode, doubleOut);
+    const evaluation = evaluateLocalVisit(player.score, darts, labels, player.entered, entryMode, finishMode);
     const total = evaluation.countedTotal;
     const remaining = evaluation.scoreAfter;
     const checkout = evaluation.checkout;
@@ -2230,7 +2265,7 @@ function resetLegBoards(nextPlayers: Player[]) {
     if (bust) {
       const nextPlayerIndex = (activePlayer + 1) % nextPlayers.length;
       setActivePlayer(nextPlayerIndex);
-      setStatusText(`${player.name} bustet. ${nextPlayers[nextPlayerIndex].name} übernimmt.`);
+      setStatusText(`${player.name} macht Miss. ${nextPlayers[nextPlayerIndex].name} übernimmt.`);
       return;
     }
 
@@ -2272,7 +2307,7 @@ function resetLegBoards(nextPlayers: Player[]) {
             winner: player.name,
             opponents,
             mode,
-            doubleOut,
+            doubleOut: finishMode !== "single",
             sets: getMatchScore(nextPlayers),
           },
           ...nextHistory,
@@ -2639,7 +2674,7 @@ function resetLegBoards(nextPlayers: Player[]) {
                       playerNames={players.map((player) => player.name)}
                       mode={mode}
                       entryMode={entryMode}
-                      doubleOut={doubleOut}
+                      finishMode={finishMode}
                       bullOffEnabled={localBullOffEnabled}
                       legsToWin={legsToWin}
                       setsToWin={setsToWin}
@@ -2647,7 +2682,9 @@ function resetLegBoards(nextPlayers: Player[]) {
                       onPlayerNameChange={updatePlayerName}
                       onModeChange={setMode}
                       onCycleEntryMode={cycleEntryMode}
-                      onToggleDoubleOut={() => setDoubleOut((prev) => !prev)}
+                      onCycleFinishMode={() =>
+                        setFinishMode((prev) => (prev === "single" ? "double" : prev === "double" ? "master" : "single"))
+                      }
                       onToggleBullOff={() => setLocalBullOffEnabled((prev) => !prev)}
                       onLegsToWinChange={setLegsToWin}
                       onSetsToWinChange={setSetsToWin}
@@ -2731,6 +2768,23 @@ function resetLegBoards(nextPlayers: Player[]) {
                       }}
                       onFinishVisit={() => recordVisit(currentDarts, currentLabels, currentMarkers)}
                       onNextLeg={startNextLeg}
+                    />
+                  ) : null}
+                  {localMatchStarted && localCelebration ? (
+                    <LiveCelebrationPanel
+                      kind={localCelebration.kind}
+                      winnerName={localCelebration.winnerName}
+                      scoreLine={localCelebration.scoreLine}
+                      nextStep={localCelebration.nextStep}
+                    />
+                  ) : null}
+                  {localMatchStarted && matchWinner !== null ? (
+                    <LiveMatchSummaryPanel
+                      liveState={localLiveState}
+                      playerStats={localPlayerStats}
+                      canControlRematch
+                      loading={false}
+                      onRematch={startConfiguredLocalMatch}
                     />
                   ) : null}
 

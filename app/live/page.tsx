@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { LiveBoardPanel, type LiveBoardSegment } from "@/components/live/board-panel";
 import {
+  LiveCelebrationPanel,
   LiveHistoryPanel,
   LiveMatchSummaryPanel,
   LiveStatsPanel,
@@ -1271,6 +1272,24 @@ export default function LivePage() {
     () => (currentPlayer ? livePlayerStats.find((entry) => entry.name === currentPlayer.name) ?? null : null),
     [currentPlayer, livePlayerStats],
   );
+  const liveCelebration = useMemo(() => {
+    if (!liveState || liveState.legWinner === null || liveState.matchWinner !== null) {
+      return null;
+    }
+
+    const winner = liveState.players[liveState.legWinner];
+    if (!winner) {
+      return null;
+    }
+
+    const setWon = winner.legs === 0 && winner.sets > 0;
+    return {
+      kind: setWon ? ("set" as const) : ("leg" as const),
+      winnerName: winner.name,
+      scoreLine: `${winner.sets} Sets - ${winner.legs} Legs`,
+      nextStep: setWon ? "Naechster Satz steht bereit" : "Naechstes Leg kann starten",
+    };
+  }, [liveState]);
   const latestScoredVisit = useMemo(() => {
     if (!liveState) {
       return null;
@@ -1438,6 +1457,14 @@ export default function LivePage() {
                     onFinishVisit={() => void handleFinishVisit()}
                     onNextLeg={() => void handleNextLeg()}
                   />
+                  {liveCelebration ? (
+                    <LiveCelebrationPanel
+                      kind={liveCelebration.kind}
+                      winnerName={liveCelebration.winnerName}
+                      scoreLine={liveCelebration.scoreLine}
+                      nextStep={liveCelebration.nextStep}
+                    />
+                  ) : null}
                   <LiveStatsPanel
                     currentLiveStats={currentLiveStats}
                     livePlayerStats={livePlayerStats}
