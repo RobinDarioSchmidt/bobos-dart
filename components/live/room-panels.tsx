@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import type { LiveAudioMode } from "@/lib/live-audio";
-import type { LiveEntryMode, LiveFinishMode } from "@/lib/live-match";
+import type { LiveEntryMode, LiveFinishMode, LiveMatchState } from "@/lib/live-match";
 
 const finishOptions: Array<{ value: LiveFinishMode; label: string }> = [
   { value: "single", label: "Straight Out" },
@@ -312,6 +312,7 @@ export function LiveRoomStatusPanel({
   deviceLockLabel,
   cloudSyncPending,
   audioMode,
+  events,
   onAudioModeChange,
   onTakeControl,
   onCopyRoomCode,
@@ -334,6 +335,7 @@ export function LiveRoomStatusPanel({
   deviceLockLabel: string | null;
   cloudSyncPending: boolean;
   audioMode: LiveAudioMode;
+  events: LiveMatchState["events"];
   onAudioModeChange: (mode: LiveAudioMode) => void;
   onTakeControl: () => void;
   onCopyRoomCode: () => void;
@@ -478,6 +480,25 @@ export function LiveRoomStatusPanel({
           </div>
         </div>
       </div>
+
+      {events.length > 0 ? (
+        <div className="mt-3 rounded-2xl border border-white/10 bg-white/5 p-3">
+          <p className="text-[10px] uppercase tracking-[0.18em] text-stone-400">Raum Ereignisse</p>
+          <div className="mt-2 space-y-2">
+            {events.slice(0, 6).map((event) => (
+              <div key={event.id} className="rounded-2xl border border-white/10 bg-black/20 px-3 py-2">
+                <p className="text-sm text-white">{event.text}</p>
+                <p className="mt-1 text-[11px] text-stone-400">
+                  {new Date(event.createdAt).toLocaleTimeString("de-DE", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       {message ? <p className="mt-3 text-sm text-amber-200">{message}</p> : null}
     </section>

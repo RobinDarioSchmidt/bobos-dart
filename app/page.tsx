@@ -1365,6 +1365,7 @@ export default function Page() {
         entered: player.entered,
       })),
       history: localLiveHistory,
+      events: [],
       pendingVisit:
         localPendingDarts.length > 0
           ? {

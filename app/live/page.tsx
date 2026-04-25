@@ -102,7 +102,7 @@ function formatLiveError(error: string) {
     case "rematch_not_allowed":
       return "Das Rematch kann gerade nur vom Matchsieger oder Host gestartet werden.";
     case "missing_service_role_or_supabase_config":
-        return "Der Online-Modus ist noch nicht komplett konfiguriert.";
+      return "Der Online-Modus ist noch nicht komplett konfiguriert.";
     default:
       if (error.startsWith("device_already_active:")) {
         const activeDeviceLabel = error.slice("device_already_active:".length) || "einem anderen Geraet";
@@ -1447,6 +1447,7 @@ export default function LivePage() {
                     deviceLockLabel={deviceLockLabel}
                     cloudSyncPending={cloudSyncPending}
                     audioMode={audioMode}
+                    events={liveState.events ?? []}
                     onAudioModeChange={setAudioMode}
                     onTakeControl={() => void handleTakeControl()}
                     onCopyRoomCode={() => void copyRoomCode()}

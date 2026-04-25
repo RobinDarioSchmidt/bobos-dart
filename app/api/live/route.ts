@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdminClients } from "@/lib/supabase-admin";
 import {
   addPendingDart,
+  appendLiveEvent,
   createEmptyLiveState,
   finalizePendingVisit,
   generateRoomCode,
@@ -15,9 +16,7 @@ import {
   type LiveDart,
   type LiveEntryMode,
   type LiveFinishMode,
-  type LiveCloudSyncState,
   type LiveMatchState,
-  type LiveVisit,
 } from "@/lib/live-match";
 import { authorizeSupabaseRequest } from "@/lib/server/request-auth";
 
@@ -77,33 +76,6 @@ function getNextJoinedSeatIndex(state: LiveMatchState, fromIndex: number) {
   }
 
   return joinedIndexes[0] ?? 0;
-}
-
-function mergeCloudSync(currentSync: LiveCloudSyncState, nextSync?: Partial<LiveCloudSyncState> | null) {
-  return {
-    sessionKey: nextSync?.sessionKey ?? currentSync.sessionKey,
-    persistedOwnerIds: Array.from(new Set([...(currentSync.persistedOwnerIds ?? []), ...(nextSync?.persistedOwnerIds ?? [])])),
-    persistedAt: nextSync?.persistedAt ?? currentSync.persistedAt ?? null,
-    deviceLocks: currentSync.deviceLocks ?? [],
-  } satisfies LiveCloudSyncState;
-}
-
-function mergeHistory(currentState: LiveMatchState, nextState: LiveMatchState) {
-  const incoming = nextState.history ?? [];
-  const existing = currentState.history ?? [];
-  const seen = new Set<string>();
-  const merged: LiveVisit[] = [];
-
-  for (const entry of [...incoming, ...existing]) {
-    const key = `${entry.createdAt}-${entry.playerName}-${entry.result}-${entry.darts.join("|")}`;
-    if (seen.has(key)) {
-      continue;
-    }
-    seen.add(key);
-    merged.push(entry);
-  }
-
-  return merged;
 }
 
 function buildStableUuid(seed: string) {
@@ -328,40 +300,6 @@ async function persistCompletedLiveMatch(adminClient: ReturnType<typeof getSupab
   });
 }
 
-function mergePlayers(currentState: LiveMatchState, nextState: LiveMatchState) {
-  return currentState.players.map((currentPlayer, index) => {
-    const incomingPlayer = nextState.players[index];
-
-    if (!incomingPlayer) {
-      return currentPlayer;
-    }
-
-    if (currentPlayer.joined && !incomingPlayer.joined) {
-      return currentPlayer;
-    }
-
-    if (currentPlayer.profileId && incomingPlayer.profileId !== currentPlayer.profileId) {
-      return currentPlayer;
-    }
-
-    return {
-      ...currentPlayer,
-      ...incomingPlayer,
-    };
-  });
-}
-
-function mergeLiveState(currentState: LiveMatchState, nextState: LiveMatchState) {
-  return normalizeLiveState({
-    ...currentState,
-    ...nextState,
-    revision: currentState.revision,
-    players: mergePlayers(currentState, nextState),
-    history: mergeHistory(currentState, nextState),
-    cloudSync: mergeCloudSync(currentState.cloudSync, nextState.cloudSync),
-  });
-}
-
 async function storeLiveMatchState(
   adminClient: ReturnType<typeof getSupabaseAdminClients>["adminClient"],
   match: LiveMatchRow,
@@ -506,13 +444,6 @@ export async function POST(request: Request) {
         displayName: string;
         deviceId?: string;
         deviceLabel?: string;
-      }
-    | {
-        action: "update";
-        roomCode: string;
-        state: LiveMatchState;
-        deviceId?: string;
-        baseRevision?: number;
       }
     | {
         action: "claim_device";
@@ -680,6 +611,10 @@ export async function POST(request: Request) {
       entered: state.entryMode === "single",
     };
     state.statusText = `${displayName} ist im Online-Match angekommen.`;
+    appendLiveEvent(state, {
+      type: "room",
+      text: `${displayName} ist dem Raum beigetreten.`,
+    });
     state = bumpLiveRevision(state);
     if (body.deviceId) {
       state = withUpdatedDeviceLock(state, {
@@ -728,6 +663,9 @@ export async function POST(request: Request) {
     }
 
     const activeDeviceLock = getActiveDeviceLockForProfile(currentState, authResult.user.id);
+    const currentUserSeat = currentState.players.findIndex(
+      (player) => player.joined && player.profileId === authResult.user.id,
+    );
     if (activeDeviceLock && activeDeviceLock.deviceId !== body.deviceId && !body.force) {
       return NextResponse.json(
         { error: `device_already_active:${activeDeviceLock.deviceLabel}` },
@@ -741,22 +679,21 @@ export async function POST(request: Request) {
       deviceLabel: body.deviceLabel,
       lastSeenAt: new Date().toISOString(),
     });
+    appendLiveEvent(stateToStore, {
+      type: "device",
+      text: `${body.deviceLabel} steuert jetzt ${currentState.players[currentUserSeat]?.name ?? "den Account"}.`,
+    });
+    const bumpedState = bumpLiveRevision(stateToStore, currentState.revision);
 
-    const { data: updated, error: updateError } = await adminClient
-      .from("live_matches")
-      .update({
-        state: stateToStore,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", match.id)
-      .select("id, owner_id, room_code, state")
-      .single();
-
-    if (updateError || !updated) {
-      return NextResponse.json({ error: updateError?.message ?? "claim_device_failed" }, { status: 400 });
+    try {
+      const updated = await storeLiveMatchState(adminClient, match, bumpedState);
+      return NextResponse.json({ match: updated });
+    } catch (storeError) {
+      return NextResponse.json(
+        { error: storeError instanceof Error ? storeError.message : "claim_device_failed" },
+        { status: 400 },
+      );
     }
-
-    return NextResponse.json({ match: updated });
   }
 
   if (
@@ -871,85 +808,6 @@ export async function POST(request: Request) {
       );
     }
   }
-
-  if (body.action === "update") {
-    const { data, error } = await adminClient
-      .from("live_matches")
-      .select("id, owner_id, room_code, state")
-      .eq("room_code", body.roomCode.toUpperCase())
-      .maybeSingle();
-
-    if (error || !data) {
-      return NextResponse.json({ error: error?.message ?? "match_not_found" }, { status: 404 });
-    }
-
-    const match = data as LiveMatchRow;
-    const currentState = normalizeLiveState(match.state);
-    const isParticipant = currentState.players.some(
-      (player) => player.joined && player.profileId === authResult.user.id,
-    );
-    if (!isParticipant) {
-      return NextResponse.json({ error: "not_a_participant" }, { status: 403 });
-    }
-
-    const activeDeviceLock = getActiveDeviceLockForProfile(currentState, authResult.user.id);
-    if (activeDeviceLock && activeDeviceLock.deviceId !== body.deviceId) {
-      return NextResponse.json(
-        { error: `device_already_active:${activeDeviceLock.deviceLabel}` },
-        { status: 409 },
-      );
-    }
-
-    if (typeof body.baseRevision === "number" && body.baseRevision !== currentState.revision) {
-      return NextResponse.json({ error: "stale_state" }, { status: 409 });
-    }
-
-    let stateToStore = body.deviceId
-      ? withUpdatedDeviceLock(currentState, {
-          profileId: authResult.user.id,
-          deviceId: body.deviceId,
-          deviceLabel: activeDeviceLock?.deviceLabel ?? "Dieses Geraet",
-          lastSeenAt: new Date().toISOString(),
-        })
-      : currentState;
-    try {
-      stateToStore = await persistCompletedLiveMatch(adminClient, stateToStore);
-    } catch {
-      stateToStore = normalizeLiveState({
-        ...stateToStore,
-        statusText: `${stateToStore.statusText} Cloud-Sync wird beim nächsten Kontakt erneut versucht.`,
-      });
-    }
-
-    stateToStore = mergeLiveState(stateToStore, body.state);
-    stateToStore = bumpLiveRevision(stateToStore, currentState.revision);
-
-    try {
-      stateToStore = await persistCompletedLiveMatch(adminClient, stateToStore);
-    } catch {
-      stateToStore = normalizeLiveState({
-        ...stateToStore,
-        statusText: `${stateToStore.statusText} Match ist beendet, Cloud-Sync bleibt ausstehend.`,
-      });
-    }
-
-    const { data: updated, error: updateError } = await adminClient
-      .from("live_matches")
-      .update({
-        state: stateToStore,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", match.id)
-      .select("id, owner_id, room_code, state")
-      .single();
-
-    if (updateError || !updated) {
-      return NextResponse.json({ error: updateError?.message ?? "update_failed" }, { status: 400 });
-    }
-
-    return NextResponse.json({ match: updated });
-  }
-
   if (body.action === "leave" || body.action === "close") {
     const { data, error } = await adminClient
       .from("live_matches")
@@ -1043,8 +901,12 @@ export async function POST(request: Request) {
       currentState.bullOff.currentPlayerIndex = currentState.players[fallbackSeatIndex]?.joined ? fallbackSeatIndex : remainingJoined[0].index;
       currentState.statusText = `${leavingPlayer.name} hat den Raum verlassen. ${remainingJoined[0].player.name} ist wieder dran.`;
     } else {
-      currentState.statusText = `${leavingPlayer.name} hat den Raum verlassen. ${remainingJoined[0].player.name} f?hrt den Raum weiter.`;
+      currentState.statusText = `${leavingPlayer.name} hat den Raum verlassen. ${remainingJoined[0].player.name} fuehrt den Raum weiter.`;
     }
+    appendLiveEvent(currentState, {
+      type: "room",
+      text: `${leavingPlayer.name} hat den Raum verlassen.`,
+    });
 
     currentState = bumpLiveRevision(currentState);
 
@@ -1068,3 +930,4 @@ export async function POST(request: Request) {
 
   return NextResponse.json({ error: "invalid_action" }, { status: 400 });
 }
+

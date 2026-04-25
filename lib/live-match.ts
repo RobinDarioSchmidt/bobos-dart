@@ -88,6 +88,13 @@ export type LiveBullOffState = {
   attempts: LiveBullOffAttempt[];
 };
 
+export type LiveRoomEvent = {
+  id: string;
+  type: "room" | "device" | "leg" | "match";
+  text: string;
+  createdAt: string;
+};
+
 export type LiveMatchState = {
   revision: number;
   mode: LiveGameMode;
@@ -105,6 +112,7 @@ export type LiveMatchState = {
   bullOff: LiveBullOffState;
   players: LivePlayer[];
   history: LiveVisit[];
+  events: LiveRoomEvent[];
   pendingVisit: LivePendingVisit | null;
   lastCallout: string | null;
   cloudSync: LiveCloudSyncState;
@@ -122,6 +130,14 @@ function generateSessionKey() {
   }
 
   return `live-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function generateEventId() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+
+  return `evt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 function deriveLegacySessionKey(state: Partial<LiveMatchState>) {
@@ -207,6 +223,14 @@ export function createEmptyLiveState(params: {
     },
     players,
     history: [],
+    events: [
+      {
+        id: generateEventId(),
+        type: "room",
+        text: `${params.ownerName} hat den Raum erstellt.`,
+        createdAt: new Date().toISOString(),
+      },
+    ],
     pendingVisit: null,
     lastCallout: null,
     cloudSync: {
@@ -293,6 +317,7 @@ export function normalizeLiveState(state: LiveMatchState | (Record<string, unkno
       entered: player.entered ?? (entryMode === "single" && player.joined),
     })),
     history: nextState.history ?? [],
+    events: nextState.events ?? [],
     pendingVisit: nextState.pendingVisit ?? null,
     lastCallout: nextState.lastCallout ?? null,
     cloudSync: {
@@ -464,6 +489,21 @@ function appendHistoryEntry(state: LiveMatchState, entry: LiveVisit) {
   state.history = [entry, ...state.history];
 }
 
+export function appendLiveEvent(
+  state: LiveMatchState,
+  event: Omit<LiveRoomEvent, "id" | "createdAt"> & { createdAt?: string },
+) {
+  state.events = [
+    {
+      id: generateEventId(),
+      createdAt: event.createdAt ?? new Date().toISOString(),
+      type: event.type,
+      text: event.text,
+    },
+    ...(state.events ?? []),
+  ].slice(0, 18);
+}
+
 function resolveBullOff(state: LiveMatchState) {
   const attempts = [...state.bullOff.attempts].sort((left, right) => {
     if (right.rank !== left.rank) {
@@ -479,6 +519,12 @@ function resolveBullOff(state: LiveMatchState) {
   state.bullOff.winnerIndex = winner?.playerIndex ?? 0;
   state.activePlayer = winner?.playerIndex ?? 0;
   state.legStartingPlayer = winner?.playerIndex ?? 0;
+  if (winner) {
+    appendLiveEvent(state, {
+      type: "leg",
+      text: `${winner.playerName} gewinnt das Bull-Off und beginnt.`,
+    });
+  }
   state.statusText = winner
     ? `${winner.playerName} gewinnt das Bull-Off und beginnt das Leg.`
     : "Bull-Off beendet.";
@@ -665,6 +711,10 @@ export function finalizePendingVisit(previousState: LiveMatchState) {
       note: `${player.name} gewinnt das Leg`,
       createdAt: new Date().toISOString(),
     });
+    appendLiveEvent(nextState, {
+      type: "leg",
+      text: `${player.name} gewinnt das Leg.`,
+    });
 
     if (player.legs >= nextState.legsToWin) {
       player.sets += 1;
@@ -676,6 +726,10 @@ export function finalizePendingVisit(previousState: LiveMatchState) {
 
     if (player.sets >= nextState.setsToWin) {
       nextState.matchWinner = nextState.activePlayer;
+      appendLiveEvent(nextState, {
+        type: "match",
+        text: `${player.name} gewinnt das Match.`,
+      });
       nextState.statusText = `${player.name} gewinnt das Match.`;
     }
 
@@ -710,6 +764,10 @@ export function startNextLiveLeg(previousState: LiveMatchState) {
     nextState.entryMode === "single"
       ? `${nextState.players[nextStarter].name} beginnt das naechste Leg.`
       : `${nextState.players[nextStarter].name} beginnt das naechste Leg und sucht ${getEntryModeLabel(nextState.entryMode)}.`;
+  appendLiveEvent(nextState, {
+    type: "leg",
+    text: `${nextState.players[nextStarter].name} startet das naechste Leg.`,
+  });
   return nextState;
 }
 
@@ -752,6 +810,10 @@ export function startRematchLiveMatch(previousState: LiveMatchState) {
     nextState.activePlayer = firstJoined;
     nextState.legStartingPlayer = firstJoined;
     nextState.statusText = `${nextState.players[firstJoined].name} startet das Bull-Off fuer das Rematch.`;
+    appendLiveEvent(nextState, {
+      type: "match",
+      text: `${nextState.players[firstJoined].name} startet das Rematch mit Bull-Off.`,
+    });
     return nextState;
   }
 
@@ -768,6 +830,10 @@ export function startRematchLiveMatch(previousState: LiveMatchState) {
     nextState.entryMode === "single"
       ? `${nextState.players[rematchStarter].name} beginnt das Rematch.`
       : `${nextState.players[rematchStarter].name} beginnt das Rematch und sucht ${getEntryModeLabel(nextState.entryMode)}.`;
+  appendLiveEvent(nextState, {
+    type: "match",
+    text: `${nextState.players[rematchStarter].name} startet das Rematch.`,
+  });
   return nextState;
 }
 
