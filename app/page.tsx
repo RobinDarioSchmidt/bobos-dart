@@ -120,6 +120,7 @@ type CloudProfileRow = {
 type CloudDashboardStats = {
   matchesPlayed: number;
   matchesWon: number;
+  matchesLost: number;
   totalSetsWon: number;
   totalLegsWon: number;
   bestAverage: number;
@@ -135,6 +136,34 @@ type CloudPlayerPresence = {
   displayName: string;
   lastSeenAt: string;
   isActive: boolean;
+  stats: {
+    matchesPlayed: number;
+    matchesWon: number;
+    matchesLost: number;
+    trainingSessions: number;
+    bestAverage: number;
+    bestVisit: number;
+  };
+  rivalry: {
+    matchesPlayed: number;
+    matchesWon: number;
+    matchesLost: number;
+  };
+};
+
+type CloudDashboardResponse = {
+  error?: string;
+  profile?: CloudProfileRow & { created_at?: string };
+  stats?: CloudDashboardStats;
+  recentTraining?: TrainingCloudRow[];
+  insights?: {
+    recentMilestones?: CloudRecentMilestone[];
+  };
+};
+
+type CloudPlayersResponse = {
+  error?: string;
+  players?: CloudPlayerPresence[];
 };
 
 type CloudRecentMilestone = {
@@ -1563,7 +1592,7 @@ export default function Page() {
       insights?: {
         recentMilestones?: CloudRecentMilestone[];
       };
-    };
+    } as CloudDashboardResponse;
 
     if (!response.ok || result.error) {
       setCloudMessage(`Cloud-Profil konnte nicht geladen werden: ${result.error ?? "Unbekannter Fehler"}`);
@@ -1575,7 +1604,14 @@ export default function Page() {
       setProfileDraft(result.profile.display_name);
     }
 
-    setCloudStats(result.stats ?? null);
+    setCloudStats(
+      result.stats
+        ? {
+            ...result.stats,
+            matchesLost: Math.max(0, (result.stats.matchesPlayed ?? 0) - (result.stats.matchesWon ?? 0)),
+          }
+        : null,
+    );
     setRecentMilestones(result.insights?.recentMilestones ?? []);
     setRecentTrainingSessions(result.recentTraining ?? []);
   }, []);
@@ -1603,7 +1639,7 @@ export default function Page() {
     const result = (await response.json()) as {
       error?: string;
       players?: CloudPlayerPresence[];
-    };
+    } as CloudPlayersResponse;
 
     if (!response.ok || result.error) {
       return;
@@ -2555,6 +2591,7 @@ function resetLegBoards(nextPlayers: Player[]) {
                 ? {
                     matchesPlayed: cloudStats.matchesPlayed,
                     matchesWon: cloudStats.matchesWon,
+                    matchesLost: cloudStats.matchesLost,
                     bestAverage: cloudStats.bestAverage,
                     bestVisit: cloudStats.bestVisit,
                     trainingSessions: cloudStats.trainingSessions,

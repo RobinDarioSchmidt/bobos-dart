@@ -7,6 +7,7 @@ import { useState } from "react";
 type CloudStats = {
   matchesPlayed: number;
   matchesWon: number;
+  matchesLost: number;
   bestAverage: number;
   bestVisit: number;
   trainingSessions: number;
@@ -17,6 +18,19 @@ type PlayerPresence = {
   displayName: string;
   lastSeenAt: string;
   isActive: boolean;
+  stats: {
+    matchesPlayed: number;
+    matchesWon: number;
+    matchesLost: number;
+    trainingSessions: number;
+    bestAverage: number;
+    bestVisit: number;
+  };
+  rivalry: {
+    matchesPlayed: number;
+    matchesWon: number;
+    matchesLost: number;
+  };
 };
 
 type RecentMilestone = {
@@ -175,6 +189,7 @@ export function SignedInOverviewSection({
   onInstallApp: () => void;
 }) {
   const [profileEditorOpen, setProfileEditorOpen] = useState(false);
+  const [selectedPlayer, setSelectedPlayer] = useState<PlayerPresence | null>(null);
   const displayName = profileName || profileDraft || sessionEmail || "Spieler";
 
   return (
@@ -295,8 +310,10 @@ export function SignedInOverviewSection({
               ) : null}
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
-                <p className="text-xs text-stone-400">Matches</p>
-                <p className="mt-1 text-2xl font-semibold text-white">{cloudStats.matchesPlayed}</p>
+                <p className="text-xs text-stone-400">Matches/Wins/Loses</p>
+                <p className="mt-1 text-2xl font-semibold text-white">
+                  {cloudStats.matchesPlayed}/{cloudStats.matchesWon}/{cloudStats.matchesLost}
+                </p>
               </div>
               <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
                 <p className="text-xs text-stone-400">Training</p>
@@ -337,7 +354,11 @@ export function SignedInOverviewSection({
           <div className="mt-3 divide-y divide-white/10 overflow-hidden rounded-2xl border border-white/10 bg-white/5">
             {playerPresence.length > 0 ? (
               playerPresence.map((player) => (
-                <div key={player.id} className="flex items-center justify-between gap-3 px-4 py-2">
+                <button
+                  key={player.id}
+                  onClick={() => setSelectedPlayer(player)}
+                  className="flex w-full items-center justify-between gap-3 px-4 py-2 text-left transition hover:bg-white/5"
+                >
                   <p className="truncate text-sm font-semibold text-white">{player.displayName}</p>
                   <div className="flex shrink-0 items-center gap-2 text-xs text-stone-400">
                     <span
@@ -347,7 +368,7 @@ export function SignedInOverviewSection({
                     />
                     {player.isActive ? "online" : "offline"}
                   </div>
-                </div>
+                </button>
               ))
             ) : (
               <p className="px-4 py-3 text-sm text-stone-400">Noch keine anderen Spieler gefunden.</p>
@@ -394,6 +415,64 @@ export function SignedInOverviewSection({
           </Link>
         ) : null}
       </div>
+
+      {selectedPlayer ? (
+        <div className="fixed inset-0 z-[120] flex items-end justify-center bg-black/65 p-3 sm:items-center sm:p-6">
+          <div className="w-full max-w-2xl rounded-[1.75rem] border border-white/10 bg-[#0f172a] p-4 shadow-2xl shadow-black/40">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-2xl font-semibold text-white">{selectedPlayer.displayName}</h2>
+                <p className="mt-1 text-sm text-stone-400">Spielerprofil und direkte Rivalitaet</p>
+              </div>
+              <button
+                onClick={() => setSelectedPlayer(null)}
+                className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-semibold text-white"
+              >
+                Schliessen
+              </button>
+            </div>
+
+            <div className="mt-4 rounded-[1.5rem] border border-white/10 bg-black/20 p-4">
+              <p className="text-xs uppercase tracking-[0.24em] text-stone-400">Rivalitaet gegen {selectedPlayer.displayName}</p>
+              <div className="mt-3 grid grid-cols-3 gap-3">
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                  <p className="text-xs text-stone-400">Matches</p>
+                  <p className="mt-1 text-2xl font-semibold text-white">{selectedPlayer.rivalry.matchesPlayed}</p>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                  <p className="text-xs text-stone-400">Wins</p>
+                  <p className="mt-1 text-2xl font-semibold text-white">{selectedPlayer.rivalry.matchesWon}</p>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                  <p className="text-xs text-stone-400">Loses</p>
+                  <p className="mt-1 text-2xl font-semibold text-white">{selectedPlayer.rivalry.matchesLost}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                <p className="text-xs text-stone-400">Matches/Wins/Loses</p>
+                <p className="mt-1 text-2xl font-semibold text-white">
+                  {selectedPlayer.stats.matchesPlayed}/{selectedPlayer.stats.matchesWon}/{selectedPlayer.stats.matchesLost}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                <p className="text-xs text-stone-400">Training</p>
+                <p className="mt-1 text-2xl font-semibold text-white">{selectedPlayer.stats.trainingSessions}</p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                <p className="text-xs text-stone-400">Best Avg</p>
+                <p className="mt-1 text-2xl font-semibold text-white">{selectedPlayer.stats.bestAverage.toFixed(2)}</p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                <p className="text-xs text-stone-400">Best Visit</p>
+                <p className="mt-1 text-2xl font-semibold text-white">{selectedPlayer.stats.bestVisit}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }
