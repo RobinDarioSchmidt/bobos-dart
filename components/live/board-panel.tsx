@@ -304,6 +304,7 @@ function LiveDartboard({
     boardX: number;
     boardY: number;
     segment: LiveBoardSegment | null;
+    cancelling: boolean;
     active: boolean;
   } | null>(null);
   const touchMaskRef = useRef<HTMLDivElement | null>(null);
@@ -351,11 +352,15 @@ function LiveDartboard({
 
     const rawBoardX = ((event.clientX - svgRect.left) / svgRect.width) * 400;
     const rawBoardY = ((event.clientY - svgRect.top) / svgRect.height) * 400;
+    const rawDx = rawBoardX - 200;
+    const rawDy = rawBoardY - 200;
+    const outsidePlayableBoard = Math.sqrt(rawDx * rawDx + rawDy * rawDy) > BOARD_RADIUS.doubleOuter;
     const clamped = clampBoardPointToPlayableArea(rawBoardX, rawBoardY);
 
     return {
       boardX: clamped.x,
       boardY: clamped.y,
+      outsidePlayableBoard,
       clientX: event.clientX,
       clientY: event.clientY,
     };
@@ -391,7 +396,8 @@ function LiveDartboard({
 
     const baseSegment = getSegmentFromBoardPoint(point.boardX, point.boardY);
     const segment = baseSegment ? withExactMarker(baseSegment, point.boardX, point.boardY) : null;
-    if (!segment && !touchPreviewActiveRef.current) {
+    const cancelling = point.outsidePlayableBoard;
+    if (!segment && !touchPreviewActiveRef.current && !cancelling) {
       return null;
     }
 
@@ -400,11 +406,12 @@ function LiveDartboard({
       y: point.clientY,
       boardX: point.boardX,
       boardY: point.boardY,
-      segment: segment ?? touchPreview?.segment ?? null,
+      segment: cancelling ? null : segment ?? touchPreview?.segment ?? null,
+      cancelling,
       active: true,
     });
-    setHoveredSegment(segment ?? touchPreview?.segment ?? null);
-    return segment ?? touchPreview?.segment ?? null;
+    setHoveredSegment(cancelling ? null : segment ?? touchPreview?.segment ?? null);
+    return cancelling ? null : segment ?? touchPreview?.segment ?? null;
   }
 
   function handleTouchPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
@@ -440,13 +447,14 @@ function LiveDartboard({
     touchPreviewActiveRef.current = false;
     event.preventDefault();
     const finalSegment = updateTouchPreview(event) ?? touchPreview?.segment ?? null;
+    const cancelled = getBoardPointFromTouchMask(event)?.outsidePlayableBoard ?? touchPreview?.cancelling ?? false;
     setTouchPreview(null);
     setHoveredSegment(null);
     window.setTimeout(() => {
       suppressClickRef.current = false;
     }, 180);
 
-    if (finalSegment) {
+    if (!cancelled && finalSegment) {
       onSegmentSelect(finalSegment);
     }
   }
@@ -752,8 +760,12 @@ function LiveDartboard({
               </div>
             </div>
             <div className="mt-2 rounded-full border border-white/10 bg-black/75 px-3 py-1 text-center shadow-lg">
-              <div className="text-sm font-semibold text-white">{touchPreview.segment?.label ?? "-"}</div>
-              <div className="text-[10px] uppercase tracking-[0.18em] text-amber-100">{touchPreview.segment?.score ?? ""}</div>
+              <div className="text-sm font-semibold text-white">
+                {touchPreview.cancelling ? "Abbrechen" : touchPreview.segment?.label ?? "-"}
+              </div>
+              <div className="text-[10px] uppercase tracking-[0.18em] text-amber-100">
+                {touchPreview.cancelling ? "Loslassen bricht ab" : touchPreview.segment?.score ?? ""}
+              </div>
             </div>
           </div>
         ) : null}
