@@ -1,12 +1,18 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdminClients } from "@/lib/supabase-admin";
 import {
+  addPendingDart,
   createEmptyLiveState,
+  finalizePendingVisit,
   generateRoomCode,
   getPreferredDisplayName,
   isLiveDeviceLockActive,
   normalizeLiveState,
+  removePendingDart,
+  startNextLiveLeg,
+  startRematchLiveMatch,
   type LiveDeviceLock,
+  type LiveDart,
   type LiveEntryMode,
   type LiveFinishMode,
   type LiveCloudSyncState,
@@ -142,6 +148,14 @@ function getActiveDeviceLocks(state: LiveMatchState) {
 
 function getActiveDeviceLockForProfile(state: LiveMatchState, profileId: string) {
   return getActiveDeviceLocks(state).find((lock) => lock.profileId === profileId) ?? null;
+}
+
+function getControllingSeatIndex(state: LiveMatchState) {
+  if (state.bullOff.enabled && !state.bullOff.completed) {
+    return state.bullOff.currentPlayerIndex ?? state.activePlayer;
+  }
+
+  return state.activePlayer;
 }
 
 function withUpdatedDeviceLock(state: LiveMatchState, deviceLock: LiveDeviceLock) {
@@ -348,6 +362,30 @@ function mergeLiveState(currentState: LiveMatchState, nextState: LiveMatchState)
   });
 }
 
+async function storeLiveMatchState(
+  adminClient: ReturnType<typeof getSupabaseAdminClients>["adminClient"],
+  match: LiveMatchRow,
+  state: LiveMatchState,
+  ownerId = match.owner_id,
+) {
+  const { data: updated, error: updateError } = await adminClient
+    .from("live_matches")
+    .update({
+      owner_id: ownerId,
+      state,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", match.id)
+    .select("id, owner_id, room_code, state")
+    .single();
+
+  if (updateError || !updated) {
+    throw new Error(updateError?.message ?? "update_failed");
+  }
+
+  return updated;
+}
+
 export async function GET(request: Request) {
   const authResult = await authorizeSupabaseRequest(request);
   if (!authResult.ok) {
@@ -482,6 +520,32 @@ export async function POST(request: Request) {
         deviceId: string;
         deviceLabel: string;
         force?: boolean;
+      }
+    | {
+        action: "add_dart";
+        roomCode: string;
+        dart: LiveDart;
+        deviceId?: string;
+      }
+    | {
+        action: "remove_dart";
+        roomCode: string;
+        deviceId?: string;
+      }
+    | {
+        action: "finalize_visit";
+        roomCode: string;
+        deviceId?: string;
+      }
+    | {
+        action: "next_leg";
+        roomCode: string;
+        deviceId?: string;
+      }
+    | {
+        action: "rematch";
+        roomCode: string;
+        deviceId?: string;
       }
     | {
         action: "leave";
@@ -693,6 +757,119 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ match: updated });
+  }
+
+  if (
+    body.action === "add_dart" ||
+    body.action === "remove_dart" ||
+    body.action === "finalize_visit" ||
+    body.action === "next_leg" ||
+    body.action === "rematch"
+  ) {
+    const { data, error } = await adminClient
+      .from("live_matches")
+      .select("id, owner_id, room_code, state")
+      .eq("room_code", body.roomCode.toUpperCase())
+      .maybeSingle();
+
+    if (error || !data) {
+      return NextResponse.json({ error: error?.message ?? "match_not_found" }, { status: 404 });
+    }
+
+    const match = data as LiveMatchRow;
+    const currentState = normalizeLiveState(match.state);
+    const currentUserSeat = currentState.players.findIndex(
+      (player) => player.joined && player.profileId === authResult.user.id,
+    );
+    if (currentUserSeat < 0) {
+      return NextResponse.json({ error: "not_a_participant" }, { status: 403 });
+    }
+
+    const activeDeviceLock = getActiveDeviceLockForProfile(currentState, authResult.user.id);
+    if (activeDeviceLock && activeDeviceLock.deviceId !== body.deviceId) {
+      return NextResponse.json(
+        { error: `device_already_active:${activeDeviceLock.deviceLabel}` },
+        { status: 409 },
+      );
+    }
+
+    let nextState = body.deviceId
+      ? withUpdatedDeviceLock(currentState, {
+          profileId: authResult.user.id,
+          deviceId: body.deviceId,
+          deviceLabel: activeDeviceLock?.deviceLabel ?? "Dieses Geraet",
+          lastSeenAt: new Date().toISOString(),
+        })
+      : currentState;
+
+    const controllingSeat = getControllingSeatIndex(nextState);
+    const isHost = match.owner_id === authResult.user.id;
+
+    if (body.action === "add_dart" || body.action === "remove_dart" || body.action === "finalize_visit") {
+      if (controllingSeat !== currentUserSeat) {
+        return NextResponse.json({ error: "not_your_turn" }, { status: 409 });
+      }
+    }
+
+    if (body.action === "next_leg") {
+      if (
+        nextState.legWinner === null ||
+        nextState.matchWinner !== null ||
+        !(nextState.legWinner === currentUserSeat || isHost)
+      ) {
+        return NextResponse.json({ error: "next_leg_not_allowed" }, { status: 409 });
+      }
+    }
+
+    if (body.action === "rematch") {
+      if (
+        nextState.matchWinner === null ||
+        !(nextState.matchWinner === currentUserSeat || isHost)
+      ) {
+        return NextResponse.json({ error: "rematch_not_allowed" }, { status: 409 });
+      }
+    }
+
+    switch (body.action) {
+      case "add_dart":
+        nextState = addPendingDart(nextState, body.dart);
+        break;
+      case "remove_dart":
+        nextState = removePendingDart(nextState);
+        break;
+      case "finalize_visit":
+        nextState = finalizePendingVisit(nextState);
+        break;
+      case "next_leg":
+        nextState = startNextLiveLeg(nextState);
+        break;
+      case "rematch":
+        nextState = startRematchLiveMatch(nextState);
+        break;
+      default:
+        break;
+    }
+
+    nextState = bumpLiveRevision(nextState, currentState.revision);
+
+    try {
+      nextState = await persistCompletedLiveMatch(adminClient, nextState);
+    } catch {
+      nextState = normalizeLiveState({
+        ...nextState,
+        statusText: `${nextState.statusText} Cloud-Sync wird beim naechsten Kontakt erneut versucht.`,
+      });
+    }
+
+    try {
+      const updated = await storeLiveMatchState(adminClient, match, nextState);
+      return NextResponse.json({ match: updated });
+    } catch (storeError) {
+      return NextResponse.json(
+        { error: storeError instanceof Error ? storeError.message : "update_failed" },
+        { status: 400 },
+      );
+    }
   }
 
   if (body.action === "update") {

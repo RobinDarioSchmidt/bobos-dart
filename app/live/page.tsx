@@ -13,14 +13,9 @@ import {
 import { LiveRoomCreatePanel, LiveRoomJoinPanel, LiveRoomStatusPanel } from "@/components/live/room-panels";
 import { MobileAppNav } from "@/components/mobile-app-nav";
 import {
-  addPendingDart,
-  finalizePendingVisit,
   getPreferredDisplayName,
   isLiveDeviceLockActive,
   normalizeLiveState,
-  removePendingDart,
-  startRematchLiveMatch,
-  startNextLiveLeg,
   type LiveBoardMarker,
   type LiveDart,
   type LiveEntryMode,
@@ -100,6 +95,12 @@ function formatLiveError(error: string) {
       return "Nur der Host kann den Raum schliessen.";
     case "stale_state":
       return "Der Raum wurde gerade von jemand anderem aktualisiert. Wir laden den aktuellen Stand neu.";
+    case "not_your_turn":
+      return "Du kannst gerade nur werfen, wenn du selbst dran bist.";
+    case "next_leg_not_allowed":
+      return "Das naechste Leg kann gerade nur vom Sieger oder Host gestartet werden.";
+    case "rematch_not_allowed":
+      return "Das Rematch kann gerade nur vom Matchsieger oder Host gestartet werden.";
     case "missing_service_role_or_supabase_config":
         return "Der Online-Modus ist noch nicht komplett konfiguriert.";
     default:
@@ -836,26 +837,32 @@ export default function LivePage() {
     };
   }, [claimDeviceLock, deviceId, liveRoomCode, session]);
 
-  async function pushRoomState(nextState: LiveMatchState, reason: string) {
+  async function performServerLiveAction(
+    body:
+      | { action: "add_dart"; dart: LiveDart }
+      | { action: "remove_dart" }
+      | { action: "finalize_visit" }
+      | { action: "next_leg" }
+      | { action: "rematch" },
+    reason: string,
+  ) {
     if (!liveRoomCode) {
-      return;
+      return null;
     }
 
-    setLiveState(nextState);
     const result = await callLiveApi({
-      action: "update",
+      ...body,
       roomCode: liveRoomCode,
-      state: nextState,
       deviceId,
-      baseRevision: liveState?.revision ?? 0,
     });
 
     if (result) {
       await broadcastRefresh(liveRoomCode, reason);
-      return;
+      return result.state;
     }
 
-    await fetchMatch(liveRoomCode);
+    await fetchMatch(liveRoomCode, { silent: true });
+    return null;
   }
 
   async function createRoom() {
@@ -1066,7 +1073,10 @@ export default function LivePage() {
     }
 
     const dart = toLiveDart(segment);
-    const nextState = addPendingDart(liveState, dart);
+    const nextState = await performServerLiveAction({ action: "add_dart", dart }, "dart");
+    if (!nextState) {
+      return;
+    }
     const completedVisit = nextState.history.find((entry) => entry.result !== "leg-win") ?? null;
     const previousVisit = liveState.history.find((entry) => entry.result !== "leg-win") ?? null;
     if (
@@ -1076,7 +1086,6 @@ export default function LivePage() {
       void playLiveDartCallout(dart.label, audioMode);
     }
     queueVisitAudio(liveState, nextState);
-    await pushRoomState(nextState, "dart");
   }
 
   async function handleMiss() {
@@ -1090,7 +1099,10 @@ export default function LivePage() {
     }
 
     const dart = missDart();
-    const nextState = addPendingDart(liveState, dart);
+    const nextState = await performServerLiveAction({ action: "add_dart", dart }, "miss");
+    if (!nextState) {
+      return;
+    }
     const completedVisit = nextState.history.find((entry) => entry.result !== "leg-win") ?? null;
     const previousVisit = liveState.history.find((entry) => entry.result !== "leg-win") ?? null;
     if (
@@ -1100,7 +1112,6 @@ export default function LivePage() {
       void playLiveDartCallout(dart.label, audioMode);
     }
     queueVisitAudio(liveState, nextState);
-    await pushRoomState(nextState, "miss");
   }
 
   async function handleRemoveLast() {
@@ -1117,8 +1128,7 @@ export default function LivePage() {
       return;
     }
 
-    const nextState = removePendingDart(liveState);
-    await pushRoomState(nextState, "undo_dart");
+    await performServerLiveAction({ action: "remove_dart" }, "undo_dart");
   }
 
   async function handleFinishVisit() {
@@ -1135,9 +1145,11 @@ export default function LivePage() {
       return;
     }
 
-    const nextState = finalizePendingVisit(liveState);
+    const nextState = await performServerLiveAction({ action: "finalize_visit" }, "finalize_visit");
+    if (!nextState) {
+      return;
+    }
     queueVisitAudio(liveState, nextState);
-    await pushRoomState(nextState, "finalize_visit");
   }
 
   async function handleNextLeg() {
@@ -1154,8 +1166,7 @@ export default function LivePage() {
       return;
     }
 
-    const nextState = startNextLiveLeg(liveState);
-    await pushRoomState(nextState, "next_leg");
+    await performServerLiveAction({ action: "next_leg" }, "next_leg");
   }
 
   async function handleRematch() {
@@ -1172,8 +1183,7 @@ export default function LivePage() {
       return;
     }
 
-    const nextState = startRematchLiveMatch(liveState);
-    await pushRoomState(nextState, "rematch");
+    await performServerLiveAction({ action: "rematch" }, "rematch");
   }
 
   async function leaveRoom() {
