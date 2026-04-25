@@ -56,6 +56,14 @@ type OpenLiveRoom = {
 };
 
 const LIVE_ROOM_STORAGE_KEY = "bobos-dart-live-room";
+const LIVE_ROOM_SNAPSHOT_KEY = "bobos-dart-live-room-snapshot";
+
+type LiveRoomSnapshot = {
+  roomCode: string;
+  ownerId: string;
+  state: LiveMatchState;
+  savedAt: string;
+};
 
 function getOpenRoomsRefreshDelay(failureCount: number) {
   if (failureCount <= 0) {
@@ -233,7 +241,53 @@ export default function LivePage() {
   const openRoomsFetchInFlightRef = useRef(false);
   const roomFailureCountRef = useRef(0);
   const openRoomsFailureCountRef = useRef(0);
+  const roomNotFoundCountRef = useRef(0);
   const lastPlayedVisitRef = useRef<string | null>(null);
+
+  const saveRoomSnapshot = useCallback((snapshot: LiveRoomSnapshot | null) => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    if (!snapshot) {
+      window.localStorage.removeItem(LIVE_ROOM_SNAPSHOT_KEY);
+      return;
+    }
+
+    window.localStorage.setItem(LIVE_ROOM_SNAPSHOT_KEY, JSON.stringify(snapshot));
+  }, []);
+
+  const restoreRoomSnapshot = useCallback((roomCode: string) => {
+    if (typeof window === "undefined") {
+      return null;
+    }
+
+    try {
+      const raw = window.localStorage.getItem(LIVE_ROOM_SNAPSHOT_KEY);
+      if (!raw) {
+        return null;
+      }
+
+      const parsed = JSON.parse(raw) as Partial<LiveRoomSnapshot>;
+      if (
+        typeof parsed.roomCode !== "string" ||
+        parsed.roomCode !== roomCode ||
+        typeof parsed.ownerId !== "string" ||
+        !parsed.state
+      ) {
+        return null;
+      }
+
+      return {
+        roomCode: parsed.roomCode,
+        ownerId: parsed.ownerId,
+        state: normalizeLiveState(parsed.state),
+        savedAt: typeof parsed.savedAt === "string" ? parsed.savedAt : "",
+      } satisfies LiveRoomSnapshot;
+    } catch {
+      return null;
+    }
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -408,23 +462,37 @@ export default function LivePage() {
         roomFailureCountRef.current += 1;
         setConnectionState("offline");
         const nextError = "error" in result && result.error ? result.error : "match_not_found";
+        if (nextError === "match_not_found") {
+          roomNotFoundCountRef.current += 1;
+        } else {
+          roomNotFoundCountRef.current = 0;
+        }
         if (!options?.silent || roomFailureCountRef.current >= 2 || nextError === "match_not_found") {
           setMessage(formatLiveError(nextError));
         }
-        if (nextError === "match_not_found") {
+        if (nextError === "match_not_found" && roomNotFoundCountRef.current >= 3) {
           setLiveRoomCode("");
           setRoomOwnerId("");
           setLiveState(null);
+          saveRoomSnapshot(null);
           void loadOpenRooms();
         }
         return false;
       }
 
+      const normalizedState = normalizeLiveState(result.match.state);
       setLiveRoomCode(result.match.room_code);
       setRoomOwnerId(result.match.owner_id);
-      setLiveState(normalizeLiveState(result.match.state));
+      setLiveState(normalizedState);
       setConnectionState("online");
       roomFailureCountRef.current = 0;
+      roomNotFoundCountRef.current = 0;
+      saveRoomSnapshot({
+        roomCode: result.match.room_code,
+        ownerId: result.match.owner_id,
+        state: normalizedState,
+        savedAt: new Date().toISOString(),
+      });
       void loadOpenRooms();
       return true;
     } catch {
@@ -437,7 +505,7 @@ export default function LivePage() {
     } finally {
       roomFetchInFlightRef.current = false;
     }
-  }, [loadOpenRooms]);
+  }, [loadOpenRooms, saveRoomSnapshot]);
 
   useEffect(() => {
     if (!session) {
@@ -542,9 +610,15 @@ export default function LivePage() {
     }
 
     setRoomCodeInput(restoredRoomCode);
-      setMessage(`Letzten Raum ${restoredRoomCode} gefunden. Online-Match wird wiederhergestellt...`);
+    const snapshot = restoreRoomSnapshot(restoredRoomCode);
+    if (snapshot) {
+      setLiveRoomCode(snapshot.roomCode);
+      setRoomOwnerId(snapshot.ownerId);
+      setLiveState(snapshot.state);
+    }
+    setMessage(`Letzten Raum ${restoredRoomCode} gefunden. Online-Match wird wiederhergestellt...`);
     void fetchMatch(restoredRoomCode);
-  }, [fetchMatch, liveRoomCode, session]);
+  }, [fetchMatch, liveRoomCode, restoreRoomSnapshot, session]);
 
   const broadcastRefresh = useCallback(async (roomCode: string, reason: string) => {
     const channel = liveChannelRef.current;
@@ -645,6 +719,7 @@ export default function LivePage() {
           setRoomOwnerId("");
           setLiveState(null);
           setConnectedNames([]);
+          saveRoomSnapshot(null);
           if (typeof window !== "undefined") {
             window.localStorage.removeItem(LIVE_ROOM_STORAGE_KEY);
           }
@@ -663,6 +738,12 @@ export default function LivePage() {
       setLiveRoomCode(result.match.room_code);
       setRoomOwnerId(result.match.owner_id);
       setLiveState(normalized);
+      saveRoomSnapshot({
+        roomCode: result.match.room_code,
+        ownerId: result.match.owner_id,
+        state: normalized,
+        savedAt: new Date().toISOString(),
+      });
       setConnectionState("online");
       void loadOpenRooms();
       return {
@@ -1100,14 +1181,24 @@ export default function LivePage() {
       return;
     }
 
+    const previousRoomCode = liveRoomCode;
     const result = await callLiveApi({
       action: "leave",
       roomCode: liveRoomCode,
     });
 
     if (result && "room_code" in result && typeof result.room_code === "string") {
+      setLiveRoomCode("");
+      setRoomOwnerId("");
+      setLiveState(null);
+      setConnectedNames([]);
+      saveRoomSnapshot(null);
+      if (typeof window !== "undefined") {
+        window.localStorage.removeItem(LIVE_ROOM_STORAGE_KEY);
+      }
+      setMessage("Du hast den Raum verlassen.");
       await loadOpenRooms();
-      await broadcastRefresh(result.room_code, "leave");
+      await broadcastRefresh(previousRoomCode, "leave");
     }
   }
 
@@ -1122,6 +1213,7 @@ export default function LivePage() {
     });
 
     if (result && "closed" in result && result.closed) {
+      saveRoomSnapshot(null);
       setMessage("Der Raum wurde geschlossen.");
       await loadOpenRooms();
     }
