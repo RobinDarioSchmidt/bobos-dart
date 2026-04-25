@@ -190,7 +190,32 @@ export function SignedInOverviewSection({
 }) {
   const [profileEditorOpen, setProfileEditorOpen] = useState(false);
   const [selectedPlayer, setSelectedPlayer] = useState<PlayerPresence | null>(null);
+  const [activeStatHint, setActiveStatHint] = useState<null | { title: string; description: string }>(null);
   const displayName = profileName || profileDraft || sessionEmail || "Spieler";
+  const statCards = cloudStats
+    ? [
+        {
+          title: "Matches/Wins/Loses",
+          value: `${cloudStats.matchesPlayed}/${cloudStats.matchesWon}/${cloudStats.matchesLost}`,
+          description: "Matches zeigt alle abgeschlossenen Cloud-Matches. Wins und Loses teilen diese in Siege und Niederlagen auf.",
+        },
+        {
+          title: "Trainings",
+          value: String(cloudStats.trainingSessions),
+          description: "Trainings zaehlt, wie viele Trainingseinheiten bereits in deiner Cloud gespeichert wurden.",
+        },
+        {
+          title: "Best Avg",
+          value: cloudStats.bestAverage.toFixed(2),
+          description: "Best Avg ist das beste 3-Dart-Average, das du in einem Match erreicht hast.",
+        },
+        {
+          title: "Best Visit",
+          value: String(cloudStats.bestVisit),
+          description: "Best Visit ist dein bester einzelner Besuch, also die hoechste Punktzahl in einem Zug mit bis zu 3 Darts.",
+        },
+      ]
+    : [];
 
   return (
     <section className="overflow-hidden border-y border-white/10 bg-white/5 shadow-2xl shadow-black/30 backdrop-blur sm:rounded-[2rem] sm:border">
@@ -243,7 +268,7 @@ export function SignedInOverviewSection({
             onClick={onStartTraining}
             className="rounded-[1.5rem] border border-white/10 bg-[linear-gradient(135deg,rgba(245,158,11,0.18),rgba(15,23,42,0.82))] p-4 text-left transition hover:border-amber-300/40 hover:bg-amber-300/10 sm:p-5"
           >
-            <h2 className="text-xs font-semibold uppercase tracking-[0.24em] text-amber-100">Training</h2>
+            <h2 className="text-xs font-semibold uppercase tracking-[0.24em] text-amber-100">Trainings</h2>
           </button>
 
           <Link
@@ -309,24 +334,16 @@ export function SignedInOverviewSection({
                 </div>
               ) : null}
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
-                <p className="text-xs text-stone-400">Matches/Wins/Loses</p>
-                <p className="mt-1 text-2xl font-semibold text-white">
-                  {cloudStats.matchesPlayed}/{cloudStats.matchesWon}/{cloudStats.matchesLost}
-                </p>
-              </div>
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
-                <p className="text-xs text-stone-400">Training</p>
-                <p className="mt-1 text-2xl font-semibold text-white">{cloudStats.trainingSessions}</p>
-              </div>
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
-                <p className="text-xs text-stone-400">Best Avg</p>
-                <p className="mt-1 text-2xl font-semibold text-white">{cloudStats.bestAverage.toFixed(2)}</p>
-              </div>
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
-                <p className="text-xs text-stone-400">Best Visit</p>
-                <p className="mt-1 text-2xl font-semibold text-white">{cloudStats.bestVisit}</p>
-              </div>
+                {statCards.map((card) => (
+                  <button
+                    key={card.title}
+                    onClick={() => setActiveStatHint({ title: card.title, description: card.description })}
+                    className="rounded-2xl border border-white/10 bg-white/5 p-3 text-left transition hover:bg-white/10"
+                  >
+                    <p className="text-xs text-stone-400">{card.title}</p>
+                    <p className="mt-1 text-2xl font-semibold text-white">{card.value}</p>
+                  </button>
+                ))}
               </div>
             </div>
           ) : (
@@ -458,7 +475,7 @@ export function SignedInOverviewSection({
                 </p>
               </div>
               <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
-                <p className="text-xs text-stone-400">Training</p>
+                <p className="text-xs text-stone-400">Trainings</p>
                 <p className="mt-1 text-2xl font-semibold text-white">{selectedPlayer.stats.trainingSessions}</p>
               </div>
               <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
@@ -469,6 +486,25 @@ export function SignedInOverviewSection({
                 <p className="text-xs text-stone-400">Best Visit</p>
                 <p className="mt-1 text-2xl font-semibold text-white">{selectedPlayer.stats.bestVisit}</p>
               </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {activeStatHint ? (
+        <div className="fixed inset-0 z-[130] flex items-end justify-center bg-black/40 p-3 sm:items-center sm:p-6">
+          <div className="w-full max-w-md rounded-[1.5rem] border border-white/10 bg-[#0f172a] p-4 shadow-2xl shadow-black/40">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-semibold text-white">{activeStatHint.title}</h3>
+                <p className="mt-2 text-sm text-stone-300">{activeStatHint.description}</p>
+              </div>
+              <button
+                onClick={() => setActiveStatHint(null)}
+                className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-semibold text-white"
+              >
+                OK
+              </button>
             </div>
           </div>
         </div>

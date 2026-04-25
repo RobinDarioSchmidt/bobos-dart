@@ -505,10 +505,10 @@ function LiveDartboard({
         )}
       </div>
 
-      <div className="relative">
+      <div className="relative overflow-x-clip">
         {!disabled ? (
           <div
-            className="pointer-events-none absolute left-1/2 top-1/2 z-0 h-[114%] w-[114%] -translate-x-1/2 -translate-y-1/2 rounded-full border-[10px] border-emerald-400/60 shadow-[0_0_36px_rgba(74,222,128,0.35)]"
+            className="pointer-events-none absolute left-1/2 top-1/2 z-0 h-[106%] w-[106%] -translate-x-1/2 -translate-y-1/2 rounded-full border-[8px] border-emerald-400/60 shadow-[0_0_30px_rgba(74,222,128,0.35)]"
           />
         ) : null}
         <svg
@@ -719,7 +719,7 @@ function LiveDartboard({
         {touchMaskEnabled ? (
           <div
             ref={touchMaskRef}
-            className={`absolute left-1/2 top-1/2 h-[106%] w-[106%] -translate-x-1/2 -translate-y-1/2 rounded-full [touch-action:none] ${
+            className={`absolute left-1/2 top-1/2 z-20 h-[106%] w-[106%] -translate-x-1/2 -translate-y-1/2 rounded-full [touch-action:none] ${
               disabled ? "pointer-events-none" : "pointer-events-auto"
             }`}
             onPointerDown={handleTouchPointerDown}

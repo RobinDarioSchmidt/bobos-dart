@@ -1327,7 +1327,9 @@ export default function LivePage() {
             />
             <div className="min-w-0">
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-100">Bobo&apos;s Dart</p>
-              <h1 className="mt-1 truncate text-2xl font-semibold text-white sm:text-3xl">Online Match</h1>
+              <h1 className="mt-1 truncate text-2xl font-semibold text-white sm:text-3xl">
+                {liveRoomCode || "Online Spiel"}
+              </h1>
             </div>
           </div>
           <Link href="/" className="rounded-2xl border border-white/10 bg-black/20 px-3 py-2 text-sm font-semibold">
