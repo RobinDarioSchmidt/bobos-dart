@@ -236,11 +236,17 @@ type AnalyticsWindow = "30" | "90" | "all";
 type SeasonWindow = "year" | "month" | "last30";
 type SeasonMetric = "wins" | "winRate" | "average";
 
+type StatHintConfig = {
+  title: string;
+  description: string;
+};
+
 export default function ProfilePage() {
   const [session, setSession] = useState<Session | null>(null);
   const [data, setData] = useState<ProfileResponse | null>(null);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
+  const [activeStatHint, setActiveStatHint] = useState<string | null>(null);
   const [analyticsNow] = useState(() => Date.now());
   const [analyticsWindow, setAnalyticsWindow] = useState<AnalyticsWindow>("90");
   const [modeFilter, setModeFilter] = useState<"all" | "301" | "501">("all");
@@ -300,6 +306,25 @@ export default function ProfilePage() {
     }
 
     const { stats, insights } = data;
+    if (stats.matchesPlayed === 0 && stats.trainingSessions === 0) {
+      return {
+        playerArchetype: "Noch in der Einspielphase",
+        momentumText: "Noch keine Matches oder Trainings in der Cloud.",
+        trendText: "Das erste Spiel legt deine Basis.",
+      };
+    }
+
+    if (stats.matchesPlayed === 0) {
+      return {
+        playerArchetype: stats.trainingHitRate >= 55 ? "Trainingsmaschine" : "Noch in der Einspielphase",
+        momentumText: `${stats.trainingSessions} Trainings - ${stats.totalTrainingHits} Treffer - ${stats.totalTrainingDarts} Darts`,
+        trendText:
+          insights.trainingLast30Days > 0
+            ? `${insights.trainingLast30Days} Trainings in den letzten 30 Tagen`
+            : "Die ersten Trainingsdaten bauen sich auf",
+      };
+    }
+
     const playerArchetype =
       stats.winRate >= 65
         ? "Checkout-Killer"
@@ -322,6 +347,91 @@ export default function ProfilePage() {
       trendText,
     };
   }, [data]);
+
+  const statHints = useMemo<Record<string, StatHintConfig>>(
+    () => ({
+      "hero-winrate": {
+        title: "Winrate",
+        description: "Zeigt, wie viele deiner abgeschlossenen Cloud-Matches du gewonnen hast.",
+      },
+      "hero-best-average": {
+        title: "Best Avg",
+        description: "Dein bestes 3-Dart-Average aus einem einzelnen Match.",
+      },
+      "hero-best-visit": {
+        title: "Best Visit",
+        description: "Dein staerkster einzelner Visit mit bis zu drei Darts, zum Beispiel 140 oder 180.",
+      },
+      "hero-hit-rate": {
+        title: "Trefferquote",
+        description: "Anteil deiner Trainingsdarts, die als Treffer auf dem Board gespeichert wurden.",
+      },
+      "compact-matches": {
+        title: "Matches",
+        description: "Alle abgeschlossenen Cloud-Matches, die fuer dein Profil gezaehlt wurden.",
+      },
+      "compact-wins": {
+        title: "Siege",
+        description: "Wie viele dieser Matches du gewonnen hast.",
+      },
+      "compact-sets": {
+        title: "Sets",
+        description: "Summe aller gewonnenen Saetze aus deinen Cloud-Matches.",
+      },
+      "compact-legs": {
+        title: "Legs",
+        description: "Summe aller gewonnenen Legs aus deinen Cloud-Matches.",
+      },
+      "activity-matches-30": {
+        title: "30 Tage Match",
+        description: "So viele abgeschlossene Matches hast du in den letzten 30 Tagen gespielt.",
+      },
+      "activity-training-30": {
+        title: "30 Tage Training",
+        description: "So viele Trainingssessions wurden in den letzten 30 Tagen gespeichert.",
+      },
+      "activity-favorite-mode": {
+        title: "Lieblingsmodus",
+        description: "Der Modus, den du in deinen Matchdaten aktuell am haeufigsten gespielt hast.",
+      },
+      "activity-training-average": {
+        title: "Trainingsschnitt",
+        description: "Der durchschnittliche Score deiner letzten Trainingssessions im gewaehlten Verlauf.",
+      },
+    }),
+    [],
+  );
+
+  function renderHintedStatPill({
+    hintKey,
+    label,
+    value,
+    tone,
+  }: {
+    hintKey: string;
+    label: string;
+    value: string;
+    tone?: string;
+  }) {
+    const hint = statHints[hintKey];
+    const isOpen = activeStatHint === hintKey;
+
+    return (
+      <button
+        type="button"
+        className="relative text-left"
+        onClick={() => setActiveStatHint((current) => (current === hintKey ? null : hintKey))}
+      >
+        <StatPill label={label} value={value} tone={tone} />
+        {hint && isOpen ? (
+          <div className="absolute left-0 right-0 top-[calc(100%+0.45rem)] z-20 rounded-2xl border border-emerald-300/25 bg-[#111827] p-3 shadow-[0_18px_44px_rgba(0,0,0,0.38)]">
+            <p className="text-[10px] uppercase tracking-[0.18em] text-emerald-200">{hint.title}</p>
+            <p className="mt-1 text-sm leading-5 text-stone-200">{hint.description}</p>
+          </div>
+        ) : null}
+      </button>
+    );
+  }
 
   const analytics = useMemo(() => {
     if (!data) {
@@ -618,17 +728,19 @@ export default function ProfilePage() {
           <>
             <section className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
               <div className="rounded-[1.5rem] border border-white/10 bg-[linear-gradient(145deg,rgba(245,158,11,0.16),rgba(16,185,129,0.14),rgba(15,23,42,0.78))] p-4 sm:p-5">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                  <div>
-                    <p className="text-[11px] uppercase tracking-[0.2em] text-stone-200">Spielerkarte</p>
-                    <h2 className="mt-2 text-3xl font-semibold text-white">{data.profile.display_name}</h2>
-                    <p className="mt-1 text-sm text-stone-300">{session.user.email}</p>
-                  </div>
-                  <div className="rounded-2xl border border-white/10 bg-black/20 px-3 py-2 text-right">
-                    <p className="text-[10px] uppercase tracking-[0.18em] text-amber-100">Mitglied seit</p>
-                    <p className="mt-1 text-sm font-semibold text-white">
-                      {new Date(data.profile.created_at).toLocaleDateString("de-DE")}
-                    </p>
+                <div>
+                  <p className="text-[11px] uppercase tracking-[0.2em] text-stone-200">Spielerkarte</p>
+                  <div className="mt-2 flex items-start justify-between gap-3">
+                    <div>
+                      <h2 className="text-3xl font-semibold text-white">{data.profile.display_name}</h2>
+                      <p className="mt-1 text-sm text-stone-300">{session.user.email}</p>
+                    </div>
+                    <div className="shrink-0 pt-1 text-right">
+                      <p className="text-[10px] uppercase tracking-[0.18em] text-amber-100">Mitglied seit</p>
+                      <p className="mt-1 text-sm font-semibold text-white">
+                        {new Date(data.profile.created_at).toLocaleDateString("de-DE")}
+                      </p>
+                    </div>
                   </div>
                 </div>
 
@@ -647,10 +759,30 @@ export default function ProfilePage() {
                 </div>
 
                 <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-                  <StatPill label="Winrate" value={`${data.stats.winRate.toFixed(1)}%`} tone="border-emerald-300/25 bg-emerald-400/12" />
-                  <StatPill label="Best Avg" value={data.stats.bestAverage.toFixed(2)} tone="border-sky-300/25 bg-sky-400/12" />
-                  <StatPill label="Best Visit" value={String(data.stats.bestVisit)} tone="border-amber-300/25 bg-amber-300/12" />
-                  <StatPill label="Trefferquote" value={`${data.stats.trainingHitRate.toFixed(1)}%`} tone="border-fuchsia-300/25 bg-fuchsia-400/12" />
+                  {renderHintedStatPill({
+                    hintKey: "hero-winrate",
+                    label: "Winrate",
+                    value: `${data.stats.winRate.toFixed(1)}%`,
+                    tone: "border-emerald-300/25 bg-emerald-400/12",
+                  })}
+                  {renderHintedStatPill({
+                    hintKey: "hero-best-average",
+                    label: "Best Avg",
+                    value: data.stats.bestAverage.toFixed(2),
+                    tone: "border-sky-300/25 bg-sky-400/12",
+                  })}
+                  {renderHintedStatPill({
+                    hintKey: "hero-best-visit",
+                    label: "Best Visit",
+                    value: String(data.stats.bestVisit),
+                    tone: "border-amber-300/25 bg-amber-300/12",
+                  })}
+                  {renderHintedStatPill({
+                    hintKey: "hero-hit-rate",
+                    label: "Trefferquote",
+                    value: `${data.stats.trainingHitRate.toFixed(1)}%`,
+                    tone: "border-fuchsia-300/25 bg-fuchsia-400/12",
+                  })}
                 </div>
               </div>
 
@@ -658,20 +790,36 @@ export default function ProfilePage() {
                 <div className="rounded-[1.25rem] border border-white/10 bg-white/5 p-4">
                   <p className="text-[10px] uppercase tracking-[0.18em] text-stone-400">Karriere kompakt</p>
                   <div className="mt-3 grid grid-cols-2 gap-2">
-                    <StatPill label="Matches" value={String(data.stats.matchesPlayed)} />
-                    <StatPill label="Siege" value={String(data.stats.matchesWon)} />
-                    <StatPill label="Sets" value={String(data.stats.totalSetsWon)} />
-                    <StatPill label="Legs" value={String(data.stats.totalLegsWon)} />
+                    {renderHintedStatPill({ hintKey: "compact-matches", label: "Matches", value: String(data.stats.matchesPlayed) })}
+                    {renderHintedStatPill({ hintKey: "compact-wins", label: "Siege", value: String(data.stats.matchesWon) })}
+                    {renderHintedStatPill({ hintKey: "compact-sets", label: "Sets", value: String(data.stats.totalSetsWon) })}
+                    {renderHintedStatPill({ hintKey: "compact-legs", label: "Legs", value: String(data.stats.totalLegsWon) })}
                   </div>
                 </div>
 
                 <div className="rounded-[1.25rem] border border-white/10 bg-white/5 p-4">
                   <p className="text-[10px] uppercase tracking-[0.18em] text-stone-400">Aktivitaet</p>
                   <div className="mt-3 grid grid-cols-2 gap-2">
-                    <StatPill label="30 Tage Match" value={String(data.insights.matchesLast30Days)} />
-                    <StatPill label="30 Tage Training" value={String(data.insights.trainingLast30Days)} />
-                    <StatPill label="Lieblingsmodus" value={data.insights.favoriteMode} />
-                    <StatPill label="Trainingsschnitt" value={data.insights.recentTrainingAverageScore.toFixed(1)} />
+                    {renderHintedStatPill({
+                      hintKey: "activity-matches-30",
+                      label: "30 Tage Match",
+                      value: String(data.insights.matchesLast30Days),
+                    })}
+                    {renderHintedStatPill({
+                      hintKey: "activity-training-30",
+                      label: "30 Tage Training",
+                      value: String(data.insights.trainingLast30Days),
+                    })}
+                    {renderHintedStatPill({
+                      hintKey: "activity-favorite-mode",
+                      label: "Lieblingsmodus",
+                      value: data.insights.favoriteMode,
+                    })}
+                    {renderHintedStatPill({
+                      hintKey: "activity-training-average",
+                      label: "Trainingsschnitt",
+                      value: data.insights.recentTrainingAverageScore.toFixed(1),
+                    })}
                   </div>
                 </div>
 

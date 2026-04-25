@@ -720,21 +720,33 @@ export async function GET(request: Request) {
     .sort((a, b) => new Date(b.unlockedAt).getTime() - new Date(a.unlockedAt).getTime())
     .slice(0, 3);
   const highlightTitle =
-    stats.winRate >= 65
-      ? "Match Closer"
-      : stats.trainingHitRate >= 55
-        ? "Practice Machine"
-        : stats.bestAverage >= 60
-          ? "Scoring Engine"
-          : "Steady Builder";
+    stats.matchesPlayed === 0 && stats.trainingSessions === 0
+      ? "Noch in der Einspielphase"
+      : stats.matchesPlayed === 0
+        ? stats.trainingHitRate >= 55
+          ? "Practice Machine"
+          : "Training laeuft an"
+        : stats.winRate >= 65
+          ? "Match Closer"
+          : stats.trainingHitRate >= 55
+            ? "Practice Machine"
+            : stats.bestAverage >= 60
+              ? "Scoring Engine"
+              : "Steady Builder";
   const highlightReason =
-    stats.winRate >= 65
-      ? "Deine Siegquote ist gerade richtig stark."
-      : stats.trainingHitRate >= 55
-        ? "Deine Trainingsdaten zeigen saubere Wiederholbarkeit."
-        : stats.bestAverage >= 60
-        ? "Dein bestes Average zeigt echtes Scoring-Potenzial."
-          : "Du baust dir gerade eine stabile Match-Basis auf.";
+    stats.matchesPlayed === 0 && stats.trainingSessions === 0
+      ? "Sobald dein erstes Match oder Training gespeichert ist, fuellt sich dein Profil mit echten Langzeitdaten."
+      : stats.matchesPlayed === 0
+        ? stats.trainingHitRate >= 55
+          ? "Deine ersten Trainingsdaten sehen schon erstaunlich sauber aus."
+          : "Dein Profil sammelt gerade erst Trainingsdaten fuer ein klares Bild."
+        : stats.winRate >= 65
+          ? "Deine Siegquote ist gerade richtig stark."
+          : stats.trainingHitRate >= 55
+            ? "Deine Trainingsdaten zeigen saubere Wiederholbarkeit."
+            : stats.bestAverage >= 60
+              ? "Dein bestes Average zeigt echtes Scoring-Potenzial."
+              : "Du baust dir gerade eine stabile Match-Basis auf.";
   const profileNameMap = new Map(
     ((allProfiles ?? []) as Array<{ id: string; display_name: string }>).map((entry) => [entry.id, entry.display_name]),
   );
