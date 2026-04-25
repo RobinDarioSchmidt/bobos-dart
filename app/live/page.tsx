@@ -57,6 +57,22 @@ type OpenLiveRoom = {
 
 const LIVE_ROOM_STORAGE_KEY = "bobos-dart-live-room";
 
+function getOpenRoomsRefreshDelay(failureCount: number) {
+  if (failureCount <= 0) {
+    return 20_000;
+  }
+
+  return Math.min(60_000, 20_000 + failureCount * 10_000);
+}
+
+function getMatchRefreshDelay(failureCount: number) {
+  if (failureCount <= 0) {
+    return 2_000;
+  }
+
+  return Math.min(15_000, 2_000 * 2 ** Math.min(failureCount, 3));
+}
+
 function formatLiveError(error: string) {
   switch (error) {
     case "missing_bearer_token":
@@ -213,6 +229,10 @@ export default function LivePage() {
   const liveChannelRef = useRef<ReturnType<NonNullable<typeof supabase>["channel"]> | null>(null);
   const requestInFlightRef = useRef(false);
   const deviceClaimInFlightRef = useRef(false);
+  const roomFetchInFlightRef = useRef(false);
+  const openRoomsFetchInFlightRef = useRef(false);
+  const roomFailureCountRef = useRef(0);
+  const openRoomsFailureCountRef = useRef(0);
   const lastPlayedVisitRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -322,11 +342,17 @@ export default function LivePage() {
   }
 
   const loadOpenRooms = useCallback(async () => {
+    if (openRoomsFetchInFlightRef.current || (typeof document !== "undefined" && document.visibilityState !== "visible")) {
+      return false;
+    }
+
     const accessToken = await getAccessToken();
     if (!accessToken) {
       setOpenRooms([]);
-      return;
+      return false;
     }
+
+    openRoomsFetchInFlightRef.current = true;
 
     try {
       const response = await fetch("/api/live", {
@@ -336,46 +362,81 @@ export default function LivePage() {
       });
       const result = (await response.json()) as { rooms?: OpenLiveRoom[]; error?: string };
       if (!response.ok || result.error) {
-        return;
+        openRoomsFailureCountRef.current += 1;
+        return false;
       }
 
       setOpenRooms(result.rooms ?? []);
+      openRoomsFailureCountRef.current = 0;
+      return true;
     } catch {
       // Keep the current list until the next successful refresh.
+      openRoomsFailureCountRef.current += 1;
+      return false;
+    } finally {
+      openRoomsFetchInFlightRef.current = false;
     }
   }, []);
 
-  const fetchMatch = useCallback(async (roomCode: string) => {
+  const fetchMatch = useCallback(async (roomCode: string, options?: { silent?: boolean }) => {
+    if (roomFetchInFlightRef.current) {
+      return false;
+    }
+
+    if (typeof document !== "undefined" && document.visibilityState !== "visible") {
+      return false;
+    }
+
     const accessToken = await getAccessToken();
     if (!accessToken) {
-      setMessage("Bitte zuerst einloggen.");
-      return;
-    }
-
-    const response = await fetch(`/api/live?roomCode=${encodeURIComponent(roomCode)}`, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
-    });
-    const result = (await response.json()) as LiveMatchResponse | { error: string };
-    if (!response.ok || !("match" in result)) {
-      setConnectionState("offline");
-      const nextError = "error" in result && result.error ? result.error : "match_not_found";
-      setMessage(formatLiveError(nextError));
-      if (nextError === "match_not_found") {
-        setLiveRoomCode("");
-        setRoomOwnerId("");
-        setLiveState(null);
-        void loadOpenRooms();
+      if (!options?.silent) {
+        setMessage("Bitte zuerst einloggen.");
       }
-      return;
+      return false;
     }
 
-    setLiveRoomCode(result.match.room_code);
-    setRoomOwnerId(result.match.owner_id);
-    setLiveState(normalizeLiveState(result.match.state));
-    setConnectionState("online");
-    void loadOpenRooms();
+    roomFetchInFlightRef.current = true;
+
+    try {
+      const response = await fetch(`/api/live?roomCode=${encodeURIComponent(roomCode)}`, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+      const result = (await response.json()) as LiveMatchResponse | { error: string };
+      if (!response.ok || !("match" in result)) {
+        roomFailureCountRef.current += 1;
+        setConnectionState("offline");
+        const nextError = "error" in result && result.error ? result.error : "match_not_found";
+        if (!options?.silent || roomFailureCountRef.current >= 2 || nextError === "match_not_found") {
+          setMessage(formatLiveError(nextError));
+        }
+        if (nextError === "match_not_found") {
+          setLiveRoomCode("");
+          setRoomOwnerId("");
+          setLiveState(null);
+          void loadOpenRooms();
+        }
+        return false;
+      }
+
+      setLiveRoomCode(result.match.room_code);
+      setRoomOwnerId(result.match.owner_id);
+      setLiveState(normalizeLiveState(result.match.state));
+      setConnectionState("online");
+      roomFailureCountRef.current = 0;
+      void loadOpenRooms();
+      return true;
+    } catch {
+      roomFailureCountRef.current += 1;
+      setConnectionState("offline");
+      if (!options?.silent || roomFailureCountRef.current >= 2) {
+        setMessage("Die Verbindung zum Online-Match ist gerade unterbrochen.");
+      }
+      return false;
+    } finally {
+      roomFetchInFlightRef.current = false;
+    }
   }, [loadOpenRooms]);
 
   useEffect(() => {
@@ -392,12 +453,27 @@ export default function LivePage() {
       return;
     }
 
-    const interval = window.setInterval(() => {
-      void loadOpenRooms();
-    }, 20000);
+    let active = true;
+    let timeout: number | null = null;
+
+    const schedule = () => {
+      if (!active) {
+        return;
+      }
+
+      timeout = window.setTimeout(async () => {
+        await loadOpenRooms();
+        schedule();
+      }, getOpenRoomsRefreshDelay(openRoomsFailureCountRef.current));
+    };
+
+    schedule();
 
     return () => {
-      window.clearInterval(interval);
+      active = false;
+      if (timeout) {
+        window.clearTimeout(timeout);
+      }
     };
   }, [loadOpenRooms, session]);
 
@@ -406,14 +482,54 @@ export default function LivePage() {
       return;
     }
 
-    const interval = window.setInterval(() => {
-      void fetchMatch(liveRoomCode);
-    }, 2000);
+    let active = true;
+    let timeout: number | null = null;
+
+    const schedule = () => {
+      if (!active) {
+        return;
+      }
+
+      timeout = window.setTimeout(async () => {
+        await fetchMatch(liveRoomCode, { silent: true });
+        schedule();
+      }, getMatchRefreshDelay(roomFailureCountRef.current));
+    };
+
+    schedule();
 
     return () => {
-      window.clearInterval(interval);
+      active = false;
+      if (timeout) {
+        window.clearTimeout(timeout);
+      }
     };
   }, [fetchMatch, liveRoomCode, session]);
+
+  useEffect(() => {
+    if (!session) {
+      return;
+    }
+
+    const refreshVisibleData = () => {
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") {
+        return;
+      }
+
+      void loadOpenRooms();
+      if (liveRoomCode) {
+        void fetchMatch(liveRoomCode, { silent: true });
+      }
+    };
+
+    window.addEventListener("focus", refreshVisibleData);
+    document.addEventListener("visibilitychange", refreshVisibleData);
+
+    return () => {
+      window.removeEventListener("focus", refreshVisibleData);
+      document.removeEventListener("visibilitychange", refreshVisibleData);
+    };
+  }, [fetchMatch, liveRoomCode, loadOpenRooms, session]);
 
   useEffect(() => {
     if (typeof window === "undefined" || !session || liveRoomCode) {
