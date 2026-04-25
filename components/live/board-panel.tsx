@@ -133,6 +133,26 @@ function withExactMarker(segment: LiveBoardSegment, x: number, y: number): LiveB
   };
 }
 
+function clampBoardPointToPlayableArea(x: number, y: number) {
+  const dx = x - 200;
+  const dy = y - 200;
+  const radius = Math.sqrt(dx * dx + dy * dy);
+
+  if (radius <= BOARD_RADIUS.doubleOuter) {
+    return { x, y };
+  }
+
+  if (radius === 0) {
+    return { x: 200, y: 200 };
+  }
+
+  const scale = BOARD_RADIUS.doubleOuter / radius;
+  return {
+    x: 200 + dx * scale,
+    y: 200 + dy * scale,
+  };
+}
+
 function getSegmentFromBoardPoint(x: number, y: number) {
   const dx = x - 200;
   const dy = y - 200;
@@ -306,29 +326,36 @@ function LiveDartboard({
 
   function getBoardPointFromTouchMask(event: ReactPointerEvent<HTMLDivElement>) {
     const touchMask = touchMaskRef.current;
+    const svg = svgRef.current;
     if (!touchMask) {
       return null;
     }
-
-    const rect = touchMask.getBoundingClientRect();
-    if (!rect.width || !rect.height) {
+    if (!svg) {
       return null;
     }
 
-    const localX = event.clientX - rect.left;
-    const localY = event.clientY - rect.top;
-    const centerX = rect.width / 2;
-    const centerY = rect.height / 2;
+    const maskRect = touchMask.getBoundingClientRect();
+    const svgRect = svg.getBoundingClientRect();
+    if (!maskRect.width || !maskRect.height || !svgRect.width || !svgRect.height) {
+      return null;
+    }
+
+    const localX = event.clientX - maskRect.left;
+    const localY = event.clientY - maskRect.top;
+    const centerX = maskRect.width / 2;
+    const centerY = maskRect.height / 2;
     const radius = Math.sqrt((localX - centerX) ** 2 + (localY - centerY) ** 2);
-    if (radius > rect.width / 2) {
+    if (radius > Math.min(maskRect.width, maskRect.height) / 2) {
       return null;
     }
 
-    const scaleX = (BOARD_RADIUS.doubleOuter * 2) / rect.width;
-    const scaleY = (BOARD_RADIUS.doubleOuter * 2) / rect.height;
+    const rawBoardX = ((event.clientX - svgRect.left) / svgRect.width) * 400;
+    const rawBoardY = ((event.clientY - svgRect.top) / svgRect.height) * 400;
+    const clamped = clampBoardPointToPlayableArea(rawBoardX, rawBoardY);
+
     return {
-      boardX: 200 - BOARD_RADIUS.doubleOuter + localX * scaleX,
-      boardY: 200 - BOARD_RADIUS.doubleOuter + localY * scaleY,
+      boardX: clamped.x,
+      boardY: clamped.y,
       clientX: event.clientX,
       clientY: event.clientY,
     };
