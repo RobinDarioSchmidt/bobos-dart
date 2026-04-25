@@ -47,6 +47,32 @@ type CloudMatchInsert = {
 
 const LIVE_ROOM_INACTIVITY_MS = 60 * 60 * 1000;
 
+function bumpLiveRevision(state: LiveMatchState, previousRevision?: number) {
+  return normalizeLiveState({
+    ...state,
+    revision: Math.max(previousRevision ?? state.revision ?? 0, state.revision ?? 0) + 1,
+  });
+}
+
+function getNextJoinedSeatIndex(state: LiveMatchState, fromIndex: number) {
+  const joinedIndexes = state.players
+    .map((player, index) => (player.joined ? index : -1))
+    .filter((index) => index >= 0);
+
+  if (joinedIndexes.length === 0) {
+    return 0;
+  }
+
+  for (let step = 1; step <= state.players.length; step += 1) {
+    const candidate = (fromIndex + step) % state.players.length;
+    if (state.players[candidate]?.joined) {
+      return candidate;
+    }
+  }
+
+  return joinedIndexes[0] ?? 0;
+}
+
 function mergeCloudSync(currentSync: LiveCloudSyncState, nextSync?: Partial<LiveCloudSyncState> | null) {
   return {
     sessionKey: nextSync?.sessionKey ?? currentSync.sessionKey,
@@ -315,6 +341,7 @@ function mergeLiveState(currentState: LiveMatchState, nextState: LiveMatchState)
   return normalizeLiveState({
     ...currentState,
     ...nextState,
+    revision: currentState.revision,
     players: mergePlayers(currentState, nextState),
     history: mergeHistory(currentState, nextState),
     cloudSync: mergeCloudSync(currentState.cloudSync, nextState.cloudSync),
@@ -447,6 +474,7 @@ export async function POST(request: Request) {
         roomCode: string;
         state: LiveMatchState;
         deviceId?: string;
+        baseRevision?: number;
       }
     | {
         action: "claim_device";
@@ -588,6 +616,7 @@ export async function POST(request: Request) {
       entered: state.entryMode === "single",
     };
     state.statusText = `${displayName} ist im Online-Match angekommen.`;
+    state = bumpLiveRevision(state);
     if (body.deviceId) {
       state = withUpdatedDeviceLock(state, {
         profileId: authResult.user.id,
@@ -694,6 +723,10 @@ export async function POST(request: Request) {
       );
     }
 
+    if (typeof body.baseRevision === "number" && body.baseRevision !== currentState.revision) {
+      return NextResponse.json({ error: "stale_state" }, { status: 409 });
+    }
+
     let stateToStore = body.deviceId
       ? withUpdatedDeviceLock(currentState, {
           profileId: authResult.user.id,
@@ -712,6 +745,7 @@ export async function POST(request: Request) {
     }
 
     stateToStore = mergeLiveState(stateToStore, body.state);
+    stateToStore = bumpLiveRevision(stateToStore, currentState.revision);
 
     try {
       stateToStore = await persistCompletedLiveMatch(adminClient, stateToStore);
@@ -775,6 +809,7 @@ export async function POST(request: Request) {
     }
 
     const leavingPlayer = currentState.players[participantIndex];
+    const fallbackSeatIndex = getNextJoinedSeatIndex(currentState, participantIndex);
     currentState.players[participantIndex] = {
       ...currentState.players[participantIndex],
       joined: false,
@@ -809,7 +844,11 @@ export async function POST(request: Request) {
     }
 
     if (currentState.activePlayer === participantIndex) {
-      currentState.activePlayer = remainingJoined[0].index;
+      currentState.activePlayer = currentState.players[fallbackSeatIndex]?.joined ? fallbackSeatIndex : remainingJoined[0].index;
+    }
+
+    if (currentState.legStartingPlayer === participantIndex) {
+      currentState.legStartingPlayer = currentState.activePlayer;
     }
 
     if (currentState.legWinner === participantIndex) {
@@ -824,11 +863,13 @@ export async function POST(request: Request) {
       currentState.bullOff.attempts = currentState.bullOff.attempts.filter(
         (attempt) => attempt.playerIndex !== participantIndex,
       );
-      currentState.bullOff.currentPlayerIndex = remainingJoined[0].index;
+      currentState.bullOff.currentPlayerIndex = currentState.players[fallbackSeatIndex]?.joined ? fallbackSeatIndex : remainingJoined[0].index;
       currentState.statusText = `${leavingPlayer.name} hat den Raum verlassen. ${remainingJoined[0].player.name} ist wieder dran.`;
     } else {
       currentState.statusText = `${leavingPlayer.name} hat den Raum verlassen. ${remainingJoined[0].player.name} f?hrt den Raum weiter.`;
     }
+
+    currentState = bumpLiveRevision(currentState);
 
     const { data: updated, error: updateError } = await adminClient
       .from("live_matches")

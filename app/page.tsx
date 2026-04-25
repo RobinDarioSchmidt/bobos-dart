@@ -1341,6 +1341,7 @@ export default function Page() {
   );
   const localLiveState = useMemo<LiveMatchState>(
     () => ({
+      revision: 0,
       mode,
       entryMode,
       finishMode: doubleOut ? "double" : "single",

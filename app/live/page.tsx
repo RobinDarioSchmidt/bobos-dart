@@ -74,6 +74,8 @@ function formatLiveError(error: string) {
       return "Diese Aktion wird gerade nicht unterstuetzt.";
     case "only_host_can_close_room":
       return "Nur der Host kann den Raum schliessen.";
+    case "stale_state":
+      return "Der Raum wurde gerade von jemand anderem aktualisiert. Wir laden den aktuellen Stand neu.";
     case "missing_service_role_or_supabase_config":
         return "Der Online-Modus ist noch nicht komplett konfiguriert.";
     default:
@@ -537,7 +539,7 @@ export default function LivePage() {
       }
         const nextError = "error" in result && result.error ? result.error : "update_failed";
         setMessage(formatLiveError(nextError));
-        setConnectionState("offline");
+        setConnectionState(nextError === "stale_state" ? "online" : "offline");
         return null;
       }
 
@@ -648,6 +650,7 @@ export default function LivePage() {
       roomCode: liveRoomCode,
       state: nextState,
       deviceId,
+      baseRevision: liveState?.revision ?? 0,
     });
 
     if (result) {
@@ -782,7 +785,7 @@ export default function LivePage() {
       liveState.matchWinner === null &&
       currentUserSeat >= 0 &&
       hasDeviceControl &&
-      (liveState.legWinner === currentUserSeat || liveState.players[0]?.profileId === session.user.id),
+      (liveState.legWinner === currentUserSeat || roomOwnerId === session.user.id),
   );
   const canControlRematch = Boolean(
     liveState &&
@@ -790,7 +793,7 @@ export default function LivePage() {
       liveState.matchWinner !== null &&
       currentUserSeat >= 0 &&
       hasDeviceControl &&
-      (liveState.matchWinner === currentUserSeat || liveState.players[0]?.profileId === session.user.id),
+      (liveState.matchWinner === currentUserSeat || roomOwnerId === session.user.id),
   );
   const isRoomHost = Boolean(session?.user.id && roomOwnerId && session.user.id === roomOwnerId);
   const joinedPlayerCount = liveState?.players.filter((player) => player.joined).length ?? 0;

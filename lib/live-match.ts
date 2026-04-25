@@ -89,6 +89,7 @@ export type LiveBullOffState = {
 };
 
 export type LiveMatchState = {
+  revision: number;
   mode: LiveGameMode;
   entryMode: LiveEntryMode;
   finishMode: LiveFinishMode;
@@ -180,6 +181,7 @@ export function createEmptyLiveState(params: {
   const initialBullOffPlayer = params.bullOffEnabled ? 0 : null;
 
   return {
+    revision: 1,
     mode: params.mode,
     entryMode: params.entryMode,
     finishMode: params.finishMode,
@@ -266,6 +268,7 @@ export function normalizeLiveState(state: LiveMatchState | (Record<string, unkno
     .filter((index) => index >= 0);
 
   return {
+    revision: typeof nextState.revision === "number" ? nextState.revision : 0,
     mode: nextState.mode ?? 501,
     entryMode,
     finishMode,
