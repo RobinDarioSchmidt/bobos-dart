@@ -506,10 +506,15 @@ function LiveDartboard({
       </div>
 
       <div className="relative">
+        {!disabled ? (
+          <div
+            className="pointer-events-none absolute left-1/2 top-1/2 z-0 h-[114%] w-[114%] -translate-x-1/2 -translate-y-1/2 rounded-full border-[10px] border-emerald-400/60 shadow-[0_0_36px_rgba(74,222,128,0.35)]"
+          />
+        ) : null}
         <svg
           ref={svgRef}
           viewBox="0 0 400 400"
-          className={`mx-auto w-full max-w-[35rem] drop-shadow-[0_18px_40px_rgba(0,0,0,0.45)] ${disabled ? "pointer-events-none" : ""}`}
+          className={`relative z-10 mx-auto w-full max-w-[35rem] drop-shadow-[0_18px_40px_rgba(0,0,0,0.45)] ${disabled ? "pointer-events-none" : ""}`}
         >
           {renderBoardArtwork()}
 
