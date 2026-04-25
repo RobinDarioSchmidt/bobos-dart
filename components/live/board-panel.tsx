@@ -798,6 +798,7 @@ export function LiveBoardPanel({
   compactVisitText,
   calloutText,
   canPlayFromThisDevice,
+  canSelectBoardInput,
   boardDisabledReason,
   loading,
   boardMarkers,
@@ -819,6 +820,7 @@ export function LiveBoardPanel({
   compactVisitText: string;
   calloutText: string | null;
   canPlayFromThisDevice: boolean;
+  canSelectBoardInput: boolean;
   boardDisabledReason: string;
   loading: boolean;
   boardMarkers: LiveBoardMarker[];
@@ -901,7 +903,7 @@ export function LiveBoardPanel({
         <LiveDartboard
           onSegmentSelect={onSegmentSelect}
           onMiss={onMiss}
-          disabled={!canPlayFromThisDevice || loading}
+          disabled={!canSelectBoardInput || loading}
           disabledLabel={boardDisabledReason}
           markers={boardMarkers}
           loading={loading}
@@ -932,14 +934,22 @@ export function LiveBoardPanel({
             <button
               onClick={onRemoveLast}
               disabled={!canPlayFromThisDevice || pendingLabels.length === 0}
-              className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white disabled:opacity-40"
+              className={`rounded-2xl px-4 py-2 text-sm font-semibold disabled:opacity-40 ${
+                pendingLabels.length >= 3
+                  ? "bg-rose-500 text-white"
+                  : "border border-white/10 bg-white/5 text-white"
+              }`}
             >
               Korrektur
             </button>
             <button
               onClick={onFinishVisit}
               disabled={!canPlayFromThisDevice || pendingLabels.length === 0}
-              className="rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-black disabled:opacity-40"
+              className={`rounded-2xl px-4 py-2 text-sm font-semibold disabled:opacity-40 ${
+                pendingLabels.length >= 3
+                  ? "bg-emerald-400 text-black"
+                  : "border border-white/10 bg-white/5 text-white"
+              }`}
             >
               Visit loggen
             </button>

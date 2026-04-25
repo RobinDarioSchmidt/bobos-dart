@@ -459,19 +459,26 @@ export function SignedInOverviewSection({
             </div>
 
             <div className="mt-4 rounded-[1.5rem] border border-white/10 bg-black/20 p-4">
-              <p className="text-xs uppercase tracking-[0.24em] text-stone-400">Rivalitaet gegen {selectedPlayer.displayName}</p>
+              <p className="text-xs uppercase tracking-[0.24em] text-stone-400">
+                {displayName} vs. {selectedPlayer.displayName}
+              </p>
               <div className="mt-3 grid grid-cols-3 gap-3">
                 <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
                   <p className="text-xs text-stone-400">Matches</p>
                   <p className="mt-1 text-2xl font-semibold text-white">{selectedPlayer.rivalry.matchesPlayed}</p>
                 </div>
                 <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
-                  <p className="text-xs text-stone-400">Wins</p>
+                  <p className="text-xs text-stone-400">Win/Lose</p>
                   <p className="mt-1 text-2xl font-semibold text-white">{selectedPlayer.rivalry.matchesWon}</p>
+                  <p className="mt-1 text-sm text-stone-400">/ {selectedPlayer.rivalry.matchesLost}</p>
                 </div>
                 <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
-                  <p className="text-xs text-stone-400">Loses</p>
-                  <p className="mt-1 text-2xl font-semibold text-white">{selectedPlayer.rivalry.matchesLost}</p>
+                  <p className="text-xs text-stone-400">KD</p>
+                  <p className="mt-1 text-2xl font-semibold text-white">
+                    {selectedPlayer.rivalry.matchesPlayed > 0
+                      ? `${Math.round((selectedPlayer.rivalry.matchesWon / selectedPlayer.rivalry.matchesPlayed) * 100)}%`
+                      : "0%"}
+                  </p>
                 </div>
               </div>
             </div>

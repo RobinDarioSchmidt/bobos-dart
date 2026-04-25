@@ -341,7 +341,7 @@ export function LineChart({
 
   return (
     <div className="space-y-3">
-      <svg viewBox="0 0 320 140" className="w-full overflow-visible">
+      <svg viewBox="0 0 320 140" className="block w-full">
         <path d="M16 124 H304" stroke="#44403c" strokeWidth="1" strokeDasharray="4 4" />
         <polyline
           fill="none"

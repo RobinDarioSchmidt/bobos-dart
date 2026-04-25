@@ -148,7 +148,7 @@ export function ProfileAnalyticsPanel({
         </div>
 
         <div className="grid gap-4 lg:grid-cols-2">
-          <div className="rounded-[1.25rem] border border-white/10 bg-black/20 p-4">
+          <div className="min-w-0 overflow-hidden rounded-[1.25rem] border border-white/10 bg-black/20 p-4">
             <div className="flex items-center justify-between gap-3">
               <h3 className="text-sm font-semibold text-white">Match-Verlauf</h3>
               <p className="text-xs text-stone-400">{analytics.filteredMatches.length} Matches</p>
@@ -162,7 +162,7 @@ export function ProfileAnalyticsPanel({
             )}
           </div>
 
-          <div className="rounded-[1.25rem] border border-white/10 bg-black/20 p-4">
+          <div className="min-w-0 overflow-hidden rounded-[1.25rem] border border-white/10 bg-black/20 p-4">
             <div className="flex items-center justify-between gap-3">
               <h3 className="text-sm font-semibold text-white">Training-Verlauf</h3>
               <p className="text-xs text-stone-400">{analytics.filteredTraining.length} Sessions</p>

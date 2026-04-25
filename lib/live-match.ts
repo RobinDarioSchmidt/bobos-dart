@@ -593,7 +593,7 @@ export function addPendingDart(previousState: LiveMatchState, dart: LiveDart) {
   nextState.lastCallout = getThrowCallout(dart);
 
   const evaluation = evaluateVisit(player.score, nextDarts, player.entered, nextState.entryMode, nextState.finishMode);
-  if (evaluation.bust || evaluation.checkout || nextDarts.length === 3) {
+  if (evaluation.bust || evaluation.checkout) {
     return finalizePendingVisit(nextState);
   }
 

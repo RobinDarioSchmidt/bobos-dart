@@ -2682,6 +2682,7 @@ function resetLegBoards(nextPlayers: Player[]) {
                       compactVisitText={currentLabels.length > 0 ? currentLabels.join(", ") : "Noch kein Dart"}
                       calloutText={null}
                       canPlayFromThisDevice={true}
+                      canSelectBoardInput={currentLabels.length < 3 || (localBullOff.enabled && !localBullOff.completed)}
                       boardDisabledReason="Lokales Spiel"
                       loading={false}
                       boardMarkers={localBoardMarkers}

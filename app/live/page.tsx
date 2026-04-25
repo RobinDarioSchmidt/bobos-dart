@@ -1006,6 +1006,11 @@ export default function LivePage() {
   const pendingLabels = pendingVisit?.darts.map((dart) => dart.label) ?? [];
   const currentVisitTotal = pendingVisit?.darts.reduce((sum, dart) => sum + dart.score, 0) ?? 0;
   const compactVisitText = pendingLabels.length > 0 ? pendingLabels.join(", ") : "Noch kein Dart";
+  const boardInputLockedByVisit = Boolean(
+    liveState &&
+      pendingLabels.length >= 3 &&
+      (!liveState.bullOff.enabled || liveState.bullOff.completed),
+  );
   const checkoutHints = useMemo(() => {
     if (
       !liveState ||
@@ -1059,8 +1064,11 @@ export default function LivePage() {
     ? "Synchronisiert..."
     : !hasDeviceControl
       ? "Dieses Geraet schaut zu"
-      : "Warte auf deinen Zug";
+      : boardInputLockedByVisit
+        ? "Visit loggen oder korrigieren"
+        : "Warte auf deinen Zug";
   const canPlayFromThisDevice = isCurrentUsersTurn && hasDeviceControl;
+  const canSelectBoardInput = canPlayFromThisDevice && !boardInputLockedByVisit;
   const isTurnHighlightActive = canPlayFromThisDevice;
 
   async function handleBoardSegment(segment: LiveBoardSegment) {
@@ -1068,8 +1076,14 @@ export default function LivePage() {
       return;
     }
 
-    if (!canPlayFromThisDevice) {
-      setMessage(hasDeviceControl ? "Du kannst nur werfen, wenn du selbst dran bist." : "Dieses Geraet darf den Account gerade nicht steuern.");
+    if (!canSelectBoardInput) {
+      setMessage(
+        boardInputLockedByVisit
+          ? "Bitte erst den Visit loggen oder mit Korrektur anpassen."
+          : hasDeviceControl
+            ? "Du kannst nur werfen, wenn du selbst dran bist."
+            : "Dieses Geraet darf den Account gerade nicht steuern.",
+      );
       return;
     }
 
@@ -1086,7 +1100,6 @@ export default function LivePage() {
     ) {
       void playLiveDartCallout(dart.label, audioMode);
     }
-    queueVisitAudio(liveState, nextState);
   }
 
   async function handleMiss() {
@@ -1094,8 +1107,14 @@ export default function LivePage() {
       return;
     }
 
-    if (!canPlayFromThisDevice) {
-      setMessage(hasDeviceControl ? "Du kannst nur werfen, wenn du selbst dran bist." : "Dieses Geraet darf den Account gerade nicht steuern.");
+    if (!canSelectBoardInput) {
+      setMessage(
+        boardInputLockedByVisit
+          ? "Bitte erst den Visit loggen oder mit Korrektur anpassen."
+          : hasDeviceControl
+            ? "Du kannst nur werfen, wenn du selbst dran bist."
+            : "Dieses Geraet darf den Account gerade nicht steuern.",
+      );
       return;
     }
 
@@ -1112,7 +1131,6 @@ export default function LivePage() {
     ) {
       void playLiveDartCallout(dart.label, audioMode);
     }
-    queueVisitAudio(liveState, nextState);
   }
 
   async function handleRemoveLast() {
@@ -1406,6 +1424,7 @@ export default function LivePage() {
                     compactVisitText={compactVisitText}
                     calloutText={liveState.lastCallout}
                     canPlayFromThisDevice={canPlayFromThisDevice}
+                    canSelectBoardInput={canSelectBoardInput}
                     boardDisabledReason={boardDisabledReason}
                     loading={loading}
                     boardMarkers={boardMarkers}
