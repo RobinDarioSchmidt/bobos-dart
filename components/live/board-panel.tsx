@@ -194,7 +194,7 @@ function renderBoardArtwork() {
   return (
     <>
       <circle cx="200" cy="200" r="194" fill="#111827" />
-      <circle cx="200" cy="200" r="182" fill="#d6d3d1" />
+      <circle cx="200" cy="200" r="182" fill="#050505" />
       <circle cx="200" cy="200" r={BOARD_RADIUS.doubleOuter} fill="#0f172a" />
 
       {BOARD_ORDER.map((value, index) => {
@@ -837,6 +837,7 @@ export function LiveBoardPanel({
   const visiblePlayers = liveState.players
     .map((player, index) => ({ player, index }))
     .filter(({ player }) => player.joined);
+  const playerGridClass = visiblePlayers.length === 3 ? "grid-cols-3" : "grid-cols-2";
 
   return (
     <section className="rounded-none border-0 bg-transparent p-0 backdrop-blur-none sm:rounded-[1.5rem] sm:border sm:border-white/10 sm:bg-white/5 sm:p-4 sm:backdrop-blur">
@@ -857,7 +858,7 @@ export function LiveBoardPanel({
       </div>
 
       {visiblePlayers.length > 0 ? (
-        <div className="mt-4 grid grid-cols-2 gap-3 px-2 sm:px-0 xl:grid-cols-4">
+        <div className={`mt-4 grid ${playerGridClass} gap-2 px-2 sm:px-0`}>
           {visiblePlayers.map(({ player, index: originalIndex }) => {
             const isActive = currentPlayerIndex === originalIndex && liveState.matchWinner === null;
             const isMe = player.profileId === currentUserId;
@@ -865,34 +866,36 @@ export function LiveBoardPanel({
             return (
               <div
                 key={`${player.name}-${originalIndex}`}
-                className={`rounded-[1.25rem] border p-3 ${
+                className={`rounded-[1.1rem] border p-2 ${
                   isActive ? "border-emerald-300/40 bg-emerald-300/10" : "border-white/10 bg-black/20"
                 }`}
               >
                 <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <p className="text-sm font-semibold text-white">{player.name}</p>
+                  <div className="min-w-0">
+                    <p className="truncate text-xs font-semibold text-white sm:text-sm">{player.name}</p>
                     {!player.entered ? (
-                      <p className="mt-1 text-[10px] uppercase tracking-[0.18em] text-amber-100">
+                      <p className="mt-0.5 truncate text-[9px] uppercase tracking-[0.14em] text-amber-100">
                         {liveState.entryMode === "double" ? "Double In offen" : "Masters In offen"}
                       </p>
                     ) : null}
                   </div>
                   {isMe ? (
-                    <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[10px] uppercase tracking-[0.18em] text-stone-300">
+                    <span className="rounded-full border border-white/10 bg-white/5 px-1.5 py-0.5 text-[9px] uppercase tracking-[0.14em] text-stone-300">
                       Du
                     </span>
                   ) : null}
                 </div>
-                <p className="mt-2 text-4xl font-semibold leading-none text-white">{player.score}</p>
-                <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-                  <div className="rounded-2xl bg-white/5 p-2">
-                    <p className="text-stone-400">Sets</p>
-                    <p className="mt-1 text-lg font-semibold text-white">{player.sets}</p>
-                  </div>
-                  <div className="rounded-2xl bg-white/5 p-2">
-                    <p className="text-stone-400">Legs</p>
-                    <p className="mt-1 text-lg font-semibold text-white">{player.legs}</p>
+                <div className="mt-2 flex items-end justify-between gap-2">
+                  <p className="text-2xl font-semibold leading-none text-white sm:text-3xl">{player.score}</p>
+                  <div className="grid grid-cols-2 gap-1 text-[10px] text-stone-300">
+                    <div className="rounded-xl bg-white/5 px-2 py-1 text-center">
+                      <p className="text-stone-400">S</p>
+                      <p className="mt-0.5 text-sm font-semibold text-white">{player.sets}</p>
+                    </div>
+                    <div className="rounded-xl bg-white/5 px-2 py-1 text-center">
+                      <p className="text-stone-400">L</p>
+                      <p className="mt-0.5 text-sm font-semibold text-white">{player.legs}</p>
+                    </div>
                   </div>
                 </div>
               </div>

@@ -442,10 +442,24 @@ export function LiveRoomStatusPanel({
         <button
           onClick={onReconnect}
           disabled={loading}
-          className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+          className="sm:col-span-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
         >
           Neu verbinden
         </button>
+      </div>
+
+      <div className="mt-2 grid gap-2 sm:grid-cols-2">
+        {isRoomHost ? (
+          <button
+            onClick={onCloseRoom}
+            disabled={loading}
+            className="rounded-2xl border border-red-400/30 bg-red-400/10 px-4 py-2 text-sm font-semibold text-red-100 disabled:opacity-50"
+          >
+            Raum beenden
+          </button>
+        ) : (
+          <div className="hidden sm:block" />
+        )}
         <button
           onClick={onLeaveRoom}
           disabled={loading}
@@ -453,15 +467,6 @@ export function LiveRoomStatusPanel({
         >
           Raum verlassen
         </button>
-        {isRoomHost ? (
-          <button
-            onClick={onCloseRoom}
-            disabled={loading}
-            className="mt-2 w-full rounded-2xl border border-red-400/30 bg-red-400/10 px-4 py-2 text-sm font-semibold text-red-100 disabled:opacity-50"
-          >
-            Raum beenden
-          </button>
-        ) : null}
       </div>
 
       <div className="mt-3 rounded-2xl border border-white/10 bg-white/5 p-3">
