@@ -9,7 +9,6 @@ import {
   LiveCelebrationPanel,
   LiveHistoryPanel,
   LiveMatchSummaryPanel,
-  LiveStatsPanel,
 } from "@/components/live/match-panels";
 import { PlayerRivalryDialog, type PlayerPresenceSummary } from "@/components/player-rivalry-dialog";
 import { LiveRoomCreatePanel, LiveRoomJoinPanel, LiveRoomStatusPanel } from "@/components/live/room-panels";
@@ -246,6 +245,13 @@ export default function LivePage() {
   const [restoringRoom, setRestoringRoom] = useState(Boolean(initialRestoreTarget));
   const [playerPresence, setPlayerPresence] = useState<PlayerPresenceSummary[]>([]);
   const [selectedPresencePlayer, setSelectedPresencePlayer] = useState<PlayerPresenceSummary | null>(null);
+  const [selectedLivePlayerStats, setSelectedLivePlayerStats] = useState<{
+    name: string;
+    average: number;
+    bestVisit: number;
+    misses: number;
+    checkouts: number;
+  } | null>(null);
   const [connectedNames, setConnectedNames] = useState<string[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
   const [joinOpen, setJoinOpen] = useState(false);
@@ -1035,8 +1041,23 @@ export default function LivePage() {
     () => liveState?.players.findIndex((player) => player.profileId === session?.user.id) ?? -1,
     [liveState, session?.user.id],
   );
+  const livePlayerStats = useMemo(() => (liveState ? getLivePlayerStats(liveState) : []), [liveState]);
   const openPresencePlayer = useCallback(
     (playerName: string, profileId: string | null) => {
+      if (profileId && profileId === session?.user.id) {
+        const match = livePlayerStats.find((entry) => entry.name === playerName);
+        if (match) {
+          setSelectedLivePlayerStats({
+            name: match.name,
+            average: match.average,
+            bestVisit: match.bestVisit,
+            misses: match.busts,
+            checkouts: match.checkouts,
+          });
+          return;
+        }
+      }
+
       const match =
         (profileId ? playerPresence.find((entry) => entry.id === profileId) : null) ??
         playerPresence.find((entry) => entry.displayName.trim().toLowerCase() === playerName.trim().toLowerCase()) ??
@@ -1049,7 +1070,7 @@ export default function LivePage() {
 
       setSelectedPresencePlayer(match);
     },
-    [playerPresence],
+    [livePlayerStats, playerPresence, session?.user.id],
   );
   const activeDeviceLock = useMemo(() => {
     if (!liveState || !session) {
@@ -1342,7 +1363,6 @@ export default function LivePage() {
 
   const historyHeading = "Historie";
   const boardHeading = "";
-  const livePlayerStats = useMemo(() => (liveState ? getLivePlayerStats(liveState) : []), [liveState]);
   const cloudSyncPending = Boolean(
     liveState &&
       liveState.matchWinner !== null &&
@@ -1352,10 +1372,6 @@ export default function LivePage() {
           player.profileId &&
           !(liveState.cloudSync.persistedOwnerIds ?? []).includes(player.profileId),
       ),
-  );
-  const currentLiveStats = useMemo(
-    () => (currentPlayer ? livePlayerStats.find((entry) => entry.name === currentPlayer.name) ?? null : null),
-    [currentPlayer, livePlayerStats],
   );
   const liveCelebration = useMemo(() => {
     if (!liveState || liveState.legWinner === null || liveState.matchWinner !== null) {
@@ -1572,14 +1588,6 @@ export default function LivePage() {
                       nextStep={liveCelebration.nextStep}
                     />
                   ) : null}
-                  <LiveStatsPanel
-                    currentLiveStats={currentLiveStats}
-                    livePlayerStats={livePlayerStats}
-                    currentPlayerName={currentPlayer?.name ?? null}
-                    title={currentPlayer?.name ?? "Stats"}
-                    subtitle=""
-                  />
-
                   {liveState.matchWinner !== null ? (
                     <LiveMatchSummaryPanel
                       liveState={liveState}
@@ -1634,6 +1642,43 @@ export default function LivePage() {
         selectedPlayer={selectedPresencePlayer}
         onClose={() => setSelectedPresencePlayer(null)}
       />
+      {selectedLivePlayerStats ? (
+        <div className="fixed inset-0 z-[120] flex items-end justify-center bg-black/65 p-3 sm:items-center sm:p-6">
+          <div className="w-full max-w-xl rounded-[1.75rem] border border-white/10 bg-[#0f172a] p-4 shadow-2xl shadow-black/40">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-2xl font-semibold text-white">{selectedLivePlayerStats.name}</h2>
+                <p className="mt-1 text-sm text-stone-400">Aktuelle Live-Statline</p>
+              </div>
+              <button
+                onClick={() => setSelectedLivePlayerStats(null)}
+                className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-semibold text-white"
+              >
+                Schliessen
+              </button>
+            </div>
+
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                <p className="text-xs text-stone-400">Average</p>
+                <p className="mt-1 text-2xl font-semibold text-white">{selectedLivePlayerStats.average.toFixed(1)}</p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                <p className="text-xs text-stone-400">Best Visit</p>
+                <p className="mt-1 text-2xl font-semibold text-white">{selectedLivePlayerStats.bestVisit}</p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                <p className="text-xs text-stone-400">Misses</p>
+                <p className="mt-1 text-2xl font-semibold text-white">{selectedLivePlayerStats.misses}</p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                <p className="text-xs text-stone-400">Checkouts</p>
+                <p className="mt-1 text-2xl font-semibold text-white">{selectedLivePlayerStats.checkouts}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
       {session ? <MobileAppNav /> : null}
     </main>
   );

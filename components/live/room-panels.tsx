@@ -435,7 +435,7 @@ export function LiveRoomStatusPanel({
 
       <div className="mt-3 grid gap-2 sm:grid-cols-[1.2fr_0.8fr]">
         <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
-          <p className="text-[10px] uppercase tracking-[0.18em] text-stone-400">Gerade online im Raum</p>
+          <p className="text-[10px] uppercase tracking-[0.18em] text-stone-400">Spieler anwesend</p>
           <p className="mt-2 text-sm text-white">
             {connectedNames.length > 0 ? connectedNames.join(", ") : "Noch keine aktiven Verbindungen"}
           </p>
@@ -559,7 +559,10 @@ export function LiveRoomStatusPanel({
               <div key={event.id} className="rounded-2xl border border-white/10 bg-black/20 px-3 py-2">
                 <p className="text-sm text-white">{event.text}</p>
                 <p className="mt-1 text-[11px] text-stone-400">
-                  {new Date(event.createdAt).toLocaleTimeString("de-DE", {
+                  {new Date(event.createdAt).toLocaleString("de-DE", {
+                    day: "2-digit",
+                    month: "2-digit",
+                    year: "2-digit",
                     hour: "2-digit",
                     minute: "2-digit",
                   })}

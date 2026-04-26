@@ -2757,6 +2757,9 @@ function resetLegBoards(nextPlayers: Player[]) {
             }}
             onRefreshCloud={() => void refreshCloudData(session, { includeHistory: true })}
             onLogout={() => void handleSignOut()}
+            onOpenLiveRoom={(roomCode) => {
+              window.location.href = `/live?room=${encodeURIComponent(roomCode)}`;
+            }}
             canInstallApp={Boolean(installPromptEvent)}
             isInstalledApp={isInstalledApp}
             installBusy={installBusy}

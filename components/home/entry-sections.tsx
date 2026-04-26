@@ -29,6 +29,10 @@ type ActiveLiveRoom = {
   finish_mode: "single" | "double" | "master";
   current_player_name: string;
   is_user_turn?: boolean;
+  players: Array<{
+    name: string;
+    is_active: boolean;
+  }>;
 };
 
 const milestoneToneClasses: Record<string, string> = {
@@ -151,6 +155,7 @@ export function SignedInOverviewSection({
   onStartTraining,
   onRefreshCloud,
   onLogout,
+  onOpenLiveRoom,
   canInstallApp,
   isInstalledApp,
   installBusy,
@@ -174,6 +179,7 @@ export function SignedInOverviewSection({
   onStartTraining: () => void;
   onRefreshCloud: () => void;
   onLogout: () => void;
+  onOpenLiveRoom: (roomCode: string) => void;
   canInstallApp: boolean;
   isInstalledApp: boolean;
   installBusy: boolean;
@@ -257,9 +263,9 @@ export function SignedInOverviewSection({
         {activeLiveRooms.length > 0 ? (
           <div className="space-y-2">
             {activeLiveRooms.map((room) => (
-              <Link
+              <button
                 key={`active-room-${room.room_code}`}
-                href={`/live?room=${encodeURIComponent(room.room_code)}`}
+                onClick={() => onOpenLiveRoom(room.room_code)}
                 className={`block rounded-[1.35rem] border p-3 transition ${
                   room.is_user_turn
                     ? "border-emerald-300/35 bg-emerald-400/12 shadow-[0_0_24px_rgba(74,222,128,0.16)]"
@@ -269,10 +275,24 @@ export function SignedInOverviewSection({
                 <p className="truncate text-sm font-semibold text-white">
                   {room.room_code} - {room.mode}, {getFinishModeLabel(room.finish_mode)}
                 </p>
-                <p className={`mt-1 truncate text-xs ${room.is_user_turn ? "text-emerald-100" : "text-stone-400"}`}>
-                  {room.is_user_turn ? "Du bist dran." : `${room.current_player_name} ist am Zug.`}
-                </p>
-              </Link>
+                <div className={`mt-1 flex items-center gap-2 overflow-hidden text-xs ${room.is_user_turn ? "text-emerald-100" : "text-stone-400"}`}>
+                  <span className="shrink-0">{room.is_user_turn ? "Du bist dran." : `${room.current_player_name} ist am Zug.`}</span>
+                  <div className="min-w-0 flex items-center gap-2 overflow-hidden">
+                    {room.players.map((player) => (
+                      <div key={`${room.room_code}-${player.name}`} className="flex min-w-0 items-center gap-1">
+                        <span
+                          className={`h-2.5 w-2.5 shrink-0 rounded-full ${
+                            player.is_active
+                              ? "bg-emerald-300 shadow-[0_0_12px_rgba(110,231,183,0.75)]"
+                              : "bg-stone-600"
+                          }`}
+                        />
+                        <span className="truncate">{player.name}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </button>
             ))}
           </div>
         ) : null}
