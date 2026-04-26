@@ -169,6 +169,29 @@ type CloudPlayersResponse = {
   players?: CloudPlayerPresence[];
 };
 
+type ActiveLiveRoom = {
+  room_code: string;
+  owner_id: string;
+  host_name: string;
+  mode: 301 | 501;
+  finish_mode: FinishMode;
+  joined_players: number;
+  max_players: number;
+  status_text: string;
+  current_player_name: string;
+  created_at: string;
+  players: Array<{
+    name: string;
+    is_active: boolean;
+  }>;
+  is_user_turn?: boolean;
+};
+
+type ActiveLiveRoomsResponse = {
+  error?: string;
+  rooms?: ActiveLiveRoom[];
+};
+
 type CloudRecentMilestone = {
   key: string;
   title: string;
@@ -1096,6 +1119,7 @@ export default function Page() {
   const [cloudLoading, setCloudLoading] = useState(false);
   const [cloudStats, setCloudStats] = useState<CloudDashboardStats | null>(null);
   const [playerPresence, setPlayerPresence] = useState<CloudPlayerPresence[]>([]);
+  const [activeLiveRooms, setActiveLiveRooms] = useState<ActiveLiveRoom[]>([]);
   const [selectedPresencePlayer, setSelectedPresencePlayer] = useState<PlayerPresenceSummary | null>(null);
   const [recentMilestones, setRecentMilestones] = useState<CloudRecentMilestone[]>([]);
   const [, setRecentTrainingSessions] = useState<TrainingCloudRow[]>([]);
@@ -1706,14 +1730,42 @@ export default function Page() {
     setPlayerPresence(result.players ?? []);
   }, []);
 
+  const loadActiveLiveRooms = useCallback(async (nextSession: Session) => {
+    if (!supabase) {
+      return;
+    }
+
+    const {
+      data: { session: freshSession },
+    } = await supabase.auth.getSession();
+
+    const accessToken = freshSession?.access_token ?? nextSession.access_token;
+    if (!accessToken) {
+      return;
+    }
+
+    const response = await fetch("/api/live?mine=1", {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    const result = (await response.json()) as ActiveLiveRoomsResponse;
+    if (!response.ok || result.error) {
+      return;
+    }
+
+    setActiveLiveRooms(result.rooms ?? []);
+  }, []);
+
   const refreshCloudData = useCallback(
     async (nextSession: Session, options?: { includeHistory?: boolean }) => {
       if (options?.includeHistory) {
         await loadCloudMatches(nextSession);
       }
-      await Promise.all([loadCloudDashboard(nextSession), loadPlayerPresence(nextSession)]);
+      await Promise.all([loadCloudDashboard(nextSession), loadPlayerPresence(nextSession), loadActiveLiveRooms(nextSession)]);
     },
-    [loadCloudDashboard, loadCloudMatches, loadPlayerPresence],
+    [loadActiveLiveRooms, loadCloudDashboard, loadCloudMatches, loadPlayerPresence],
   );
 
   async function saveProfileDraft() {
@@ -1780,6 +1832,7 @@ export default function Page() {
         setProfileDraft("");
         setCloudStats(null);
         setPlayerPresence([]);
+        setActiveLiveRooms([]);
         setRecentMilestones([]);
         setCloudSettingsReady(false);
         setSelectedFlow("overview");
@@ -1790,6 +1843,32 @@ export default function Page() {
       subscription.unsubscribe();
     };
   }, [loadCloudProfile, refreshCloudData]);
+
+  useEffect(() => {
+    if (!session || selectedFlow !== "overview") {
+      return;
+    }
+
+    void loadActiveLiveRooms(session);
+
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        void loadActiveLiveRooms(session);
+      }
+    }, 15_000);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void loadActiveLiveRooms(session);
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [loadActiveLiveRooms, selectedFlow, session]);
 
   useEffect(() => {
     if (!session || !supabase) {
@@ -2662,6 +2741,7 @@ function resetLegBoards(nextPlayers: Player[]) {
             cloudMessage={cloudMessage}
             cloudLoading={cloudLoading}
             playerPresence={playerPresence}
+            activeLiveRooms={activeLiveRooms}
             recentMilestones={recentMilestones}
             onProfileDraftChange={setProfileDraft}
             onSaveProfile={() => void saveProfileDraft()}

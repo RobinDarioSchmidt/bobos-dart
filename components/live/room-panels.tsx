@@ -171,6 +171,12 @@ export function LiveRoomJoinPanel({
     joined_players: number;
     max_players: number;
     status_text: string;
+    current_player_name: string;
+    created_at: string;
+    players: Array<{
+      name: string;
+      is_active: boolean;
+    }>;
   }>;
   loading: boolean;
   message: string;
@@ -184,15 +190,41 @@ export function LiveRoomJoinPanel({
   onLeaveRoom: () => void;
   onCloseRoom: () => void;
 }) {
+  function getFinishModeLabel(value: LiveFinishMode) {
+    if (value === "single") {
+      return "Straight Out";
+    }
+
+    if (value === "master") {
+      return "Masters Out";
+    }
+
+    return "Double Out";
+  }
+
+  function formatRoomCreatedAt(value: string) {
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+      return value;
+    }
+
+    return new Intl.DateTimeFormat("de-DE", {
+      dateStyle: "short",
+      timeStyle: "short",
+    }).format(parsed);
+  }
+
   return (
     <div className="min-w-0 overflow-hidden rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur">
       <button onClick={onToggle} className="flex w-full min-w-0 items-center justify-between gap-3 text-left">
         <h2 className="min-w-0 text-xl font-semibold text-white">Raum beitreten</h2>
-        <span className="shrink-0 text-sm text-stone-400">{joinOpen ? "Einklappen" : "Ausklappen"}</span>
+        <span className="shrink-0 rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs font-semibold text-stone-300">
+          {joinOpen ? "Zu" : "Auf"}
+        </span>
       </button>
       {joinOpen ? (
         <div className="mt-4 space-y-4">
-          <div className="grid gap-2 min-[390px]:grid-cols-[1fr_auto]">
+          <div className="grid grid-cols-[1fr_auto] gap-2">
             <input
               value={roomCodeInput}
               onChange={(event) => onRoomCodeChange(event.target.value.toUpperCase())}
@@ -202,7 +234,7 @@ export function LiveRoomJoinPanel({
             <button
               onClick={onJoin}
               disabled={loading}
-              className="rounded-2xl bg-emerald-400 px-4 py-3 text-sm font-semibold text-black disabled:opacity-50"
+              className="rounded-2xl bg-emerald-400 px-3 py-3 text-sm font-semibold text-black disabled:opacity-50"
             >
               Beitreten
             </button>
@@ -219,17 +251,37 @@ export function LiveRoomJoinPanel({
                   className="w-full rounded-2xl border border-white/10 bg-black/20 p-3 text-left transition hover:bg-white/10 disabled:opacity-50"
                 >
                   <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="font-semibold text-white">{room.host_name}</p>
-                      <p className="mt-1 text-xs text-stone-400">
-                        Raum {room.room_code} - {room.mode} - {room.finish_mode === "single" ? "Single Out" : room.finish_mode === "double" ? "Double Out" : "Masters Out"}
-                      </p>
-                    </div>
+                    <p className="min-w-0 truncate font-semibold text-white">
+                      {room.room_code} - {room.mode}, {getFinishModeLabel(room.finish_mode)}
+                    </p>
                     <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-stone-200">
                       {room.joined_players}/{room.max_players}
                     </div>
                   </div>
-                  <p className="mt-2 text-sm text-stone-300">{room.status_text}</p>
+                  <p className="mt-1 truncate text-sm text-stone-300">
+                    Host {room.host_name} - {room.current_player_name} ist am Zug.
+                  </p>
+                  <p className="mt-1 truncate text-xs text-stone-400">
+                    Erstellt von {room.host_name}: {formatRoomCreatedAt(room.created_at)}
+                  </p>
+                  {room.players.filter((player) => player.name !== room.host_name).length > 0 ? (
+                    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-stone-300">
+                      {room.players
+                        .filter((player) => player.name !== room.host_name)
+                        .map((player) => (
+                          <div key={`${room.room_code}-${player.name}`} className="flex items-center gap-1.5">
+                            <span
+                              className={`h-2.5 w-2.5 rounded-full ${
+                                player.is_active
+                                  ? "bg-emerald-300 shadow-[0_0_12px_rgba(110,231,183,0.75)]"
+                                  : "bg-stone-600"
+                              }`}
+                            />
+                            <span>{player.name}</span>
+                          </div>
+                        ))}
+                    </div>
+                  ) : null}
                 </button>
               ))}
             </div>

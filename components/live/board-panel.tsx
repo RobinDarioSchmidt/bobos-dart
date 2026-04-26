@@ -806,6 +806,7 @@ export function LiveBoardPanel({
   canControlLegTransition,
   checkoutHints,
   currentPlayerName,
+  connectedNames = [],
   onPlayerSelect,
   onSegmentSelect,
   onMiss,
@@ -829,6 +830,7 @@ export function LiveBoardPanel({
   canControlLegTransition: boolean;
   checkoutHints: string[];
   currentPlayerName: string | null;
+  connectedNames?: string[];
   onPlayerSelect?: (playerName: string, profileId: string | null) => void;
   onSegmentSelect: (segment: LiveBoardSegment) => void;
   onMiss: () => void;
@@ -864,6 +866,9 @@ export function LiveBoardPanel({
           {visiblePlayers.map(({ player, index: originalIndex }) => {
             const isActive = currentPlayerIndex === originalIndex && liveState.matchWinner === null;
             const isMe = player.profileId === currentUserId;
+            const isOnline = connectedNames.some(
+              (name) => name.trim().toLowerCase() === player.name.trim().toLowerCase(),
+            );
 
             return (
               <div
@@ -875,7 +880,14 @@ export function LiveBoardPanel({
               >
                 <div className="flex items-center justify-between gap-2">
                   <div className="min-w-0">
-                    <p className="truncate text-xs font-semibold text-white sm:text-sm">{player.name}</p>
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`h-2.5 w-2.5 shrink-0 rounded-full ${
+                          isOnline ? "bg-emerald-300 shadow-[0_0_12px_rgba(110,231,183,0.75)]" : "bg-stone-600"
+                        }`}
+                      />
+                      <p className="truncate text-xs font-semibold text-white sm:text-sm">{player.name}</p>
+                    </div>
                     {!player.entered ? (
                       <p className="mt-0.5 truncate text-[9px] uppercase tracking-[0.14em] text-amber-100">
                         {liveState.entryMode === "double" ? "Double In offen" : "Masters In offen"}

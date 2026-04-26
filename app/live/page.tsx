@@ -50,6 +50,12 @@ type OpenLiveRoom = {
   joined_players: number;
   max_players: number;
   status_text: string;
+  current_player_name: string;
+  created_at: string;
+  players: Array<{
+    name: string;
+    is_active: boolean;
+  }>;
 };
 
 type CloudPlayersResponse = {
@@ -241,8 +247,8 @@ export default function LivePage() {
   const [playerPresence, setPlayerPresence] = useState<PlayerPresenceSummary[]>([]);
   const [selectedPresencePlayer, setSelectedPresencePlayer] = useState<PlayerPresenceSummary | null>(null);
   const [connectedNames, setConnectedNames] = useState<string[]>([]);
-  const [createOpen, setCreateOpen] = useState(true);
-  const [joinOpen, setJoinOpen] = useState(true);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [joinOpen, setJoinOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [audioMode, setAudioMode] = useState<LiveAudioMode>("visits");
   const [deviceId, setDeviceId] = useState("");
@@ -1478,7 +1484,15 @@ export default function LivePage() {
                   legsToWin={legsToWin}
                   setsToWin={setsToWin}
                   loading={loading}
-                  onToggle={() => setCreateOpen((prev) => !prev)}
+                  onToggle={() => {
+                    setCreateOpen((prev) => {
+                      const next = !prev;
+                      if (next) {
+                        setJoinOpen(false);
+                      }
+                      return next;
+                    });
+                  }}
                   onModeChange={setMode}
                   onEntryModeChange={setEntryMode}
                   onFinishModeChange={setFinishMode}
@@ -1498,7 +1512,15 @@ export default function LivePage() {
                   openRooms={openRooms.filter((room) => room.room_code !== liveRoomCode)}
                   loading={loading}
                   message={message}
-                  onToggle={() => setJoinOpen((prev) => !prev)}
+                  onToggle={() => {
+                    setJoinOpen((prev) => {
+                      const next = !prev;
+                      if (next) {
+                        setCreateOpen(false);
+                      }
+                      return next;
+                    });
+                  }}
                   onRoomCodeChange={setRoomCodeInput}
                   onJoin={() => void joinRoom()}
                   onJoinSuggestedRoom={(roomCode) => {
@@ -1531,6 +1553,7 @@ export default function LivePage() {
                     loading={loading}
                     boardMarkers={boardMarkers}
                     pendingLabels={pendingLabels}
+                    connectedNames={connectedNames}
                     canControlLegTransition={canControlLegTransition}
                     checkoutHints={checkoutHints}
                     currentPlayerName={currentPlayer?.name ?? null}

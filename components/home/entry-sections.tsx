@@ -23,6 +23,14 @@ type RecentMilestone = {
   tone: string;
 };
 
+type ActiveLiveRoom = {
+  room_code: string;
+  mode: 301 | 501;
+  finish_mode: "single" | "double" | "master";
+  current_player_name: string;
+  is_user_turn?: boolean;
+};
+
 const milestoneToneClasses: Record<string, string> = {
   amber: "border-amber-300/25 bg-amber-300/10 text-amber-100",
   emerald: "border-emerald-300/25 bg-emerald-400/10 text-emerald-100",
@@ -135,6 +143,7 @@ export function SignedInOverviewSection({
   cloudMessage,
   cloudLoading,
   playerPresence,
+  activeLiveRooms,
   recentMilestones,
   onProfileDraftChange,
   onSaveProfile,
@@ -157,6 +166,7 @@ export function SignedInOverviewSection({
   cloudMessage: string;
   cloudLoading: boolean;
   playerPresence: PlayerPresence[];
+  activeLiveRooms: ActiveLiveRoom[];
   recentMilestones: RecentMilestone[];
   onProfileDraftChange: (value: string) => void;
   onSaveProfile: () => void;
@@ -200,6 +210,18 @@ export function SignedInOverviewSection({
       ]
     : [];
 
+  function getFinishModeLabel(value: ActiveLiveRoom["finish_mode"]) {
+    if (value === "single") {
+      return "Straight Out";
+    }
+
+    if (value === "master") {
+      return "Masters Out";
+    }
+
+    return "Double Out";
+  }
+
   return (
     <section className="overflow-hidden border-y border-white/10 bg-white/5 shadow-2xl shadow-black/30 backdrop-blur sm:rounded-[2rem] sm:border">
       <div className="space-y-5 px-3 py-4 sm:p-6 lg:p-8">
@@ -231,6 +253,29 @@ export function SignedInOverviewSection({
             </button>
           </div>
         </div>
+
+        {activeLiveRooms.length > 0 ? (
+          <div className="space-y-2">
+            {activeLiveRooms.map((room) => (
+              <Link
+                key={`active-room-${room.room_code}`}
+                href={`/live?room=${encodeURIComponent(room.room_code)}`}
+                className={`block rounded-[1.35rem] border p-3 transition ${
+                  room.is_user_turn
+                    ? "border-emerald-300/35 bg-emerald-400/12 shadow-[0_0_24px_rgba(74,222,128,0.16)]"
+                    : "border-white/10 bg-black/20 hover:bg-white/5"
+                }`}
+              >
+                <p className="truncate text-sm font-semibold text-white">
+                  {room.room_code} - {room.mode}, {getFinishModeLabel(room.finish_mode)}
+                </p>
+                <p className={`mt-1 truncate text-xs ${room.is_user_turn ? "text-emerald-100" : "text-stone-400"}`}>
+                  {room.is_user_turn ? "Du bist dran." : `${room.current_player_name} ist am Zug.`}
+                </p>
+              </Link>
+            ))}
+          </div>
+        ) : null}
 
         <div className="grid grid-cols-2 gap-3 sm:gap-4">
           <Link

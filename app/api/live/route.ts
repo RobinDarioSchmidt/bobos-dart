@@ -25,7 +25,13 @@ type LiveMatchRow = {
   owner_id: string;
   room_code: string;
   state: LiveMatchState;
+  created_at?: string;
   updated_at?: string;
+};
+
+type LiveRoomPlayerEntry = {
+  name: string;
+  is_active: boolean;
 };
 
 type LiveRoomListEntry = {
@@ -37,6 +43,10 @@ type LiveRoomListEntry = {
   joined_players: number;
   max_players: number;
   status_text: string;
+  current_player_name: string;
+  created_at: string;
+  players: LiveRoomPlayerEntry[];
+  is_user_turn: boolean;
 };
 
 type CloudMatchInsert = {
@@ -117,6 +127,48 @@ function getPersistedOwnerIds(state: LiveMatchState) {
 
 function getActiveDeviceLocks(state: LiveMatchState) {
   return (state.cloudSync.deviceLocks ?? []).filter((lock) => isLiveDeviceLockActive(lock));
+}
+
+function getCurrentLiveTurnIndex(state: LiveMatchState) {
+  if (state.bullOff.enabled && !state.bullOff.completed) {
+    return state.bullOff.currentPlayerIndex ?? state.activePlayer;
+  }
+
+  return state.activePlayer;
+}
+
+function toLiveRoomListEntry(entry: LiveMatchRow, userId?: string) {
+  const state = normalizeLiveState(entry.state);
+  if (state.matchWinner !== null) {
+    return null;
+  }
+
+  const joinedPlayers = state.players.filter((player) => player.joined);
+  if (joinedPlayers.length === 0) {
+    return null;
+  }
+
+  const activeLockIds = new Set(getActiveDeviceLocks(state).map((lock) => lock.profileId));
+  const currentPlayerIndex = getCurrentLiveTurnIndex(state);
+  const currentPlayerName = state.players[currentPlayerIndex]?.name ?? joinedPlayers[0]?.name ?? "Spieler";
+
+  return {
+    room_code: entry.room_code,
+    owner_id: entry.owner_id,
+    host_name: state.players[0]?.name ?? "Host",
+    mode: state.mode,
+    finish_mode: state.finishMode,
+    joined_players: joinedPlayers.length,
+    max_players: state.maxPlayers,
+    status_text: state.statusText,
+    current_player_name: currentPlayerName,
+    created_at: entry.created_at ?? entry.updated_at ?? new Date().toISOString(),
+    players: joinedPlayers.map((player) => ({
+      name: player.name,
+      is_active: Boolean(player.profileId && activeLockIds.has(player.profileId)),
+    })),
+    is_user_turn: Boolean(userId && state.players[currentPlayerIndex]?.profileId === userId),
+  } satisfies LiveRoomListEntry;
 }
 
 function getActiveDeviceLockForProfile(state: LiveMatchState, profileId: string) {
@@ -334,6 +386,7 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url);
   const roomCode = url.searchParams.get("roomCode");
+  const onlyMine = url.searchParams.get("mine") === "1";
   const { adminClient } = getSupabaseAdminClients();
 
   try {
@@ -348,7 +401,7 @@ export async function GET(request: Request) {
   if (!roomCode) {
     const { data, error } = await adminClient
       .from("live_matches")
-      .select("owner_id, room_code, state")
+      .select("owner_id, room_code, state, created_at, updated_at")
       .order("updated_at", { ascending: false });
 
     if (error) {
@@ -357,26 +410,19 @@ export async function GET(request: Request) {
 
     const rooms = ((data ?? []) as LiveMatchRow[])
       .map((entry) => {
-        const state = normalizeLiveState(entry.state);
-        if (state.matchWinner !== null) {
+        const room = toLiveRoomListEntry(entry, authResult.user.id);
+        if (!room) {
           return null;
         }
 
-        const joinedPlayers = state.players.filter((player) => player.joined);
-        if (joinedPlayers.length === 0 || joinedPlayers.length >= state.maxPlayers) {
-          return null;
+        if (onlyMine) {
+          const isParticipant = normalizeLiveState(entry.state).players.some(
+            (player) => player.joined && player.profileId === authResult.user.id,
+          );
+          return isParticipant ? room : null;
         }
 
-        return {
-          room_code: entry.room_code,
-          owner_id: entry.owner_id,
-          host_name: state.players[0]?.name ?? "Host",
-          mode: state.mode,
-          finish_mode: state.finishMode,
-          joined_players: joinedPlayers.length,
-          max_players: state.maxPlayers,
-          status_text: state.statusText,
-        } satisfies LiveRoomListEntry;
+        return room.joined_players >= room.max_players ? null : room;
       })
       .filter((entry): entry is LiveRoomListEntry => Boolean(entry));
 
