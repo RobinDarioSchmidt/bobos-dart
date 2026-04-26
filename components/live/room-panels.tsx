@@ -427,7 +427,7 @@ export function LiveRoomStatusPanel({
         ) : null}
       </div>
 
-      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+      <div className="mt-3 grid grid-cols-2 gap-2">
         <button
           onClick={onCopyRoomCode}
           className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white"
@@ -442,17 +442,17 @@ export function LiveRoomStatusPanel({
         </button>
       </div>
 
-      <div className="mt-2 grid gap-2 sm:grid-cols-2">
+      <div className="mt-2 grid grid-cols-1 gap-2">
         <button
           onClick={onReconnect}
           disabled={loading}
-          className="sm:col-span-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+          className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
         >
           Neu verbinden
         </button>
       </div>
 
-      <div className="mt-2 grid gap-2 sm:grid-cols-2">
+      <div className="mt-2 grid grid-cols-2 gap-2">
         {isRoomHost ? (
           <button
             onClick={onCloseRoom}
@@ -462,7 +462,7 @@ export function LiveRoomStatusPanel({
             Raum beenden
           </button>
         ) : (
-          <div className="hidden sm:block" />
+          <div />
         )}
         <button
           onClick={onLeaveRoom}

@@ -209,6 +209,12 @@ function getDeviceLabel() {
 }
 
 export default function LivePage() {
+  const initialRestoreTarget =
+    typeof window === "undefined"
+      ? ""
+      : new URLSearchParams(window.location.search).get("room")?.toUpperCase() ??
+        window.localStorage.getItem(LIVE_ROOM_STORAGE_KEY) ??
+        "";
   const [session, setSession] = useState<Session | null>(null);
   const [displayName, setDisplayName] = useState("");
   const [roomCodeInput, setRoomCodeInput] = useState(() => {
@@ -231,6 +237,7 @@ export default function LivePage() {
   const [maxPlayers] = useState(4);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [restoringRoom, setRestoringRoom] = useState(Boolean(initialRestoreTarget));
   const [playerPresence, setPlayerPresence] = useState<PlayerPresenceSummary[]>([]);
   const [selectedPresencePlayer, setSelectedPresencePlayer] = useState<PlayerPresenceSummary | null>(null);
   const [connectedNames, setConnectedNames] = useState<string[]>([]);
@@ -511,6 +518,7 @@ export default function LivePage() {
           saveRoomSnapshot(null);
           void loadOpenRooms();
         }
+        setRestoringRoom(false);
         return false;
       }
 
@@ -527,6 +535,7 @@ export default function LivePage() {
         state: normalizedState,
         savedAt: new Date().toISOString(),
       });
+      setRestoringRoom(false);
       void loadOpenRooms();
       return true;
     } catch {
@@ -535,6 +544,7 @@ export default function LivePage() {
       if (!options?.silent || roomFailureCountRef.current >= 2) {
         setMessage("Die Verbindung zum Online-Match ist gerade unterbrochen.");
       }
+      setRestoringRoom(false);
       return false;
     } finally {
       roomFetchInFlightRef.current = false;
@@ -639,8 +649,11 @@ export default function LivePage() {
       return;
     }
 
-    const restoredRoomCode = window.localStorage.getItem(LIVE_ROOM_STORAGE_KEY);
+    const queryRoomCode = new URLSearchParams(window.location.search).get("room")?.toUpperCase() ?? "";
+    const storedRoomCode = window.localStorage.getItem(LIVE_ROOM_STORAGE_KEY) ?? "";
+    const restoredRoomCode = queryRoomCode || storedRoomCode;
     if (!restoredRoomCode) {
+      setRestoringRoom(false);
       return;
     }
 
@@ -1430,7 +1443,11 @@ export default function LivePage() {
           </section>
         ) : (
           <>
-            {!liveState ? (
+            {!liveState && restoringRoom ? (
+              <section className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4 text-sm text-stone-300">
+                Letzter Raum wird wiederhergestellt...
+              </section>
+            ) : !liveState ? (
               <section className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
                 <LiveRoomCreatePanel
                   createOpen={createOpen}
