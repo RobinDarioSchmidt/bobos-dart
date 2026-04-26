@@ -274,6 +274,22 @@ export default function LivePage() {
     window.localStorage.setItem(LIVE_ROOM_SNAPSHOT_KEY, JSON.stringify(snapshot));
   }, []);
 
+  const syncRoomCodeInUrl = useCallback((roomCode: string | null) => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const url = new URL(window.location.href);
+    if (roomCode) {
+      url.searchParams.set("room", roomCode);
+    } else {
+      url.searchParams.delete("room");
+    }
+
+    const nextPath = `${url.pathname}${url.search}${url.hash}`;
+    window.history.replaceState(window.history.state, "", nextPath);
+  }, []);
+
   const restoreRoomSnapshot = useCallback((roomCode: string) => {
     if (typeof window === "undefined") {
       return null;
@@ -399,6 +415,10 @@ export default function LivePage() {
 
     window.localStorage.removeItem(LIVE_ROOM_STORAGE_KEY);
   }, [liveRoomCode]);
+
+  useEffect(() => {
+    syncRoomCodeInUrl(liveRoomCode || null);
+  }, [liveRoomCode, syncRoomCodeInUrl]);
 
   async function getAccessToken() {
     if (!supabase) {
