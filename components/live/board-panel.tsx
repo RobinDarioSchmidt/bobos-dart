@@ -284,14 +284,12 @@ function renderBoardMarkers(markers: LiveBoardMarker[]) {
 
 function LiveDartboard({
   onSegmentSelect,
-  onMiss,
   disabled,
   disabledLabel,
   markers,
   loading,
 }: {
   onSegmentSelect: (segment: LiveBoardSegment) => void;
-  onMiss: () => void;
   disabled: boolean;
   disabledLabel: string;
   markers: LiveBoardMarker[];
@@ -483,14 +481,7 @@ function LiveDartboard({
         disabled ? "opacity-45" : ""
       }`}
     >
-      <div className="mb-2 flex items-center justify-between gap-3 sm:mb-3">
-        <button
-          onClick={onMiss}
-          disabled={disabled || loading}
-          className="rounded-2xl border border-red-400/30 bg-red-400/10 px-4 py-2 text-sm font-semibold text-red-100 disabled:opacity-40"
-        >
-          Miss
-        </button>
+      <div className={`mb-2 items-center justify-end gap-3 sm:mb-3 ${touchMaskEnabled ? "hidden" : "flex"}`}>
         {hoveredSegment ? (
           <div className="min-h-[3.25rem] min-w-[8.5rem] rounded-2xl border border-amber-300/30 bg-amber-300/10 px-3 py-2 text-right">
             <p className="text-[10px] uppercase tracking-[0.22em] text-amber-100">Ziel</p>
@@ -874,7 +865,7 @@ export function LiveBoardPanel({
               <div
                 key={`${player.name}-${originalIndex}`}
                 onClick={() => onPlayerSelect?.(player.name, player.profileId)}
-                className={`rounded-[1.1rem] border p-2 ${
+                className={`rounded-[1.1rem] border px-2 py-1.5 ${
                   isActive ? "border-emerald-300/40 bg-emerald-300/10" : "border-white/10 bg-black/20"
                 } ${onPlayerSelect ? "cursor-pointer transition hover:bg-white/10" : ""}`}
               >
@@ -900,16 +891,16 @@ export function LiveBoardPanel({
                     </span>
                   ) : null}
                 </div>
-                <div className="mt-2 flex items-end justify-between gap-2">
-                  <p className="text-2xl font-semibold leading-none text-white sm:text-3xl">{player.score}</p>
+                <div className="mt-1.5 flex items-end justify-between gap-2">
+                  <p className="text-xl font-semibold leading-none text-white sm:text-2xl">{player.score}</p>
                   <div className="grid grid-cols-2 gap-1 text-[10px] text-stone-300">
-                    <div className="rounded-xl bg-white/5 px-2 py-1 text-center">
+                    <div className="rounded-xl bg-white/5 px-2 py-0.5 text-center">
                       <p className="text-stone-400">S</p>
-                      <p className="mt-0.5 text-sm font-semibold text-white">{player.sets}</p>
+                      <p className="text-sm font-semibold text-white">{player.sets}</p>
                     </div>
-                    <div className="rounded-xl bg-white/5 px-2 py-1 text-center">
+                    <div className="rounded-xl bg-white/5 px-2 py-0.5 text-center">
                       <p className="text-stone-400">L</p>
-                      <p className="mt-0.5 text-sm font-semibold text-white">{player.legs}</p>
+                      <p className="text-sm font-semibold text-white">{player.legs}</p>
                     </div>
                   </div>
                 </div>
@@ -922,7 +913,6 @@ export function LiveBoardPanel({
       <div className="mt-4 -mx-2 sm:mx-0">
         <LiveDartboard
           onSegmentSelect={onSegmentSelect}
-          onMiss={onMiss}
           disabled={!canSelectBoardInput || loading}
           disabledLabel={boardDisabledReason}
           markers={boardMarkers}
@@ -931,26 +921,20 @@ export function LiveBoardPanel({
       </div>
 
       <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4 mx-2 sm:mx-0">
-        <div className="flex flex-wrap gap-2">
-          {pendingLabels.length > 0 ? (
-            pendingLabels.map((label, index) => (
+        {pendingLabels.length > 0 ? (
+          <div className="flex flex-wrap gap-2">
+            {pendingLabels.map((label, index) => (
               <div
                 key={`${label}-${index}`}
                 className="rounded-full border border-amber-300/30 bg-amber-300/10 px-3 py-1 text-sm font-semibold text-amber-100"
               >
                 {label}
               </div>
-            ))
-          ) : (
-            <p className="text-sm text-stone-400">
-              {liveState.bullOff.enabled && !liveState.bullOff.completed
-                ? "Bull-Off wartet auf den nächsten Wurf."
-                : "Noch keine Darts geklickt."}
-            </p>
-          )}
-        </div>
-        {!liveState.bullOff.enabled || liveState.bullOff.completed ? (
-          <div className="mt-4 flex flex-wrap gap-2">
+            ))}
+          </div>
+        ) : null}
+        {!liveState.bullOff.enabled || liveState.bullOff.completed ? canPlayFromThisDevice ? (
+          <div className={`${pendingLabels.length > 0 ? "mt-4" : ""} flex flex-wrap gap-2`}>
             <button
               onClick={onRemoveLast}
               disabled={!canPlayFromThisDevice || pendingLabels.length === 0}
@@ -961,6 +945,17 @@ export function LiveBoardPanel({
               }`}
             >
               Korrektur
+            </button>
+            <button
+              onClick={onMiss}
+              disabled={!canPlayFromThisDevice || loading}
+              className={`rounded-2xl px-4 py-2 text-sm font-semibold disabled:opacity-40 ${
+                pendingLabels.length >= 3
+                  ? "bg-red-500 text-white"
+                  : "border border-white/10 bg-white/5 text-white"
+              }`}
+            >
+              Miss
             </button>
             <button
               onClick={onFinishVisit}
@@ -974,7 +969,7 @@ export function LiveBoardPanel({
               Visit loggen
             </button>
           </div>
-        ) : null}
+        ) : null : null}
 
         {liveState.legWinner !== null && liveState.matchWinner === null ? (
           <button

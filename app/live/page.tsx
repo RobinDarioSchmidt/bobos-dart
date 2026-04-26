@@ -1183,6 +1183,13 @@ export default function LivePage() {
   const canPlayFromThisDevice = isCurrentUsersTurn && hasDeviceControl;
   const canSelectBoardInput = canPlayFromThisDevice && !boardInputLockedByVisit;
   const isTurnHighlightActive = canPlayFromThisDevice;
+  const boardStatusText = !currentPlayer
+    ? null
+    : liveState?.bullOff.enabled && !liveState.bullOff.completed
+      ? `Aktuell: ${currentPlayer.name} wirft Bull-Off`
+      : pendingLabels.length >= 3
+        ? `Aktuell: ${currentPlayer.name} loggt den Visit`
+        : `Aktuell: ${currentPlayer.name} wirft den ${pendingLabels.length + 1}. Dart`;
 
   async function handleBoardSegment(segment: LiveBoardSegment) {
     if (!liveState) {
@@ -1562,7 +1569,7 @@ export default function LivePage() {
                     boardHeading={boardHeading}
                     currentVisitTotal={currentVisitTotal}
                     compactVisitText={compactVisitText}
-                    calloutText={liveState.lastCallout}
+                    calloutText={boardStatusText}
                     canPlayFromThisDevice={canPlayFromThisDevice}
                     canSelectBoardInput={canSelectBoardInput}
                     boardDisabledReason={boardDisabledReason}
