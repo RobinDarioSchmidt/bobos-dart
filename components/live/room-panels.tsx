@@ -1,5 +1,6 @@
 ﻿"use client";
 
+import { useState } from "react";
 import type { LiveAudioMode } from "@/lib/live-audio";
 import type { LiveEntryMode, LiveFinishMode, LiveMatchState } from "@/lib/live-match";
 
@@ -344,6 +345,9 @@ export function LiveRoomStatusPanel({
   onLeaveRoom: () => void;
   onCloseRoom: () => void;
 }) {
+  const [eventsOpen, setEventsOpen] = useState(false);
+  const previewEvents = events.slice(0, 4);
+
   return (
     <section className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur">
       <div className="flex items-start justify-between gap-3">
@@ -494,9 +498,12 @@ export function LiveRoomStatusPanel({
 
       {events.length > 0 ? (
         <div className="mt-3 rounded-2xl border border-white/10 bg-white/5 p-3">
-          <p className="text-[10px] uppercase tracking-[0.18em] text-stone-400">Raum Ereignisse</p>
-          <div className="mt-2 space-y-2">
-            {events.slice(0, 6).map((event) => (
+          <button onClick={() => setEventsOpen((prev) => !prev)} className="flex w-full items-center justify-between gap-3 text-left">
+            <p className="text-[10px] uppercase tracking-[0.18em] text-stone-400">Raum Ereignisse</p>
+            <span className="text-sm text-stone-400">{eventsOpen ? "Einklappen" : "Ausklappen"}</span>
+          </button>
+          <div className={`mt-2 space-y-2 ${eventsOpen ? "max-h-72 overflow-y-auto pr-1" : ""}`}>
+            {(eventsOpen ? events : previewEvents).map((event) => (
               <div key={event.id} className="rounded-2xl border border-white/10 bg-black/20 px-3 py-2">
                 <p className="text-sm text-white">{event.text}</p>
                 <p className="mt-1 text-[11px] text-stone-400">

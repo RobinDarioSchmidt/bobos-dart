@@ -14,6 +14,7 @@ import {
 } from "@/components/local/session-panels";
 import { SignedInOverviewSection, SignedOutLandingSection } from "@/components/home/entry-sections";
 import { MobileAppNav } from "@/components/mobile-app-nav";
+import { PlayerRivalryDialog, type PlayerPresenceSummary } from "@/components/player-rivalry-dialog";
 import { getCheckoutSuggestions } from "@/lib/checkout-hints";
 import type { LiveBoardMarker, LiveDart, LiveMatchState, LiveVisit } from "@/lib/live-match";
 import { supabase, supabaseEnabled } from "@/lib/supabase";
@@ -34,6 +35,7 @@ type Visit = {
   scoreAfter: number;
   bust: boolean;
   checkout: boolean;
+  createdAt?: string;
 };
 
 type Player = {
@@ -1094,6 +1096,7 @@ export default function Page() {
   const [cloudLoading, setCloudLoading] = useState(false);
   const [cloudStats, setCloudStats] = useState<CloudDashboardStats | null>(null);
   const [playerPresence, setPlayerPresence] = useState<CloudPlayerPresence[]>([]);
+  const [selectedPresencePlayer, setSelectedPresencePlayer] = useState<PlayerPresenceSummary | null>(null);
   const [recentMilestones, setRecentMilestones] = useState<CloudRecentMilestone[]>([]);
   const [, setRecentTrainingSessions] = useState<TrainingCloudRow[]>([]);
   const [trainingSession, setTrainingSession] = useState<TrainingSession>(() =>
@@ -1345,24 +1348,21 @@ export default function Page() {
   const localLiveHistory = useMemo<LiveVisit[]>(
     () =>
       players.flatMap((player, playerIndex) =>
-        player.visits.map((visit, visitIndex) => ({
-          playerIndex,
-          playerName: player.name,
-          total: visit.darts.reduce((sum, dart) => sum + dart, 0),
-          scoreBefore: visit.scoreBefore,
-          scoreAfter: visit.bust ? visit.scoreBefore : visit.scoreAfter,
-          bust: visit.bust,
-          checkout: visit.checkout,
-          result: visit.checkout ? "checkout" : visit.bust ? "bust" : "ok",
-          darts: visit.labels,
-          dartDetails: visit.labels.map((label, dartIndex) => {
-            const parsed = parseThrowLabel(label, visit.darts[dartIndex] ?? 0);
-            return {
-              label: parsed.label,
-              score: parsed.score,
-              number: parsed.baseValue,
-              multiplier: (parsed.ring === "miss" ? 0 : parsed.multiplier) as 0 | 1 | 2 | 3,
-              ring:
+        player.visits.map((visit, visitIndex) => {
+          const result: LiveVisit["result"] = visit.checkout ? "checkout" : visit.bust ? "bust" : "ok";
+          return {
+            playerIndex,
+            playerName: player.name,
+            total: visit.darts.reduce((sum, dart) => sum + dart, 0),
+            scoreBefore: visit.scoreBefore,
+            scoreAfter: visit.bust ? visit.scoreBefore : visit.scoreAfter,
+            bust: visit.bust,
+            checkout: visit.checkout,
+            result,
+            darts: visit.labels,
+            dartDetails: visit.labels.map((label, dartIndex) => {
+              const parsed = parseThrowLabel(label, visit.darts[dartIndex] ?? 0);
+              const ring: LiveDart["ring"] =
                 parsed.ring === "double"
                   ? "double"
                   : parsed.ring === "triple"
@@ -1373,14 +1373,21 @@ export default function Page() {
                         ? "bull"
                         : parsed.ring === "miss"
                           ? "miss"
-                          : "single-outer",
-              marker: visit.markers[dartIndex] ?? parsed.marker,
-            };
-          }),
-          note: visit.checkout ? "Checkout" : visit.bust ? "Miss" : "Visit",
-          createdAt: new Date(Date.UTC(2024, 0, 1, 0, playerIndex, visitIndex)).toISOString(),
-        })),
-      ),
+                          : "single-outer";
+              return {
+                label: parsed.label,
+                score: parsed.score,
+                number: parsed.baseValue,
+                multiplier: (parsed.ring === "miss" ? 0 : parsed.multiplier) as 0 | 1 | 2 | 3,
+                ring,
+                marker: visit.markers[dartIndex] ?? parsed.marker,
+              };
+            }),
+            note: visit.checkout ? "Checkout" : visit.bust ? "Miss" : "Visit",
+            createdAt: visit.createdAt ?? new Date(Date.UTC(2024, 0, 1, 0, playerIndex, visitIndex)).toISOString(),
+          };
+        }),
+      ).sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()),
     [players],
   );
   const localLiveState = useMemo<LiveMatchState>(
@@ -1464,6 +1471,23 @@ export default function Page() {
       nextStep: setWon ? "Naechster Satz wartet" : "Naechstes Leg wartet",
     };
   }, [legWinner, matchWinner, players]);
+
+  const openPresencePlayer = useCallback(
+    (playerName: string, profileId: string | null) => {
+      const match =
+        (profileId ? playerPresence.find((entry) => entry.id === profileId) : null) ??
+        playerPresence.find((entry) => entry.displayName.trim().toLowerCase() === playerName.trim().toLowerCase()) ??
+        null;
+
+      if (!match) {
+        setCloudMessage("Fuer diesen Spieler gibt es noch keine Cloud-Rivalitaet.");
+        return;
+      }
+
+      setSelectedPresencePlayer(match);
+    },
+    [playerPresence],
+  );
 
   const ensureProfile = useCallback(async (nextSession: Session) => {
     if (!supabase || !nextSession.user.email) {
@@ -2252,6 +2276,7 @@ function resetLegBoards(nextPlayers: Player[]) {
       scoreAfter: bust ? player.score : remaining,
       bust,
       checkout: !bust && checkout,
+      createdAt: new Date().toISOString(),
     };
 
     player.visits = [...player.visits, visit];
@@ -2695,7 +2720,7 @@ function resetLegBoards(nextPlayers: Player[]) {
                   ) : null}
                   {localMatchStarted ? (
                     <LiveHistoryPanel
-                      heading={`Live Historie${boardPlayer ? ` - ${boardPlayer.name} ist dran` : ""}`}
+                      heading="Historie"
                       historyOpen={localHistoryOpen}
                       history={localLiveHistory}
                       onToggle={() => setLocalHistoryOpen((prev) => !prev)}
@@ -2728,6 +2753,7 @@ function resetLegBoards(nextPlayers: Player[]) {
                       canControlLegTransition={legWinner !== null && matchWinner === null}
                       checkoutHints={checkoutHints}
                       currentPlayerName={boardPlayer.name}
+                      onPlayerSelect={openPresencePlayer}
                       onSegmentSelect={(segment: LiveBoardSegment) => {
                         if (localBullOff.enabled && !localBullOff.completed) {
                           registerLocalBullOffDart({
@@ -2808,7 +2834,7 @@ function resetLegBoards(nextPlayers: Player[]) {
                       currentLiveStats={localPlayerStats.find((entry) => entry.name === boardPlayer.name) ?? null}
                       livePlayerStats={localPlayerStats}
                       currentPlayerName={boardPlayer.name}
-                      title={`LIVE-STATS von ${boardPlayer.name}`}
+                      title={boardPlayer.name}
                       subtitle=""
                     />
                   ) : null}
@@ -2914,6 +2940,11 @@ function resetLegBoards(nextPlayers: Player[]) {
           </>
         )}
       </div>
+      <PlayerRivalryDialog
+        viewerName={profileName || profileDraft || session?.user.email?.split("@")[0] || "Du"}
+        selectedPlayer={selectedPresencePlayer}
+        onClose={() => setSelectedPresencePlayer(null)}
+      />
       {session ? <MobileAppNav /> : null}
     </main>
   );

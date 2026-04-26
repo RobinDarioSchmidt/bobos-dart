@@ -11,6 +11,7 @@ import {
   LiveMatchSummaryPanel,
   LiveStatsPanel,
 } from "@/components/live/match-panels";
+import { PlayerRivalryDialog, type PlayerPresenceSummary } from "@/components/player-rivalry-dialog";
 import { LiveRoomCreatePanel, LiveRoomJoinPanel, LiveRoomStatusPanel } from "@/components/live/room-panels";
 import { MobileAppNav } from "@/components/mobile-app-nav";
 import {
@@ -49,6 +50,11 @@ type OpenLiveRoom = {
   joined_players: number;
   max_players: number;
   status_text: string;
+};
+
+type CloudPlayersResponse = {
+  error?: string;
+  players?: PlayerPresenceSummary[];
 };
 
 const LIVE_ROOM_STORAGE_KEY = "bobos-dart-live-room";
@@ -225,6 +231,8 @@ export default function LivePage() {
   const [maxPlayers] = useState(4);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [playerPresence, setPlayerPresence] = useState<PlayerPresenceSummary[]>([]);
+  const [selectedPresencePlayer, setSelectedPresencePlayer] = useState<PlayerPresenceSummary | null>(null);
   const [connectedNames, setConnectedNames] = useState<string[]>([]);
   const [createOpen, setCreateOpen] = useState(true);
   const [joinOpen, setJoinOpen] = useState(true);
@@ -434,6 +442,30 @@ export default function LivePage() {
     }
   }, []);
 
+  const loadCloudPlayers = useCallback(async () => {
+    const accessToken = await getAccessToken();
+    if (!accessToken) {
+      return false;
+    }
+
+    try {
+      const response = await fetch("/api/cloud/players", {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+      const result = (await response.json()) as CloudPlayersResponse;
+      if (!response.ok) {
+        return false;
+      }
+
+      setPlayerPresence(result.players ?? []);
+      return true;
+    } catch {
+      return false;
+    }
+  }, []);
+
   const fetchMatch = useCallback(async (roomCode: string, options?: { silent?: boolean }) => {
     if (roomFetchInFlightRef.current) {
       return false;
@@ -516,7 +548,8 @@ export default function LivePage() {
     }
 
     void loadOpenRooms();
-  }, [loadOpenRooms, session]);
+    void loadCloudPlayers();
+  }, [loadCloudPlayers, loadOpenRooms, session]);
 
   useEffect(() => {
     if (!session) {
@@ -936,7 +969,10 @@ export default function LivePage() {
     }
 
     setMessage("Online-Match wird neu verbunden...");
-    await fetchMatch(liveRoomCode);
+    const reconnected = await fetchMatch(liveRoomCode);
+    if (reconnected) {
+      setMessage("Online-Match ist wieder verbunden.");
+    }
   }
 
   const currentPlayerIndex = useMemo(() => {
@@ -959,6 +995,22 @@ export default function LivePage() {
   const currentUserSeat = useMemo(
     () => liveState?.players.findIndex((player) => player.profileId === session?.user.id) ?? -1,
     [liveState, session?.user.id],
+  );
+  const openPresencePlayer = useCallback(
+    (playerName: string, profileId: string | null) => {
+      const match =
+        (profileId ? playerPresence.find((entry) => entry.id === profileId) : null) ??
+        playerPresence.find((entry) => entry.displayName.trim().toLowerCase() === playerName.trim().toLowerCase()) ??
+        null;
+
+      if (!match) {
+        setMessage("Fuer diesen Spieler gibt es noch keine Cloud-Rivalitaet.");
+        return;
+      }
+
+      setSelectedPresencePlayer(match);
+    },
+    [playerPresence],
   );
   const activeDeviceLock = useMemo(() => {
     if (!liveState || !session) {
@@ -1043,24 +1095,24 @@ export default function LivePage() {
   const turnStatus = !liveState
     ? ""
     : currentUserSeat < 0
-      ? "Du bist nicht als Spieler eingetragen."
+      ? "Nicht als Spieler drin"
       : !hasDeviceControl
         ? deviceLockLabel
-          ? `${deviceLockLabel} steuert diesen Account gerade.`
-          : "Dieses Geraet ist gerade nur zum Zuschauen verbunden."
+          ? `${deviceLockLabel} steuert`
+          : "Nur Zuschauen"
       : isCurrentUsersTurn
         ? liveState.bullOff.enabled && !liveState.bullOff.completed
-          ? "Du wirfst fuer das Bull-Off."
+          ? "Du wirfst Bull-Off"
           : currentPlayer && !currentPlayer.entered
-            ? `Du suchst ${liveState.entryMode === "double" ? "Double In" : "Masters In"}.`
-          : "Du bist dran."
+            ? `Du suchst ${liveState.entryMode === "double" ? "Double In" : "Masters In"}`
+          : "Du bist dran"
         : currentPlayer
           ? liveState.bullOff.enabled && !liveState.bullOff.completed
-            ? `${currentPlayer.name} wirft gerade fuer das Bull-Off.`
+            ? `${currentPlayer.name} wirft Bull-Off`
             : !currentPlayer.entered
-              ? `${currentPlayer.name} sucht ${liveState.entryMode === "double" ? "Double In" : "Masters In"}.`
-            : `${currentPlayer.name} ist gerade am Zug.`
-          : "Warte auf den naechsten Spieler.";
+              ? `${currentPlayer.name} sucht ${liveState.entryMode === "double" ? "Double In" : "Masters In"}`
+            : `${currentPlayer.name} ist dran`
+          : "Warte auf den naechsten Spieler";
   const boardDisabledReason = loading
     ? "Synchronisiert..."
     : !hasDeviceControl
@@ -1445,6 +1497,7 @@ export default function LivePage() {
                     canControlLegTransition={canControlLegTransition}
                     checkoutHints={checkoutHints}
                     currentPlayerName={currentPlayer?.name ?? null}
+                    onPlayerSelect={openPresencePlayer}
                     onSegmentSelect={handleBoardSegment}
                     onMiss={() => void handleMiss()}
                     onRemoveLast={() => void handleRemoveLast()}
@@ -1516,6 +1569,11 @@ export default function LivePage() {
           </>
         )}
       </div>
+      <PlayerRivalryDialog
+        viewerName={displayName}
+        selectedPlayer={selectedPresencePlayer}
+        onClose={() => setSelectedPresencePlayer(null)}
+      />
       {session ? <MobileAppNav /> : null}
     </main>
   );

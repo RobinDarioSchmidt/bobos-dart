@@ -681,10 +681,12 @@ export async function POST(request: Request) {
       deviceLabel: body.deviceLabel,
       lastSeenAt: new Date().toISOString(),
     });
-    appendLiveEvent(stateToStore, {
-      type: "device",
-      text: `${body.deviceLabel} steuert jetzt ${currentState.players[currentUserSeat]?.name ?? "den Account"}.`,
-    });
+    if (!activeDeviceLock || activeDeviceLock.deviceId !== body.deviceId) {
+      appendLiveEvent(stateToStore, {
+        type: "device",
+        text: `${body.deviceLabel} hat die Steuerung fuer ${currentState.players[currentUserSeat]?.name ?? "den Account"} uebernommen.`,
+      });
+    }
     const bumpedState = bumpLiveRevision(stateToStore, currentState.revision);
 
     try {

@@ -806,6 +806,7 @@ export function LiveBoardPanel({
   canControlLegTransition,
   checkoutHints,
   currentPlayerName,
+  onPlayerSelect,
   onSegmentSelect,
   onMiss,
   onRemoveLast,
@@ -828,6 +829,7 @@ export function LiveBoardPanel({
   canControlLegTransition: boolean;
   checkoutHints: string[];
   currentPlayerName: string | null;
+  onPlayerSelect?: (playerName: string, profileId: string | null) => void;
   onSegmentSelect: (segment: LiveBoardSegment) => void;
   onMiss: () => void;
   onRemoveLast: () => void;
@@ -866,9 +868,10 @@ export function LiveBoardPanel({
             return (
               <div
                 key={`${player.name}-${originalIndex}`}
+                onClick={() => onPlayerSelect?.(player.name, player.profileId)}
                 className={`rounded-[1.1rem] border p-2 ${
                   isActive ? "border-emerald-300/40 bg-emerald-300/10" : "border-white/10 bg-black/20"
-                }`}
+                } ${onPlayerSelect ? "cursor-pointer transition hover:bg-white/10" : ""}`}
               >
                 <div className="flex items-center justify-between gap-2">
                   <div className="min-w-0">
