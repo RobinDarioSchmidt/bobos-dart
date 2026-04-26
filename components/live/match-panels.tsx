@@ -270,7 +270,11 @@ export function LiveStatsPanel({
     <section className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-[11px] uppercase tracking-[0.22em] text-stone-400">{title ?? "Live-Stats"}</p>
+          {title ? (
+            <h2 className="text-lg font-semibold text-white">{title}</h2>
+          ) : (
+            <p className="text-[11px] uppercase tracking-[0.22em] text-stone-400">Live-Stats</p>
+          )}
           {subtitle !== undefined ? (
             subtitle ? <p className="text-xs text-stone-400">{subtitle}</p> : null
           ) : (
@@ -389,16 +393,21 @@ export function LiveHistoryPanel({
   history: LiveMatchState["history"];
   onToggle: () => void;
 }) {
+  const previewHistory = history.slice(0, 2);
+
   return (
     <section className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur">
       <button onClick={onToggle} className="flex w-full items-center justify-between gap-3 text-left">
         <h2 className="text-lg font-semibold text-white">{heading}</h2>
         <span className="text-sm text-stone-400">{historyOpen ? "Einklappen" : "Ausklappen"}</span>
       </button>
-      {historyOpen ? (
+      {history.length === 0 ? (
+        <div className="mt-4 rounded-2xl border border-dashed border-white/10 bg-black/20 p-4 text-sm text-stone-400">
+          Noch keine Besuche im Raum.
+        </div>
+      ) : historyOpen ? (
         <div className="mt-4 space-y-2">
-          {history.length > 0 ? (
-            history.slice(0, 32).map((visit, index) => (
+          {history.slice(0, 32).map((visit, index) => (
               <div key={`${visit.createdAt}-${index}`} className={`rounded-2xl border p-3 text-sm ${resultStyles(visit.result)}`}>
                 <div className="flex items-start justify-between gap-3">
                   <p className="font-semibold">{visit.playerName}</p>
@@ -411,14 +420,24 @@ export function LiveHistoryPanel({
                   {`${visit.total} Punkte - ${visit.scoreBefore} -> ${visit.scoreAfter}`}
                 </p>
               </div>
-            ))
-          ) : (
-            <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-4 text-sm text-stone-400">
-              Noch keine Besuche im Raum.
-            </div>
-          )}
+            ))}
         </div>
-      ) : null}
+      ) : (
+        <div className="mt-4 space-y-2">
+          {previewHistory.map((visit, index) => (
+            <div key={`${visit.createdAt}-${index}`} className={`rounded-2xl border p-3 text-sm ${resultStyles(visit.result)}`}>
+              <div className="flex items-start justify-between gap-3">
+                <p className="font-semibold">{visit.playerName}</p>
+                <p className="text-xs opacity-70">
+                  {new Date(visit.createdAt).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}
+                </p>
+              </div>
+              <p className="mt-1 text-xs opacity-85">{visit.note} - {visit.darts.join(", ") || "Ohne Dartdaten"}</p>
+              <p className="mt-2 text-xs opacity-90">{`${visit.total} Punkte - ${visit.scoreBefore} -> ${visit.scoreAfter}`}</p>
+            </div>
+          ))}
+        </div>
+      )}
     </section>
   );
 }

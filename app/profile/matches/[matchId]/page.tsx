@@ -14,6 +14,7 @@ type MatchDetailResponse = {
     played_at: string;
     mode: string;
     double_out: boolean;
+    finish_mode?: string | null;
     legs_to_win: number;
     sets_to_win: number;
     status: string;
@@ -291,7 +292,7 @@ export default function MatchDetailPage() {
                   {data.match.mode}
                 </span>
                 <span className="rounded-full border border-amber-300/25 bg-amber-300/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100">
-                  {formatOutLabel(data.match.double_out, data.match.mode)}
+                  {formatOutLabel(data.match.double_out, data.match.mode, data.match.finish_mode)}
                 </span>
                 <span className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-[11px] text-stone-300">
                   Legs bis {data.match.legs_to_win}

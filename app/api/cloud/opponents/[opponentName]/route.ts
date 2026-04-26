@@ -27,7 +27,7 @@ export async function GET(
 
   const { data: matches, error: matchesError } = await adminClient
     .from("matches")
-    .select("id, played_at, mode, double_out, status")
+    .select("id, played_at, mode, double_out, finish_mode, status")
     .eq("owner_id", user.id)
     .eq("status", "finished")
     .order("played_at", { ascending: false });
@@ -68,6 +68,7 @@ export async function GET(
         played_at: match.played_at,
         mode: match.mode,
         double_out: match.double_out,
+        finish_mode: match.finish_mode ?? null,
         didWin: mySeat.is_winner ?? false,
         myAverage: Number(mySeat.average ?? 0),
         opponentAverage: Number(opponentSeat.average ?? 0),

@@ -33,6 +33,7 @@ type MatchRow = {
   played_at: string;
   mode: string;
   double_out: boolean;
+  finish_mode?: string | null;
   owner_id?: string;
   status?: string;
 };
@@ -107,7 +108,7 @@ export async function GET(request: Request) {
       ,
     adminClient
       .from("matches")
-      .select("id, owner_id, played_at, mode, double_out, status")
+      .select("id, owner_id, played_at, mode, double_out, finish_mode, status")
       .eq("owner_id", user.id)
       .eq("status", "finished")
       .order("played_at", { ascending: false })
@@ -201,6 +202,7 @@ export async function GET(request: Request) {
       played_at: match.played_at,
       mode: match.mode,
       double_out: match.double_out,
+      finish_mode: match.finish_mode ?? null,
       winner,
       opponents,
       opponent_entries: opponentEntries,
@@ -229,6 +231,7 @@ export async function GET(request: Request) {
       played_at: match.played_at,
       mode: match.mode,
       double_out: match.double_out,
+      finish_mode: match.finish_mode ?? null,
       winner,
       opponents,
       opponent_entries: players

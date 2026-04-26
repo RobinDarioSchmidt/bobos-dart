@@ -842,11 +842,13 @@ export function LiveBoardPanel({
     <section className="rounded-none border-0 bg-transparent p-0 backdrop-blur-none sm:rounded-[1.5rem] sm:border sm:border-white/10 sm:bg-white/5 sm:p-4 sm:backdrop-blur">
       <div className="px-2 sm:px-0 flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold text-white">{boardHeading}</h2>
+          {boardHeading ? <h2 className="text-lg font-semibold text-white">{boardHeading}</h2> : null}
           {calloutText ? (
-            <p className="mt-2 text-sm font-semibold uppercase tracking-[0.14em] text-amber-100">{calloutText}</p>
+            <p className={`${boardHeading ? "mt-2" : ""} text-sm font-semibold uppercase tracking-[0.14em] text-amber-100`}>
+              {calloutText}
+            </p>
           ) : null}
-          <p className="mt-1 text-sm text-stone-400">
+          <p className={`${boardHeading || calloutText ? "mt-1" : ""} text-sm text-stone-400`}>
             {liveState.bullOff.enabled && !liveState.bullOff.completed
               ? "Ein Wurf pro Spieler entscheidet über den Start."
               : `${currentVisitTotal} Punkte · ${compactVisitText}`}

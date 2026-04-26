@@ -17,7 +17,7 @@ export async function GET(
 
   const { data: match, error: matchError } = await adminClient
     .from("matches")
-    .select("id, owner_id, played_at, mode, double_out, legs_to_win, sets_to_win, status")
+    .select("id, owner_id, played_at, mode, double_out, finish_mode, legs_to_win, sets_to_win, status")
     .eq("id", matchId)
     .eq("owner_id", user.id)
     .eq("status", "finished")

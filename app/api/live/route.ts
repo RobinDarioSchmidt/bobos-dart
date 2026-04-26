@@ -44,6 +44,7 @@ type CloudMatchInsert = {
   owner_id: string;
   mode: string;
   double_out: boolean;
+  finish_mode: LiveFinishMode;
   legs_to_win: number;
   sets_to_win: number;
   status: "finished";
@@ -194,6 +195,7 @@ async function persistCompletedLiveMatch(adminClient: ReturnType<typeof getSupab
       owner_id: ownerId,
       mode: String(state.mode),
       double_out: state.finishMode !== "single",
+      finish_mode: state.finishMode,
       legs_to_win: state.legsToWin,
       sets_to_win: state.setsToWin,
       status: "finished",

@@ -1,7 +1,11 @@
-export function formatOutLabel(doubleOut: boolean, mode: string) {
-  if (mode.toLowerCase().includes("master")) {
+export function formatOutLabel(doubleOut: boolean, mode: string, finishMode?: string | null) {
+  if (finishMode === "master" || mode.toLowerCase().includes("master")) {
     return "Masters Out";
   }
 
-  return doubleOut ? "Double Out" : "Single Out";
+  if (finishMode === "single") {
+    return "Straight Out";
+  }
+
+  return doubleOut ? "Double Out" : "Straight Out";
 }

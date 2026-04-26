@@ -1900,6 +1900,7 @@ export default function Page() {
         owner_id: session.user.id,
         mode: String(mode),
         double_out: finishMode !== "single",
+        finish_mode: finishMode,
         legs_to_win: legsToWin,
         sets_to_win: setsToWin,
         winner_profile_id: winnerIndex === 0 ? session.user.id : null,

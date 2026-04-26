@@ -13,7 +13,7 @@ export async function GET(request: Request) {
 
   const { data: matches, error: matchesError } = await adminClient
     .from("matches")
-    .select("id, played_at, mode, double_out")
+    .select("id, played_at, mode, double_out, finish_mode")
     .eq("owner_id", user.id)
     .eq("status", "finished")
     .order("played_at", { ascending: false })

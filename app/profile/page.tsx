@@ -49,6 +49,7 @@ type RecentMatchEntry = {
   played_at: string;
   mode: string;
   double_out: boolean;
+  finish_mode?: string | null;
   winner: string;
   opponents: string;
   opponent_entries?: Array<{
@@ -1027,7 +1028,7 @@ export default function ProfilePage() {
 
                         <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-stone-300">
                           <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1">
-                            {formatOutLabel(match.double_out, match.mode)}
+                            {formatOutLabel(match.double_out, match.mode, match.finish_mode)}
                           </span>
                           <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1">{match.sets}</span>
                           <Link

@@ -119,7 +119,7 @@ function formatLiveError(error: string) {
 }
 
 function getLivePlayerStats(state: LiveMatchState) {
-  return state.players.map((player) => {
+  return state.players.filter((player) => player.joined).map((player) => {
     const visits = state.history.filter((entry) => entry.playerName === player.name && entry.result !== "leg-win");
     const dartsThrown = visits.reduce((sum, entry) => sum + entry.darts.length, 0);
     const scoredPoints = visits.reduce((sum, entry) => sum + entry.total, 0);
@@ -1249,14 +1249,8 @@ export default function LivePage() {
     }
   }
 
-  const historyHeading = liveState?.bullOff.enabled && !liveState.bullOff.completed
-    ? `Live Historie - ${currentPlayer?.name ?? "Niemand"} wirft Bull-Off`
-    : `Live Historie - ${currentPlayer?.name ?? "Niemand"} ist dran!`;
-  const boardHeading = liveState?.bullOff.enabled && !liveState.bullOff.completed
-    ? `${currentPlayer?.name ?? "Niemand"} wirft Bull-Off`
-    : liveState && currentPlayer && !currentPlayer.entered
-      ? `${currentPlayer.name} sucht ${liveState.entryMode === "double" ? "Double In" : "Masters In"}${pendingLabels.length > 0 ? ` - ${pendingLabels.join(", ")}` : ""}`
-    : `${currentPlayer?.name ?? "Niemand"} ist dran${pendingLabels.length > 0 ? ` - ${pendingLabels.join(", ")}` : ""}`;
+  const historyHeading = "Historie";
+  const boardHeading = "";
   const livePlayerStats = useMemo(() => (liveState ? getLivePlayerStats(liveState) : []), [liveState]);
   const cloudSyncPending = Boolean(
     liveState &&
@@ -1469,6 +1463,8 @@ export default function LivePage() {
                     currentLiveStats={currentLiveStats}
                     livePlayerStats={livePlayerStats}
                     currentPlayerName={currentPlayer?.name ?? null}
+                    title={currentPlayer?.name ?? "Stats"}
+                    subtitle=""
                   />
 
                   {liveState.matchWinner !== null ? (

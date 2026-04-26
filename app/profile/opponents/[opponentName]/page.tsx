@@ -26,6 +26,7 @@ type OpponentResponse = {
     played_at: string;
     mode: string;
     double_out: boolean;
+    finish_mode?: string | null;
     didWin: boolean;
     myAverage: number;
     opponentAverage: number;
