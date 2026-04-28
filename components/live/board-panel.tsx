@@ -840,7 +840,7 @@ export function LiveBoardPanel({
         <div>
           {boardHeading ? <h2 className="text-lg font-semibold text-white">{boardHeading}</h2> : null}
           {calloutText ? (
-            <p className={`${boardHeading ? "mt-2" : ""} text-sm font-semibold uppercase tracking-[0.14em] text-amber-100`}>
+            <p className={`${boardHeading ? "mt-2" : ""} text-sm font-semibold text-emerald-100`}>
               {calloutText}
             </p>
           ) : null}
@@ -934,22 +934,22 @@ export function LiveBoardPanel({
           </div>
         ) : null}
         {!liveState.bullOff.enabled || liveState.bullOff.completed ? canPlayFromThisDevice ? (
-          <div className={`${pendingLabels.length > 0 ? "mt-4" : ""} flex flex-wrap gap-2`}>
+          <div className={`${pendingLabels.length > 0 ? "mt-4" : ""} grid grid-cols-3 gap-2`}>
             <button
               onClick={onRemoveLast}
               disabled={!canPlayFromThisDevice || pendingLabels.length === 0}
-              className={`rounded-2xl px-4 py-2 text-sm font-semibold disabled:opacity-40 ${
+              className={`whitespace-nowrap rounded-2xl px-3 py-2 text-xs font-semibold disabled:opacity-40 sm:px-4 sm:text-sm ${
                 pendingLabels.length >= 3
                   ? "bg-rose-500 text-white"
                   : "border border-white/10 bg-white/5 text-white"
               }`}
             >
-              Korrektur
+              Korr.
             </button>
             <button
               onClick={onMiss}
               disabled={!canPlayFromThisDevice || loading}
-              className={`rounded-2xl px-4 py-2 text-sm font-semibold disabled:opacity-40 ${
+              className={`whitespace-nowrap rounded-2xl px-3 py-2 text-xs font-semibold disabled:opacity-40 sm:px-4 sm:text-sm ${
                 pendingLabels.length >= 3
                   ? "bg-red-500 text-white"
                   : "border border-white/10 bg-white/5 text-white"
@@ -960,7 +960,7 @@ export function LiveBoardPanel({
             <button
               onClick={onFinishVisit}
               disabled={!canPlayFromThisDevice || pendingLabels.length === 0}
-              className={`rounded-2xl px-4 py-2 text-sm font-semibold disabled:opacity-40 ${
+              className={`whitespace-nowrap rounded-2xl px-3 py-2 text-xs font-semibold disabled:opacity-40 sm:px-4 sm:text-sm ${
                 pendingLabels.length >= 3
                   ? "bg-emerald-400 text-black"
                   : "border border-white/10 bg-white/5 text-white"

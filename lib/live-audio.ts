@@ -1,4 +1,4 @@
-export type LiveAudioMode = "off" | "visits" | "all";
+export type LiveAudioMode = "off" | "darts" | "visits" | "all";
 
 export const LIVE_AUDIO_MODE_STORAGE_KEY = "bobos-dart-live-audio-mode";
 
@@ -84,7 +84,7 @@ export async function playAudioClip(src: string) {
 }
 
 export async function playLiveDartCallout(label: string, mode: LiveAudioMode) {
-  if (!label || mode !== "all") {
+  if (!label || (mode !== "all" && mode !== "darts")) {
     return false;
   }
 
@@ -97,7 +97,7 @@ export async function playLiveDartCallout(label: string, mode: LiveAudioMode) {
 }
 
 export async function playLiveVisitCallout(total: number, mode: LiveAudioMode) {
-  if (!Number.isFinite(total) || total < 0 || mode === "off") {
+  if (!Number.isFinite(total) || total < 0 || (mode !== "all" && mode !== "visits")) {
     return false;
   }
 

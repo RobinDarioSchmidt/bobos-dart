@@ -13,7 +13,6 @@ import {
   TrainingSetupPanel,
 } from "@/components/local/session-panels";
 import { SignedInOverviewSection, SignedOutLandingSection } from "@/components/home/entry-sections";
-import { MobileAppNav } from "@/components/mobile-app-nav";
 import { PlayerRivalryDialog, type PlayerPresenceSummary } from "@/components/player-rivalry-dialog";
 import { getCheckoutSuggestions } from "@/lib/checkout-hints";
 import type { LiveBoardMarker, LiveDart, LiveMatchState, LiveVisit } from "@/lib/live-match";
@@ -2758,6 +2757,7 @@ function resetLegBoards(nextPlayers: Player[]) {
             onRefreshCloud={() => void refreshCloudData(session, { includeHistory: true })}
             onLogout={() => void handleSignOut()}
             onOpenLiveRoom={(roomCode) => {
+              window.localStorage.setItem("bobos-dart-live-room", roomCode);
               window.location.href = `/live?room=${encodeURIComponent(roomCode)}`;
             }}
             canInstallApp={Boolean(installPromptEvent)}
@@ -3028,7 +3028,6 @@ function resetLegBoards(nextPlayers: Player[]) {
         selectedPlayer={selectedPresencePlayer}
         onClose={() => setSelectedPresencePlayer(null)}
       />
-      {session ? <MobileAppNav /> : null}
     </main>
   );
 }

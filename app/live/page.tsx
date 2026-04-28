@@ -12,7 +12,6 @@ import {
 } from "@/components/live/match-panels";
 import { PlayerRivalryDialog, type PlayerPresenceSummary } from "@/components/player-rivalry-dialog";
 import { LiveRoomCreatePanel, LiveRoomJoinPanel, LiveRoomStatusPanel } from "@/components/live/room-panels";
-import { MobileAppNav } from "@/components/mobile-app-nav";
 import {
   getPreferredDisplayName,
   isLiveDeviceLockActive,
@@ -241,6 +240,11 @@ export default function LivePage() {
   const [setsToWin, setSetsToWin] = useState(1);
   const [maxPlayers] = useState(4);
   const [message, setMessage] = useState("");
+  const [spectatorMode, setSpectatorMode] = useState(false);
+  const [spectatorPrompt, setSpectatorPrompt] = useState<{
+    roomCode: string;
+    activeDeviceLabel: string;
+  } | null>(null);
   const [loading, setLoading] = useState(false);
   const [restoringRoom, setRestoringRoom] = useState(Boolean(initialRestoreTarget));
   const [playerPresence, setPlayerPresence] = useState<PlayerPresenceSummary[]>([]);
@@ -272,6 +276,7 @@ export default function LivePage() {
   const openRoomsFailureCountRef = useRef(0);
   const roomNotFoundCountRef = useRef(0);
   const lastPlayedVisitRef = useRef<string | null>(null);
+  const messageTimeoutRef = useRef<number | null>(null);
 
   const saveRoomSnapshot = useCallback((snapshot: LiveRoomSnapshot | null) => {
     if (typeof window === "undefined") {
@@ -284,6 +289,22 @@ export default function LivePage() {
     }
 
     window.localStorage.setItem(LIVE_ROOM_SNAPSHOT_KEY, JSON.stringify(snapshot));
+  }, []);
+
+  const flashMessage = useCallback((nextMessage: string) => {
+    setMessage(nextMessage);
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    if (messageTimeoutRef.current) {
+      window.clearTimeout(messageTimeoutRef.current);
+    }
+
+    messageTimeoutRef.current = window.setTimeout(() => {
+      setMessage((current) => (current === nextMessage ? "" : current));
+      messageTimeoutRef.current = null;
+    }, 2000);
   }, []);
 
   const syncRoomCodeInUrl = useCallback((roomCode: string | null) => {
@@ -353,7 +374,7 @@ export default function LivePage() {
     }
 
     const storedMode = window.localStorage.getItem(LIVE_AUDIO_MODE_STORAGE_KEY);
-    if (storedMode === "off" || storedMode === "visits" || storedMode === "all") {
+    if (storedMode === "off" || storedMode === "darts" || storedMode === "visits" || storedMode === "all") {
       setAudioMode(storedMode);
     } else if (storedMode === "clips") {
       setAudioMode("visits");
@@ -369,6 +390,15 @@ export default function LivePage() {
 
     window.localStorage.setItem(LIVE_AUDIO_MODE_STORAGE_KEY, audioMode);
   }, [audioMode]);
+
+  useEffect(
+    () => () => {
+      if (typeof window !== "undefined" && messageTimeoutRef.current) {
+        window.clearTimeout(messageTimeoutRef.current);
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -902,7 +932,7 @@ export default function LivePage() {
   }
 
   useEffect(() => {
-    if (!liveRoomCode || !session || !deviceId) {
+    if (!liveRoomCode || !session || !deviceId || spectatorMode) {
       return;
     }
 
@@ -914,7 +944,7 @@ export default function LivePage() {
     return () => {
       window.clearInterval(interval);
     };
-  }, [claimDeviceLock, deviceId, liveRoomCode, session]);
+  }, [claimDeviceLock, deviceId, liveRoomCode, session, spectatorMode]);
 
   async function performServerLiveAction(
     body:
@@ -973,19 +1003,65 @@ export default function LivePage() {
       return;
     }
 
-    const match = await callLiveApi({
-      action: "join",
-      roomCode,
-      displayName,
-      deviceId,
-      deviceLabel,
-    });
+    const accessToken = await getAccessToken();
+    if (!accessToken) {
+      setMessage("Bitte zuerst einloggen.");
+      return;
+    }
 
-    if (match?.room_code) {
-      setRoomCodeInput(match.room_code);
+    setLoading(true);
+    setMessage("");
+
+    try {
+      const response = await fetch("/api/live", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          action: "join",
+          roomCode,
+          displayName,
+          deviceId,
+          deviceLabel,
+        }),
+      });
+
+      const result = (await response.json()) as LiveMatchResponse | { error: string };
+      if (!response.ok || !("match" in result)) {
+        const nextError = "error" in result && result.error ? result.error : "join_failed";
+        if (nextError.startsWith("device_already_active:")) {
+          setSpectatorPrompt({
+            roomCode: roomCode.toUpperCase(),
+            activeDeviceLabel: nextError.slice("device_already_active:".length) || "einem anderen Geraet",
+          });
+          return;
+        }
+
+        setMessage(formatLiveError(nextError));
+        return;
+      }
+
+      const normalized = normalizeLiveState(result.match.state);
+      setSpectatorMode(false);
+      setLiveRoomCode(result.match.room_code);
+      setRoomOwnerId(result.match.owner_id);
+      setLiveState(normalized);
+      setRoomCodeInput(result.match.room_code);
+      saveRoomSnapshot({
+        roomCode: result.match.room_code,
+        ownerId: result.match.owner_id,
+        state: normalized,
+        savedAt: new Date().toISOString(),
+      });
       setJoinOpen(false);
       await loadOpenRooms();
-      await broadcastRefresh(match.room_code, "join");
+      await broadcastRefresh(result.match.room_code, "join");
+    } catch {
+      setMessage("Die Verbindung zum Online-Match ist gerade unterbrochen.");
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -995,7 +1071,7 @@ export default function LivePage() {
     }
 
     await navigator.clipboard.writeText(liveRoomCode);
-    setMessage("Raumcode kopiert.");
+    flashMessage("Raumcode kopiert.");
   }
 
   async function copyRoomLink() {
@@ -1005,7 +1081,7 @@ export default function LivePage() {
 
     const url = `${window.location.origin}/live?room=${encodeURIComponent(liveRoomCode)}`;
     await navigator.clipboard.writeText(url);
-    setMessage("Einladungslink kopiert.");
+    flashMessage("Einladungslink kopiert.");
   }
 
   async function reconnectToRoom() {
@@ -1017,6 +1093,18 @@ export default function LivePage() {
     const reconnected = await fetchMatch(liveRoomCode);
     if (reconnected) {
       setMessage("Online-Match ist wieder verbunden.");
+    }
+  }
+
+  async function enterSpectatorMode(roomCode: string) {
+    setSpectatorPrompt(null);
+    setSpectatorMode(true);
+    setRoomCodeInput(roomCode);
+    setJoinOpen(false);
+    setCreateOpen(false);
+    const restored = await fetchMatch(roomCode);
+    if (restored) {
+      flashMessage("Zuschauer-Modus aktiv.");
     }
   }
 
@@ -1085,6 +1173,15 @@ export default function LivePage() {
   }, [liveState, session]);
   const hasDeviceControl = Boolean(deviceId && (!activeDeviceLock || activeDeviceLock.deviceId === deviceId));
   const deviceLockLabel = activeDeviceLock?.deviceLabel ?? null;
+
+  useEffect(() => {
+    if (!liveState || !session || !deviceId) {
+      return;
+    }
+
+    const nextSpectatorMode = Boolean(activeDeviceLock && activeDeviceLock.deviceId !== deviceId);
+    setSpectatorMode(nextSpectatorMode);
+  }, [activeDeviceLock, deviceId, liveState, session]);
 
   const isCurrentUsersTurn = Boolean(
     liveState &&
@@ -1472,9 +1569,16 @@ export default function LivePage() {
             />
             <div className="min-w-0">
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-100">Bobo&apos;s Dart</p>
-              <h1 className="mt-1 truncate text-2xl font-semibold text-white sm:text-3xl">
-                {liveRoomCode || "Online Spiel"}
-              </h1>
+              {liveRoomCode ? (
+                <button
+                  onClick={() => void copyRoomCode()}
+                  className="mt-1 truncate text-left text-2xl font-semibold text-white sm:text-3xl"
+                >
+                  {liveRoomCode}
+                </button>
+              ) : (
+                <h1 className="mt-1 truncate text-2xl font-semibold text-white sm:text-3xl">Online Spiel</h1>
+              )}
             </div>
           </div>
           <Link href="/" className="rounded-2xl border border-white/10 bg-black/20 px-3 py-2 text-sm font-semibold">
@@ -1560,8 +1664,13 @@ export default function LivePage() {
             ) : null}
 
             {liveState ? (
-              <section className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+              <section className={`grid gap-4 ${spectatorMode ? "xl:grid-cols-[1.35fr_0.65fr]" : "lg:grid-cols-[1.1fr_0.9fr]"}`}>
                 <div className="space-y-4">
+                  {spectatorMode ? (
+                    <section className="rounded-[1.5rem] border border-emerald-300/20 bg-emerald-400/10 p-4 text-sm text-emerald-50">
+                      Zuschauer-Modus aktiv. Dieses Geraet zeigt den Raum nur an, waehrend {deviceLockLabel ?? "ein anderes Geraet"} den Account steuert.
+                    </section>
+                  ) : null}
                   <LiveBoardPanel
                     liveState={liveState}
                     currentPlayerIndex={currentPlayerIndex}
@@ -1633,6 +1742,7 @@ export default function LivePage() {
                     onAudioModeChange={setAudioMode}
                     onTakeControl={() => void handleTakeControl()}
                     onCopyRoomCode={() => void copyRoomCode()}
+                    onRoomCodeTap={() => void copyRoomCode()}
                     onCopyRoomLink={() => void copyRoomLink()}
                     onReconnect={() => void reconnectToRoom()}
                     onLeaveRoom={() => void leaveRoom()}
@@ -1644,6 +1754,30 @@ export default function LivePage() {
           </>
         )}
       </div>
+      {spectatorPrompt ? (
+        <div className="fixed inset-0 z-[120] flex items-end justify-center bg-black/65 p-3 sm:items-center sm:p-6">
+          <div className="w-full max-w-lg rounded-[1.75rem] border border-white/10 bg-[#0f172a] p-4 shadow-2xl shadow-black/40">
+            <h2 className="text-2xl font-semibold text-white">Nur Zuschauen?</h2>
+            <p className="mt-3 text-sm text-stone-300">
+              Dieser Account steuert den Raum bereits ueber {spectatorPrompt.activeDeviceLabel}. Du kannst den Raum auf diesem Geraet trotzdem im Zuschauer-Modus oeffnen.
+            </p>
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <button
+                onClick={() => void enterSpectatorMode(spectatorPrompt.roomCode)}
+                className="rounded-2xl bg-emerald-400 px-4 py-3 text-sm font-semibold text-black"
+              >
+                Zuschauen
+              </button>
+              <button
+                onClick={() => setSpectatorPrompt(null)}
+                className="rounded-2xl border border-red-400/30 bg-red-400/10 px-4 py-3 text-sm font-semibold text-red-100"
+              >
+                Abbrechen
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
       <PlayerRivalryDialog
         viewerName={displayName}
         selectedPlayer={selectedPresencePlayer}
@@ -1686,7 +1820,6 @@ export default function LivePage() {
           </div>
         </div>
       ) : null}
-      {session ? <MobileAppNav /> : null}
     </main>
   );
 }

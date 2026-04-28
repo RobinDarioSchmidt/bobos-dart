@@ -3,8 +3,6 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import type { Session } from "@supabase/supabase-js";
-import { MobileAppNav } from "@/components/mobile-app-nav";
 import { formatOutLabel } from "@/lib/darts-display";
 import { supabase } from "@/lib/supabase";
 
@@ -199,7 +197,6 @@ function ProgressLine({
 export default function MatchDetailPage() {
   const params = useParams<{ matchId: string }>();
   const canLoad = Boolean(supabase && params?.matchId);
-  const [session, setSession] = useState<Session | null>(null);
   const [data, setData] = useState<MatchDetailResponse | null>(null);
   const [loading, setLoading] = useState(canLoad);
   const [message, setMessage] = useState("");
@@ -239,7 +236,6 @@ export default function MatchDetailPage() {
     const client = supabase;
 
     void client.auth.getSession().then(async ({ data: sessionData }) => {
-      setSession(sessionData.session);
       if (!sessionData.session) {
         setMessage("Bitte erst einloggen.");
         setLoading(false);
@@ -557,7 +553,6 @@ export default function MatchDetailPage() {
           </>
         ) : null}
       </div>
-      {session ? <MobileAppNav /> : null}
     </main>
   );
 }

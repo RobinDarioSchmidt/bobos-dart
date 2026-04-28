@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
-import { MobileAppNav } from "@/components/mobile-app-nav";
 import {
   HeatmapBoard,
   MeterCard,
@@ -1075,7 +1074,6 @@ export default function ProfilePage() {
           </>
         )}
       </div>
-      {session ? <MobileAppNav /> : null}
     </main>
   );
 }

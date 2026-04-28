@@ -3,8 +3,6 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
-import type { Session } from "@supabase/supabase-js";
-import { MobileAppNav } from "@/components/mobile-app-nav";
 import { supabase } from "@/lib/supabase";
 
 type OpponentResponse = {
@@ -103,7 +101,6 @@ function MiniLine({
 export default function OpponentDetailPage() {
   const params = useParams<{ opponentName: string }>();
   const canLoad = Boolean(supabase && params?.opponentName);
-  const [session, setSession] = useState<Session | null>(null);
   const [data, setData] = useState<OpponentResponse | null>(null);
   const [loading, setLoading] = useState(canLoad);
   const [message, setMessage] = useState("");
@@ -115,7 +112,6 @@ export default function OpponentDetailPage() {
 
     const client = supabase;
     void client.auth.getSession().then(async ({ data: sessionData }) => {
-      setSession(sessionData.session);
       if (!sessionData.session) {
         setMessage("Bitte erst einloggen.");
         setLoading(false);
@@ -384,7 +380,6 @@ export default function OpponentDetailPage() {
           </div>
         )}
       </div>
-      {session ? <MobileAppNav /> : null}
     </main>
   );
 }
