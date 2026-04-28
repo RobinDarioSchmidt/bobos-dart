@@ -37,12 +37,14 @@ type LiveMatchResponse = {
     room_code: string;
     state: LiveMatchState;
   };
+  spectator?: boolean;
 };
 
 type OpenLiveRoom = {
   room_code: string;
   owner_id: string;
   host_name: string;
+  phase: "lobby" | "running";
   mode: 301 | 501;
   finish_mode: LiveFinishMode;
   joined_players: number;
@@ -124,6 +126,12 @@ function formatLiveError(error: string) {
       return "Das Rematch kann gerade nur vom Matchsieger oder Host gestartet werden.";
     case "missing_service_role_or_supabase_config":
       return "Der Online-Modus ist noch nicht komplett konfiguriert.";
+    case "only_host_can_start_match":
+      return "Nur der Host kann das Match aus der Lobby starten.";
+    case "match_not_started":
+      return "Dieses Match ist noch in der Lobby.";
+    case "no_players_in_lobby":
+      return "In der Lobby ist noch kein aktiver Spieler.";
     default:
       if (error.startsWith("device_already_active:")) {
         const activeDeviceLabel = error.slice("device_already_active:".length) || "einem anderen Geraet";
@@ -953,7 +961,8 @@ export default function LivePage() {
   }
 
   useEffect(() => {
-    if (!liveRoomCode || !session || !deviceId || spectatorMode) {
+    const seatIndex = liveState?.players.findIndex((player) => player.profileId === session?.user.id) ?? -1;
+    if (!liveRoomCode || !session || !deviceId || spectatorMode || seatIndex < 0) {
       return;
     }
 
@@ -965,7 +974,7 @@ export default function LivePage() {
     return () => {
       window.clearInterval(interval);
     };
-  }, [claimDeviceLock, deviceId, liveRoomCode, session, spectatorMode]);
+  }, [claimDeviceLock, deviceId, liveRoomCode, liveState, session, spectatorMode]);
 
   async function performServerLiveAction(
     body:
@@ -1018,6 +1027,25 @@ export default function LivePage() {
     }
   }
 
+  async function startMatchFromLobby() {
+    if (!liveRoomCode) {
+      return;
+    }
+
+    const match = await callLiveApi({
+      action: "start_match",
+      roomCode: liveRoomCode,
+      deviceId,
+    });
+
+    if (match?.room_code) {
+      setCreateOpen(false);
+      setJoinOpen(false);
+      await loadOpenRooms();
+      await broadcastRefresh(match.room_code, "start_match");
+    }
+  }
+
   async function joinRoom(roomCode = roomCodeInput) {
     if (!roomCode) {
       setMessage("Bitte einen Raumcode eingeben.");
@@ -1065,7 +1093,8 @@ export default function LivePage() {
       }
 
       const normalized = normalizeLiveState(result.match.state);
-      setSpectatorMode(false);
+      const isParticipant = normalized.players.some((player) => player.profileId === session?.user.id);
+      setSpectatorMode(Boolean(result.spectator || (normalized.phase === "running" && !isParticipant)));
       setLiveRoomCode(result.match.room_code);
       setRoomOwnerId(result.match.owner_id);
       setLiveState(normalized);
@@ -1077,6 +1106,9 @@ export default function LivePage() {
         savedAt: new Date().toISOString(),
       });
       setJoinOpen(false);
+      if (result.spectator || (normalized.phase === "running" && !isParticipant)) {
+        flashMessage("Du schaust in diesem laufenden Match zu.");
+      }
       await loadOpenRooms();
       await broadcastRefresh(result.match.room_code, "join");
     } catch {
@@ -1200,13 +1232,17 @@ export default function LivePage() {
       return;
     }
 
-    const nextSpectatorMode = Boolean(activeDeviceLock && activeDeviceLock.deviceId !== deviceId);
+    const nextSpectatorMode = Boolean(
+      (liveState.phase === "running" && currentUserSeat < 0) ||
+        (activeDeviceLock && activeDeviceLock.deviceId !== deviceId),
+    );
     setSpectatorMode(nextSpectatorMode);
-  }, [activeDeviceLock, deviceId, liveState, session]);
+  }, [activeDeviceLock, currentUserSeat, deviceId, liveState, session]);
 
   const isCurrentUsersTurn = Boolean(
     liveState &&
       session &&
+      liveState.phase === "running" &&
       liveState.matchWinner === null &&
       liveState.legWinner === null &&
       currentUserSeat >= 0 &&
@@ -1216,6 +1252,7 @@ export default function LivePage() {
   const canControlLegTransition = Boolean(
     liveState &&
       session &&
+      liveState.phase === "running" &&
       liveState.legWinner !== null &&
       liveState.matchWinner === null &&
       currentUserSeat >= 0 &&
@@ -1225,6 +1262,7 @@ export default function LivePage() {
   const canControlRematch = Boolean(
     liveState &&
       session &&
+      liveState.phase === "running" &&
       liveState.matchWinner !== null &&
       currentUserSeat >= 0 &&
       hasDeviceControl &&
@@ -1232,6 +1270,7 @@ export default function LivePage() {
   );
   const isRoomHost = Boolean(session?.user.id && roomOwnerId && session.user.id === roomOwnerId);
   const joinedPlayerCount = liveState?.players.filter((player) => player.joined).length ?? 0;
+  const canStartMatch = Boolean(liveState && liveState.phase === "lobby" && isRoomHost && joinedPlayerCount > 0);
 
   const pendingVisit = liveState?.pendingVisit;
   const pendingLabels = pendingVisit?.darts.map((dart) => dart.label) ?? [];
@@ -1239,6 +1278,7 @@ export default function LivePage() {
   const compactVisitText = pendingLabels.length > 0 ? pendingLabels.join(", ") : "Noch kein Dart";
   const boardInputLockedByVisit = Boolean(
     liveState &&
+      liveState.phase === "running" &&
       pendingLabels.length >= 3 &&
       (!liveState.bullOff.enabled || liveState.bullOff.completed),
   );
@@ -1272,8 +1312,14 @@ export default function LivePage() {
 
   const turnStatus = !liveState
     ? ""
+    : liveState.phase === "lobby"
+      ? currentUserSeat >= 0
+        ? isRoomHost
+          ? "Lobby bereit"
+          : "Warte auf Matchstart"
+        : "Du schaust zu"
     : currentUserSeat < 0
-      ? "Nicht als Spieler drin"
+      ? "Du schaust zu"
       : !hasDeviceControl
         ? deviceLockLabel
           ? `${deviceLockLabel} steuert`
@@ -1293,6 +1339,8 @@ export default function LivePage() {
           : "Warte auf den naechsten Spieler";
   const boardDisabledReason = loading
     ? "Synchronisiert..."
+    : liveState?.phase === "lobby"
+      ? "Matchstart durch den Host"
     : !hasDeviceControl
       ? "Dieses Geraet schaut zu"
       : boardInputLockedByVisit
@@ -1302,7 +1350,9 @@ export default function LivePage() {
   const canSelectBoardInput = canPlayFromThisDevice && !boardInputLockedByVisit;
   const isTurnHighlightActive = canPlayFromThisDevice;
   const boardStatusText = !currentPlayer
-    ? null
+    ? liveState?.phase === "lobby"
+      ? "Lobby: Der Host startet das Match, sobald alle da sind."
+      : null
     : liveState?.bullOff.enabled && !liveState.bullOff.completed
       ? `Aktuell: ${currentPlayer.name} wirft Bull-Off`
       : pendingLabels.length >= 3
@@ -1445,6 +1495,21 @@ export default function LivePage() {
 
   async function leaveRoom() {
     if (!liveRoomCode) {
+      return;
+    }
+
+    if (spectatorMode && currentUserSeat < 0) {
+      setLiveRoomCode("");
+      setRoomOwnerId("");
+      setLiveState(null);
+      setRestoreTargetCode("");
+      setConnectedNames([]);
+      saveRoomSnapshot(null);
+      if (typeof window !== "undefined") {
+        window.localStorage.removeItem(LIVE_ROOM_STORAGE_KEY);
+      }
+      setMessage("Du hast den Zuschauer-Modus verlassen.");
+      await loadOpenRooms();
       return;
     }
 
@@ -1695,63 +1760,93 @@ export default function LivePage() {
                 <div className="space-y-4">
                   {spectatorMode ? (
                     <section className="rounded-[1.5rem] border border-emerald-300/20 bg-emerald-400/10 p-4 text-sm text-emerald-50">
-                      Zuschauer-Modus aktiv. Dieses Geraet zeigt den Raum nur an, waehrend {deviceLockLabel ?? "ein anderes Geraet"} den Account steuert.
+                      {currentUserSeat < 0
+                        ? "Zuschauer-Modus aktiv. Dieses Match laeuft bereits, deshalb schaut dieses Geraet nur zu."
+                        : `Zuschauer-Modus aktiv. Dieses Geraet zeigt den Raum nur an, waehrend ${deviceLockLabel ?? "ein anderes Geraet"} den Account steuert.`}
                     </section>
                   ) : null}
-                  <LiveBoardPanel
-                    liveState={liveState}
-                    currentPlayerIndex={currentPlayerIndex}
-                    currentUserId={session.user.id}
-                    boardHeading={boardHeading}
-                    currentVisitTotal={currentVisitTotal}
-                    compactVisitText={compactVisitText}
-                    calloutText={boardStatusText}
-                    canPlayFromThisDevice={canPlayFromThisDevice}
-                    canSelectBoardInput={canSelectBoardInput}
-                    boardDisabledReason={boardDisabledReason}
-                    loading={loading}
-                    boardMarkers={boardMarkers}
-                    pendingLabels={pendingLabels}
-                    connectedNames={connectedNames}
-                    canControlLegTransition={canControlLegTransition}
-                    checkoutHints={checkoutHints}
-                    currentPlayerName={currentPlayer?.name ?? null}
-                    onPlayerSelect={openPresencePlayer}
-                    onSegmentSelect={handleBoardSegment}
-                    onMiss={() => void handleMiss()}
-                    onRemoveLast={() => void handleRemoveLast()}
-                    onFinishVisit={() => void handleFinishVisit()}
-                    onNextLeg={() => void handleNextLeg()}
-                  />
-                  {liveCelebration ? (
-                    <LiveCelebrationPanel
-                      kind={liveCelebration.kind}
-                      winnerName={liveCelebration.winnerName}
-                      scoreLine={liveCelebration.scoreLine}
-                      nextStep={liveCelebration.nextStep}
-                    />
-                  ) : null}
-                  {liveState.matchWinner !== null ? (
-                    <LiveMatchSummaryPanel
-                      liveState={liveState}
-                      playerStats={livePlayerStats}
-                      canControlRematch={canControlRematch}
-                      loading={loading}
-                      onRematch={() => void handleRematch()}
-                    />
-                  ) : null}
 
+                  {liveState.phase === "lobby" ? (
+                    <section className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4 backdrop-blur">
+                      <p className="text-[11px] uppercase tracking-[0.22em] text-stone-400">Lobby</p>
+                      <h2 className="mt-2 text-2xl font-semibold text-white">Warte auf den Matchstart</h2>
+                      <p className="mt-2 text-sm text-stone-300">
+                        Nur die Spieler, die jetzt in der Lobby sind, werden aktive Spieler. Spaetere Beitritte kommen automatisch als Zuschauer rein.
+                      </p>
+                      <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                        {liveState.players.filter((player) => player.joined).map((player) => (
+                          <div
+                            key={`lobby-${player.name}-${player.profileId ?? "guest"}`}
+                            className="rounded-2xl border border-white/10 bg-black/20 px-3 py-3"
+                          >
+                            <p className="text-sm font-semibold text-white">{player.name}</p>
+                            <p className="mt-1 text-xs text-stone-400">
+                              {player.profileId === session.user.id ? "Du bist bereit" : "In der Lobby"}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+                  ) : (
+                    <>
+                      <LiveBoardPanel
+                        liveState={liveState}
+                        currentPlayerIndex={currentPlayerIndex}
+                        currentUserId={session.user.id}
+                        boardHeading={boardHeading}
+                        currentVisitTotal={currentVisitTotal}
+                        compactVisitText={compactVisitText}
+                        calloutText={boardStatusText}
+                        canPlayFromThisDevice={canPlayFromThisDevice}
+                        canSelectBoardInput={canSelectBoardInput}
+                        boardDisabledReason={boardDisabledReason}
+                        loading={loading}
+                        boardMarkers={boardMarkers}
+                        pendingLabels={pendingLabels}
+                        connectedNames={connectedNames}
+                        canControlLegTransition={canControlLegTransition}
+                        checkoutHints={checkoutHints}
+                        currentPlayerName={currentPlayer?.name ?? null}
+                        onPlayerSelect={openPresencePlayer}
+                        onSegmentSelect={handleBoardSegment}
+                        onMiss={() => void handleMiss()}
+                        onRemoveLast={() => void handleRemoveLast()}
+                        onFinishVisit={() => void handleFinishVisit()}
+                        onNextLeg={() => void handleNextLeg()}
+                      />
+                      {liveCelebration ? (
+                        <LiveCelebrationPanel
+                          kind={liveCelebration.kind}
+                          winnerName={liveCelebration.winnerName}
+                          scoreLine={liveCelebration.scoreLine}
+                          nextStep={liveCelebration.nextStep}
+                        />
+                      ) : null}
+                      {liveState.matchWinner !== null ? (
+                        <LiveMatchSummaryPanel
+                          liveState={liveState}
+                          playerStats={livePlayerStats}
+                          canControlRematch={canControlRematch}
+                          loading={loading}
+                          onRematch={() => void handleRematch()}
+                        />
+                      ) : null}
+                    </>
+                  )}
                 </div>
 
                 <div className="space-y-4">
-                  <LiveHistoryPanel
-                    heading={historyHeading}
-                    historyOpen={historyOpen}
-                    history={liveState.history}
-                    onToggle={() => setHistoryOpen((prev) => !prev)}
-                  />
+                  {liveState.phase === "running" ? (
+                    <LiveHistoryPanel
+                      heading={historyHeading}
+                      historyOpen={historyOpen}
+                      history={liveState.history}
+                      onToggle={() => setHistoryOpen((prev) => !prev)}
+                    />
+                  ) : null}
                   <LiveRoomStatusPanel
                     liveRoomCode={liveRoomCode}
+                    matchPhase={liveState.phase}
                     isRoomHost={isRoomHost}
                     joinedPlayerCount={joinedPlayerCount}
                     maxPlayers={liveState.maxPlayers ?? maxPlayers}
@@ -1764,8 +1859,10 @@ export default function LivePage() {
                     hasDeviceControl={hasDeviceControl}
                     deviceLockLabel={deviceLockLabel}
                     cloudSyncPending={cloudSyncPending}
+                    canStartMatch={canStartMatch}
                     audioMode={audioMode}
                     events={liveState.events ?? []}
+                    onStartMatch={() => void startMatchFromLobby()}
                     onAudioModeChange={setAudioMode}
                     onTakeControl={() => void handleTakeControl()}
                     onCopyRoomCode={() => void copyRoomCode()}

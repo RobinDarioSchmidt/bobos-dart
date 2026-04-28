@@ -1423,12 +1423,14 @@ export default function Page() {
   const localLiveState = useMemo<LiveMatchState>(
     () => ({
       revision: 0,
+      phase: "running",
       mode,
       entryMode,
       finishMode,
       legsToWin,
       setsToWin,
       maxPlayers: players.length,
+      activeSeatIndexes: players.map((_, index) => index),
       activePlayer,
       legStartingPlayer,
       legWinner,

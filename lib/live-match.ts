@@ -97,12 +97,14 @@ export type LiveRoomEvent = {
 
 export type LiveMatchState = {
   revision: number;
+  phase: "lobby" | "running";
   mode: LiveGameMode;
   entryMode: LiveEntryMode;
   finishMode: LiveFinishMode;
   legsToWin: number;
   setsToWin: number;
   maxPlayers: number;
+  activeSeatIndexes: number[];
   activePlayer: number;
   legStartingPlayer: number;
   legWinner: number | null;
@@ -198,21 +200,19 @@ export function createEmptyLiveState(params: {
 
   return {
     revision: 1,
+    phase: "lobby",
     mode: params.mode,
     entryMode: params.entryMode,
     finishMode: params.finishMode,
     legsToWin: params.legsToWin,
     setsToWin: params.setsToWin,
     maxPlayers: params.maxPlayers,
+    activeSeatIndexes: [],
     activePlayer: 0,
     legStartingPlayer: 0,
     legWinner: null,
     matchWinner: null,
-    statusText: params.bullOffEnabled
-      ? `${params.ownerName} hat den Raum erstellt. Bull-Off entscheidet ueber den Start.`
-      : params.entryMode === "single"
-        ? `${params.ownerName} hat den Raum erstellt.`
-        : `${params.ownerName} hat den Raum erstellt. ${getEntryModeLabel(params.entryMode)} ist aktiv.`,
+    statusText: `${params.ownerName} hat die Lobby erstellt.`,
     bullOffEnabled: params.bullOffEnabled,
     bullOff: {
       enabled: params.bullOffEnabled,
@@ -290,20 +290,31 @@ export function normalizeLiveState(state: LiveMatchState | (Record<string, unkno
   const joinedIndexes = (nextState.players ?? [])
     .map((player, index) => (player?.joined ? index : -1))
     .filter((index) => index >= 0);
+  const phase = nextState.phase === "running" ? "running" : "lobby";
+  const activeSeatIndexes =
+    Array.isArray(nextState.activeSeatIndexes) && nextState.activeSeatIndexes.length > 0
+      ? nextState.activeSeatIndexes.filter(
+          (index): index is number => typeof index === "number" && index >= 0 && Boolean(nextState.players?.[index]?.joined),
+        )
+      : phase === "running"
+        ? joinedIndexes
+        : [];
 
   return {
     revision: typeof nextState.revision === "number" ? nextState.revision : 0,
+    phase,
     mode: nextState.mode ?? 501,
     entryMode,
     finishMode,
     legsToWin: nextState.legsToWin ?? 3,
     setsToWin: nextState.setsToWin ?? 1,
     maxPlayers: nextState.maxPlayers ?? Math.max((nextState.players ?? []).length, 2),
+    activeSeatIndexes,
     activePlayer: nextState.activePlayer ?? 0,
     legStartingPlayer: nextState.legStartingPlayer ?? nextState.activePlayer ?? 0,
     legWinner: nextState.legWinner ?? null,
     matchWinner: nextState.matchWinner ?? null,
-    statusText: nextState.statusText ?? "Live-Match bereit.",
+    statusText: nextState.statusText ?? (phase === "running" ? "Live-Match bereit." : "Lobby bereit."),
     bullOffEnabled,
     bullOff: nextState.bullOff ?? {
       enabled: bullOffEnabled,
@@ -327,6 +338,17 @@ export function normalizeLiveState(state: LiveMatchState | (Record<string, unkno
       deviceLocks: nextState.cloudSync?.deviceLocks ?? [],
     },
   } satisfies LiveMatchState;
+}
+
+export function getLiveActiveSeatIndexes(state: LiveMatchState) {
+  const normalized = normalizeLiveState(state);
+  if (normalized.phase !== "running") {
+    return normalized.players
+      .map((player, index) => (player.joined ? index : -1))
+      .filter((index) => index >= 0);
+  }
+
+  return normalized.activeSeatIndexes.filter((index) => normalized.players[index]?.joined);
 }
 
 export function isLiveDeviceLockActive(lock: LiveDeviceLock | null | undefined, now = Date.now()) {
@@ -366,15 +388,15 @@ export function getThrowCallout(dart: LiveDart) {
 }
 
 export function getNextJoinedPlayerIndex(state: LiveMatchState, fromIndex: number) {
-  const joinedPlayers = state.players.filter((player) => player.joined).length;
-  if (joinedPlayers <= 1) {
+  const activeSeatIndexes = getLiveActiveSeatIndexes(state);
+  if (activeSeatIndexes.length <= 1) {
     return fromIndex;
   }
 
   let index = fromIndex;
   for (let step = 0; step < state.players.length; step += 1) {
     index = (index + 1) % state.players.length;
-    if (state.players[index]?.joined) {
+    if (activeSeatIndexes.includes(index)) {
       return index;
     }
   }
@@ -383,9 +405,7 @@ export function getNextJoinedPlayerIndex(state: LiveMatchState, fromIndex: numbe
 }
 
 function getJoinedPlayerIndexes(state: LiveMatchState) {
-  return state.players
-    .map((player, index) => (player.joined ? index : -1))
-    .filter((index) => index >= 0);
+  return getLiveActiveSeatIndexes(state);
 }
 
 function getBullOffRank(dart: LiveDart) {
@@ -532,6 +552,9 @@ function resolveBullOff(state: LiveMatchState) {
 
 export function applyBullOffThrow(previousState: LiveMatchState, dart: LiveDart) {
   const nextState = normalizeLiveState(previousState);
+  if (nextState.phase !== "running") {
+    return nextState;
+  }
   if (!nextState.bullOff.enabled || nextState.bullOff.completed) {
     return nextState;
   }
@@ -570,6 +593,9 @@ export function applyBullOffThrow(previousState: LiveMatchState, dart: LiveDart)
 
 export function addPendingDart(previousState: LiveMatchState, dart: LiveDart) {
   const nextState = normalizeLiveState(previousState);
+  if (nextState.phase !== "running") {
+    return nextState;
+  }
   if (nextState.matchWinner !== null || nextState.legWinner !== null) {
     return nextState;
   }
@@ -603,6 +629,9 @@ export function addPendingDart(previousState: LiveMatchState, dart: LiveDart) {
 
 export function removePendingDart(previousState: LiveMatchState) {
   const nextState = normalizeLiveState(previousState);
+  if (nextState.phase !== "running") {
+    return nextState;
+  }
   if (!nextState.pendingVisit || nextState.pendingVisit.playerIndex !== nextState.activePlayer) {
     return nextState;
   }
@@ -625,6 +654,9 @@ export function removePendingDart(previousState: LiveMatchState) {
 
 export function clearPendingVisit(previousState: LiveMatchState) {
   const nextState = normalizeLiveState(previousState);
+  if (nextState.phase !== "running") {
+    return nextState;
+  }
   if (!nextState.pendingVisit || nextState.pendingVisit.playerIndex !== nextState.activePlayer) {
     return nextState;
   }
@@ -636,6 +668,9 @@ export function clearPendingVisit(previousState: LiveMatchState) {
 
 export function finalizePendingVisit(previousState: LiveMatchState) {
   const nextState = normalizeLiveState(previousState);
+  if (nextState.phase !== "running") {
+    return nextState;
+  }
   if (!nextState.pendingVisit || nextState.pendingVisit.playerIndex !== nextState.activePlayer) {
     return nextState;
   }
@@ -743,6 +778,9 @@ export function finalizePendingVisit(previousState: LiveMatchState) {
 
 export function startNextLiveLeg(previousState: LiveMatchState) {
   const nextState = normalizeLiveState(previousState);
+  if (nextState.phase !== "running") {
+    return nextState;
+  }
   const nextStarter = getNextJoinedPlayerIndex(nextState, nextState.legStartingPlayer);
   nextState.players = nextState.players.map((player) => ({
     ...player,
@@ -773,7 +811,7 @@ export function startNextLiveLeg(previousState: LiveMatchState) {
 
 export function startRematchLiveMatch(previousState: LiveMatchState) {
   const nextState = normalizeLiveState(previousState);
-  const firstJoined = getJoinedPlayerIndexes(nextState)[0] ?? 0;
+  const firstJoined = getLiveActiveSeatIndexes(nextState)[0] ?? 0;
   const rematchStarter =
     nextState.bullOff.enabled
       ? firstJoined
@@ -791,6 +829,8 @@ export function startRematchLiveMatch(previousState: LiveMatchState) {
   nextState.legWinner = null;
   nextState.matchWinner = null;
   nextState.lastCallout = null;
+  nextState.phase = "running";
+  nextState.activeSeatIndexes = getLiveActiveSeatIndexes(nextState);
   nextState.legStartingPlayer = rematchStarter;
   nextState.cloudSync = {
     sessionKey: generateSessionKey(),
@@ -833,6 +873,70 @@ export function startRematchLiveMatch(previousState: LiveMatchState) {
   appendLiveEvent(nextState, {
     type: "match",
     text: `${nextState.players[rematchStarter].name} startet das Rematch.`,
+  });
+  return nextState;
+}
+
+export function startLiveMatch(previousState: LiveMatchState) {
+  const nextState = normalizeLiveState(previousState);
+  const activeSeatIndexes = nextState.players
+    .map((player, index) => (player.joined ? index : -1))
+    .filter((index) => index >= 0);
+
+  if (activeSeatIndexes.length === 0) {
+    return nextState;
+  }
+
+  const firstActiveSeat = activeSeatIndexes[0] ?? 0;
+  nextState.phase = "running";
+  nextState.activeSeatIndexes = activeSeatIndexes;
+  nextState.pendingVisit = null;
+  nextState.history = [];
+  nextState.legWinner = null;
+  nextState.matchWinner = null;
+  nextState.lastCallout = null;
+  nextState.players = nextState.players.map((player) => ({
+    ...player,
+    score: nextState.mode,
+    legs: 0,
+    sets: 0,
+    entered: player.joined ? nextState.entryMode === "single" : false,
+  }));
+
+  if (nextState.bullOff.enabled && activeSeatIndexes.length > 1) {
+    nextState.bullOff = {
+      enabled: true,
+      completed: false,
+      currentPlayerIndex: firstActiveSeat,
+      winnerIndex: null,
+      attempts: [],
+    };
+    nextState.activePlayer = firstActiveSeat;
+    nextState.legStartingPlayer = firstActiveSeat;
+    nextState.statusText = `${nextState.players[firstActiveSeat]?.name ?? "Spieler"} startet das Bull-Off.`;
+    appendLiveEvent(nextState, {
+      type: "room",
+      text: `Das Match wurde gestartet. Bull-Off entscheidet ueber den Beginn.`,
+    });
+    return nextState;
+  }
+
+  nextState.bullOff = {
+    enabled: nextState.bullOff.enabled,
+    completed: true,
+    currentPlayerIndex: null,
+    winnerIndex: nextState.bullOff.enabled ? firstActiveSeat : null,
+    attempts: [],
+  };
+  nextState.activePlayer = firstActiveSeat;
+  nextState.legStartingPlayer = firstActiveSeat;
+  nextState.statusText =
+    nextState.entryMode === "single"
+      ? `${nextState.players[firstActiveSeat]?.name ?? "Spieler"} beginnt das Match.`
+      : `${nextState.players[firstActiveSeat]?.name ?? "Spieler"} beginnt das Match und sucht ${getEntryModeLabel(nextState.entryMode)}.`;
+  appendLiveEvent(nextState, {
+    type: "room",
+    text: `Das Match wurde mit ${activeSeatIndexes.length} aktiven Spielern gestartet.`,
   });
   return nextState;
 }

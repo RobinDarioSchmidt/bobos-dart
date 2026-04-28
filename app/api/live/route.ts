@@ -6,11 +6,13 @@ import {
   createEmptyLiveState,
   finalizePendingVisit,
   generateRoomCode,
+  getLiveActiveSeatIndexes,
   getPreferredDisplayName,
   isLiveDeviceLockActive,
   normalizeLiveState,
   removePendingDart,
   startNextLiveLeg,
+  startLiveMatch,
   startRematchLiveMatch,
   type LiveDeviceLock,
   type LiveDart,
@@ -38,6 +40,7 @@ type LiveRoomListEntry = {
   room_code: string;
   owner_id: string;
   host_name: string;
+  phase: "lobby" | "running";
   mode: 301 | 501;
   finish_mode: LiveFinishMode;
   joined_players: number;
@@ -151,6 +154,10 @@ function getActiveDeviceLocks(state: LiveMatchState) {
 }
 
 function getCurrentLiveTurnIndex(state: LiveMatchState) {
+  if (state.phase !== "running") {
+    return -1;
+  }
+
   if (state.bullOff.enabled && !state.bullOff.completed) {
     return state.bullOff.currentPlayerIndex ?? state.activePlayer;
   }
@@ -164,31 +171,39 @@ function toLiveRoomListEntry(entry: LiveMatchRow, userId?: string) {
     return null;
   }
 
-  const joinedPlayers = state.players.filter((player) => player.joined);
-  if (joinedPlayers.length === 0) {
+  const visibleSeatIndexes =
+    state.phase === "running"
+      ? getLiveActiveSeatIndexes(state)
+      : state.players
+          .map((player, index) => (player.joined ? index : -1))
+          .filter((index) => index >= 0);
+  const visiblePlayers = visibleSeatIndexes.map((index) => state.players[index]).filter(Boolean);
+  if (visiblePlayers.length === 0) {
     return null;
   }
 
   const activeLockIds = new Set(getActiveDeviceLocks(state).map((lock) => lock.profileId));
   const currentPlayerIndex = getCurrentLiveTurnIndex(state);
-  const currentPlayerName = state.players[currentPlayerIndex]?.name ?? joinedPlayers[0]?.name ?? "Spieler";
+  const currentPlayerName =
+    currentPlayerIndex >= 0 ? state.players[currentPlayerIndex]?.name ?? "Spieler" : "Lobby";
 
   return {
     room_code: entry.room_code,
     owner_id: entry.owner_id,
     host_name: state.players[0]?.name ?? "Host",
+    phase: state.phase,
     mode: state.mode,
     finish_mode: state.finishMode,
-    joined_players: joinedPlayers.length,
+    joined_players: visiblePlayers.length,
     max_players: state.maxPlayers,
     status_text: state.statusText,
     current_player_name: currentPlayerName,
     created_at: entry.created_at ?? entry.updated_at ?? new Date().toISOString(),
-    players: joinedPlayers.map((player) => ({
+    players: visiblePlayers.map((player) => ({
       name: player.name,
       is_active: Boolean(player.profileId && activeLockIds.has(player.profileId)),
     })),
-    is_user_turn: Boolean(userId && state.players[currentPlayerIndex]?.profileId === userId),
+    is_user_turn: Boolean(userId && currentPlayerIndex >= 0 && state.players[currentPlayerIndex]?.profileId === userId),
   } satisfies LiveRoomListEntry;
 }
 
@@ -197,6 +212,10 @@ function getActiveDeviceLockForProfile(state: LiveMatchState, profileId: string)
 }
 
 function getControllingSeatIndex(state: LiveMatchState) {
+  if (state.phase !== "running") {
+    return -1;
+  }
+
   if (state.bullOff.enabled && !state.bullOff.completed) {
     return state.bullOff.currentPlayerIndex ?? state.activePlayer;
   }
@@ -443,7 +462,7 @@ export async function GET(request: Request) {
           return isParticipant ? room : null;
         }
 
-        return room.joined_players >= room.max_players ? null : room;
+        return room.phase === "lobby" && room.joined_players >= room.max_players ? null : room;
       })
       .filter((entry): entry is LiveRoomListEntry => Boolean(entry));
 
@@ -513,6 +532,11 @@ export async function POST(request: Request) {
         displayName: string;
         deviceId?: string;
         deviceLabel?: string;
+      }
+    | {
+        action: "start_match";
+        roomCode: string;
+        deviceId?: string;
       }
     | {
         action: "claim_device";
@@ -678,6 +702,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ match });
     }
 
+    if (state.phase === "running") {
+      return NextResponse.json({ match, spectator: true });
+    }
+
     const openSeatIndex = state.players.findIndex((player) => !player.joined);
     if (openSeatIndex < 0) {
       return NextResponse.json({ error: "room_full" }, { status: 400 });
@@ -721,6 +749,57 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ match: updated });
+  }
+
+  if (body.action === "start_match") {
+    const { data, error } = await adminClient
+      .from("live_matches")
+      .select("id, owner_id, room_code, state")
+      .eq("room_code", body.roomCode.toUpperCase())
+      .maybeSingle();
+
+    if (error || !data) {
+      return NextResponse.json({ error: error?.message ?? "match_not_found" }, { status: 404 });
+    }
+
+    const match = data as LiveMatchRow;
+    if (match.owner_id !== authResult.user.id) {
+      return NextResponse.json({ error: "only_host_can_start_match" }, { status: 403 });
+    }
+
+    let state = normalizeLiveState(match.state);
+    if (state.phase === "running") {
+      return NextResponse.json({ match });
+    }
+
+    const joinedSeatIndexes = state.players
+      .map((player, index) => (player.joined ? index : -1))
+      .filter((index) => index >= 0);
+    if (joinedSeatIndexes.length === 0) {
+      return NextResponse.json({ error: "no_players_in_lobby" }, { status: 409 });
+    }
+
+    if (body.deviceId) {
+      state = withUpdatedDeviceLock(state, {
+        profileId: authResult.user.id,
+        deviceId: body.deviceId,
+        deviceLabel: getActiveDeviceLockForProfile(state, authResult.user.id)?.deviceLabel ?? "Dieses Geraet",
+        lastSeenAt: new Date().toISOString(),
+      });
+    }
+
+    state = startLiveMatch(state);
+    state = bumpLiveRevision(state);
+
+    try {
+      const updated = await storeLiveMatchState(adminClient, match, state);
+      return NextResponse.json({ match: updated });
+    } catch (storeError) {
+      return NextResponse.json(
+        { error: storeError instanceof Error ? storeError.message : "start_match_failed" },
+        { status: 400 },
+      );
+    }
   }
 
   if (body.action === "claim_device") {
@@ -826,6 +905,9 @@ export async function POST(request: Request) {
     const isHost = match.owner_id === authResult.user.id;
 
     if (body.action === "add_dart" || body.action === "remove_dart" || body.action === "finalize_visit") {
+      if (nextState.phase !== "running") {
+        return NextResponse.json({ error: "match_not_started" }, { status: 409 });
+      }
       if (controllingSeat !== currentUserSeat) {
         return NextResponse.json({ error: "not_your_turn" }, { status: 409 });
       }
@@ -934,7 +1016,7 @@ export async function POST(request: Request) {
     }
 
     if (participantIndex < 0) {
-      return NextResponse.json({ error: "not_a_participant" }, { status: 403 });
+      return NextResponse.json({ left: true, spectator: true });
     }
 
     const leavingPlayer = currentState.players[participantIndex];
@@ -949,6 +1031,7 @@ export async function POST(request: Request) {
       entered: false,
       name: `Spieler ${participantIndex + 1}`,
     };
+    currentState.activeSeatIndexes = currentState.activeSeatIndexes.filter((index) => index !== participantIndex);
 
     if (currentState.pendingVisit?.playerIndex === participantIndex) {
       currentState.pendingVisit = null;
@@ -973,7 +1056,13 @@ export async function POST(request: Request) {
     }
 
     if (currentState.activePlayer === participantIndex) {
-      currentState.activePlayer = currentState.players[fallbackSeatIndex]?.joined ? fallbackSeatIndex : remainingJoined[0].index;
+      const nextSeat =
+        currentState.phase === "running"
+          ? currentState.activeSeatIndexes[0] ?? remainingJoined[0].index
+          : currentState.players[fallbackSeatIndex]?.joined
+            ? fallbackSeatIndex
+            : remainingJoined[0].index;
+      currentState.activePlayer = nextSeat;
     }
 
     if (currentState.legStartingPlayer === participantIndex) {

@@ -831,7 +831,9 @@ export function LiveBoardPanel({
 }) {
   const visiblePlayers = liveState.players
     .map((player, index) => ({ player, index }))
-    .filter(({ player }) => player.joined);
+    .filter(({ player, index }) =>
+      liveState.phase === "running" ? liveState.activeSeatIndexes.includes(index) : player.joined,
+    );
   const playerGridClass = visiblePlayers.length === 3 ? "grid-cols-3" : "grid-cols-2";
 
   return (

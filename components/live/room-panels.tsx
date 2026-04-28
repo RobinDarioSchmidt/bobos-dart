@@ -352,6 +352,7 @@ export function LiveRoomJoinPanel({
 
 export function LiveRoomStatusPanel({
   liveRoomCode,
+  matchPhase,
   isRoomHost,
   joinedPlayerCount,
   maxPlayers,
@@ -364,8 +365,10 @@ export function LiveRoomStatusPanel({
   hasDeviceControl,
   deviceLockLabel,
   cloudSyncPending,
+  canStartMatch,
   audioMode,
   events,
+  onStartMatch,
   onAudioModeChange,
   onTakeControl,
   onCopyRoomCode,
@@ -376,6 +379,7 @@ export function LiveRoomStatusPanel({
   onCloseRoom,
 }: {
   liveRoomCode: string;
+  matchPhase: "lobby" | "running";
   isRoomHost: boolean;
   joinedPlayerCount: number;
   maxPlayers: number;
@@ -388,8 +392,10 @@ export function LiveRoomStatusPanel({
   hasDeviceControl: boolean;
   deviceLockLabel: string | null;
   cloudSyncPending: boolean;
+  canStartMatch: boolean;
   audioMode: LiveAudioMode;
   events: LiveMatchState["events"];
+  onStartMatch: () => void;
   onAudioModeChange: (mode: LiveAudioMode) => void;
   onTakeControl: () => void;
   onCopyRoomCode: () => void;
@@ -431,7 +437,25 @@ export function LiveRoomStatusPanel({
         <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-stone-200">
           {isRoomHost ? "Du bist Host" : "Du bist im Raum"}
         </div>
+        <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-stone-200">
+          {matchPhase === "lobby" ? "Lobby" : "Laufend"}
+        </div>
       </div>
+
+      {matchPhase === "lobby" && isRoomHost ? (
+        <div className="mt-3 rounded-2xl border border-emerald-300/20 bg-emerald-400/10 p-3">
+          <p className="text-sm text-emerald-50">
+            Starte das Match erst, wenn alle aktiven Spieler in der Lobby sind. Spaetere Beitritte kommen automatisch als Zuschauer rein.
+          </p>
+          <button
+            onClick={onStartMatch}
+            disabled={!canStartMatch || loading}
+            className="mt-3 w-full rounded-2xl bg-emerald-400 px-4 py-3 text-sm font-semibold text-black disabled:opacity-50"
+          >
+            Match starten
+          </button>
+        </div>
+      ) : null}
 
       {cloudSyncPending ? (
         <p className="mt-3 text-xs text-amber-200">Cloud-Statistiken werden fuer dieses Match noch gesichert.</p>
