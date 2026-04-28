@@ -911,13 +911,47 @@ export function LiveBoardPanel({
       ) : null}
 
       <div className="mt-4 -mx-2 sm:mx-0">
-        <LiveDartboard
-          onSegmentSelect={onSegmentSelect}
-          disabled={!canSelectBoardInput || loading}
-          disabledLabel={boardDisabledReason}
-          markers={boardMarkers}
-          loading={loading}
-        />
+        <div className="relative">
+          <LiveDartboard
+            onSegmentSelect={onSegmentSelect}
+            disabled={!canSelectBoardInput || loading}
+            disabledLabel={boardDisabledReason}
+            markers={boardMarkers}
+            loading={loading}
+          />
+          {pendingLabels.length >= 3 && canPlayFromThisDevice ? (
+            <div className="pointer-events-none absolute inset-x-0 bottom-4 z-30 flex justify-center px-3">
+              <div className="pointer-events-auto w-full max-w-md rounded-[1.5rem] border border-white/10 bg-black/78 p-3 shadow-2xl shadow-black/50 backdrop-blur-xl">
+                <div className="flex flex-wrap gap-2">
+                  {pendingLabels.map((label, index) => (
+                    <div
+                      key={`overlay-${label}-${index}`}
+                      className="rounded-full border border-amber-300/30 bg-amber-300/10 px-3 py-1 text-sm font-semibold text-amber-100"
+                    >
+                      {label}
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <button
+                    onClick={onRemoveLast}
+                    disabled={!canPlayFromThisDevice || pendingLabels.length === 0}
+                    className="whitespace-nowrap rounded-2xl bg-rose-500 px-3 py-2 text-xs font-semibold text-white disabled:opacity-40 sm:text-sm"
+                  >
+                    Korr.
+                  </button>
+                  <button
+                    onClick={onFinishVisit}
+                    disabled={!canPlayFromThisDevice || pendingLabels.length === 0}
+                    className="whitespace-nowrap rounded-2xl bg-emerald-400 px-3 py-2 text-xs font-semibold text-black disabled:opacity-40 sm:text-sm"
+                  >
+                    Visit loggen
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
+        </div>
       </div>
 
       <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4 mx-2 sm:mx-0">
@@ -946,28 +980,23 @@ export function LiveBoardPanel({
             >
               Korr.
             </button>
-            <button
-              onClick={onMiss}
-              disabled={!canPlayFromThisDevice || loading}
-              className={`whitespace-nowrap rounded-2xl px-3 py-2 text-xs font-semibold disabled:opacity-40 sm:px-4 sm:text-sm ${
-                pendingLabels.length >= 3
-                  ? "bg-red-500 text-white"
-                  : "border border-white/10 bg-white/5 text-white"
-              }`}
-            >
-              Miss
-            </button>
-            <button
-              onClick={onFinishVisit}
-              disabled={!canPlayFromThisDevice || pendingLabels.length === 0}
-              className={`whitespace-nowrap rounded-2xl px-3 py-2 text-xs font-semibold disabled:opacity-40 sm:px-4 sm:text-sm ${
-                pendingLabels.length >= 3
-                  ? "bg-emerald-400 text-black"
-                  : "border border-white/10 bg-white/5 text-white"
-              }`}
-            >
-              Visit loggen
-            </button>
+            {pendingLabels.length < 3 ? (
+              <>
+                <button
+                  onClick={onMiss}
+                  disabled={!canPlayFromThisDevice || loading}
+                  className="whitespace-nowrap rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-white disabled:opacity-40 sm:px-4 sm:text-sm"
+                >
+                  Miss
+                </button>
+                <div />
+              </>
+            ) : (
+              <>
+                <div />
+                <div />
+              </>
+            )}
           </div>
         ) : null : null}
 

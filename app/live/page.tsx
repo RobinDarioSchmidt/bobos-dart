@@ -213,21 +213,10 @@ function getDeviceLabel() {
 }
 
 export default function LivePage() {
-  const initialRestoreTarget =
-    typeof window === "undefined"
-      ? ""
-      : new URLSearchParams(window.location.search).get("room")?.toUpperCase() ??
-        window.localStorage.getItem(LIVE_ROOM_STORAGE_KEY) ??
-        "";
   const [session, setSession] = useState<Session | null>(null);
   const [displayName, setDisplayName] = useState("");
-  const [roomCodeInput, setRoomCodeInput] = useState(() => {
-    if (typeof window === "undefined") {
-      return "";
-    }
-
-    return new URLSearchParams(window.location.search).get("room")?.toUpperCase() ?? "";
-  });
+  const [roomCodeInput, setRoomCodeInput] = useState("");
+  const [restoreTargetCode, setRestoreTargetCode] = useState("");
   const [liveRoomCode, setLiveRoomCode] = useState("");
   const [roomOwnerId, setRoomOwnerId] = useState("");
   const [liveState, setLiveState] = useState<LiveMatchState | null>(null);
@@ -246,7 +235,7 @@ export default function LivePage() {
     activeDeviceLabel: string;
   } | null>(null);
   const [loading, setLoading] = useState(false);
-  const [restoringRoom, setRestoringRoom] = useState(Boolean(initialRestoreTarget));
+  const [restoringRoom, setRestoringRoom] = useState(false);
   const [playerPresence, setPlayerPresence] = useState<PlayerPresenceSummary[]>([]);
   const [selectedPresencePlayer, setSelectedPresencePlayer] = useState<PlayerPresenceSummary | null>(null);
   const [selectedLivePlayerStats, setSelectedLivePlayerStats] = useState<{
@@ -289,7 +278,7 @@ export default function LivePage() {
     }
 
     window.localStorage.setItem(LIVE_ROOM_SNAPSHOT_KEY, JSON.stringify(snapshot));
-  }, []);
+  }, [liveRoomCode]);
 
   const flashMessage = useCallback((nextMessage: string) => {
     setMessage(nextMessage);
@@ -371,6 +360,15 @@ export default function LivePage() {
   useEffect(() => {
     if (typeof window === "undefined") {
       return;
+    }
+
+    const queryRoomCode = new URLSearchParams(window.location.search).get("room")?.toUpperCase() ?? "";
+    const storedRoomCode = window.localStorage.getItem(LIVE_ROOM_STORAGE_KEY) ?? "";
+    const restoreTarget = queryRoomCode || storedRoomCode;
+    if (restoreTarget && !liveRoomCode) {
+      setRestoreTargetCode(restoreTarget);
+      setRestoringRoom(true);
+      setRoomCodeInput(restoreTarget);
     }
 
     const storedMode = window.localStorage.getItem(LIVE_AUDIO_MODE_STORAGE_KEY);
@@ -456,7 +454,7 @@ export default function LivePage() {
     }
 
     window.localStorage.removeItem(LIVE_ROOM_STORAGE_KEY);
-  }, [liveRoomCode]);
+  }, []);
 
   useEffect(() => {
     syncRoomCodeInUrl(liveRoomCode || null);
@@ -509,7 +507,7 @@ export default function LivePage() {
     } finally {
       openRoomsFetchInFlightRef.current = false;
     }
-  }, []);
+  }, [liveRoomCode]);
 
   const loadCloudPlayers = useCallback(async () => {
     const accessToken = await getAccessToken();
@@ -577,6 +575,7 @@ export default function LivePage() {
           setLiveRoomCode("");
           setRoomOwnerId("");
           setLiveState(null);
+          setRestoreTargetCode("");
           saveRoomSnapshot(null);
           void loadOpenRooms();
         }
@@ -588,6 +587,7 @@ export default function LivePage() {
       setLiveRoomCode(result.match.room_code);
       setRoomOwnerId(result.match.owner_id);
       setLiveState(normalizedState);
+      setRestoreTargetCode(result.match.room_code);
       setConnectionState("online");
       roomFailureCountRef.current = 0;
       roomNotFoundCountRef.current = 0;
@@ -715,10 +715,12 @@ export default function LivePage() {
     const storedRoomCode = window.localStorage.getItem(LIVE_ROOM_STORAGE_KEY) ?? "";
     const restoredRoomCode = queryRoomCode || storedRoomCode;
     if (!restoredRoomCode) {
+      setRestoreTargetCode("");
       setRestoringRoom(false);
       return;
     }
 
+    setRestoreTargetCode(restoredRoomCode);
     setRoomCodeInput(restoredRoomCode);
     const snapshot = restoreRoomSnapshot(restoredRoomCode);
     if (snapshot) {
@@ -729,6 +731,8 @@ export default function LivePage() {
     setMessage(`Letzten Raum ${restoredRoomCode} gefunden. Online-Match wird wiederhergestellt...`);
     void fetchMatch(restoredRoomCode);
   }, [fetchMatch, liveRoomCode, restoreRoomSnapshot, session]);
+
+  const hasRoomRestoreTarget = Boolean(restoringRoom || liveRoomCode || restoreTargetCode);
 
   const broadcastRefresh = useCallback(async (roomCode: string, reason: string) => {
     const channel = liveChannelRef.current;
@@ -1312,7 +1316,7 @@ export default function LivePage() {
     const completedVisit = nextState.history.find((entry) => entry.result !== "leg-win") ?? null;
     const previousVisit = liveState.history.find((entry) => entry.result !== "leg-win") ?? null;
     if (
-      audioMode === "all" &&
+      (audioMode === "all" || audioMode === "darts") &&
       (!completedVisit || completedVisit.createdAt === previousVisit?.createdAt)
     ) {
       void playLiveDartCallout(dart.label, audioMode);
@@ -1343,7 +1347,7 @@ export default function LivePage() {
     const completedVisit = nextState.history.find((entry) => entry.result !== "leg-win") ?? null;
     const previousVisit = liveState.history.find((entry) => entry.result !== "leg-win") ?? null;
     if (
-      audioMode === "all" &&
+      (audioMode === "all" || audioMode === "darts") &&
       (!completedVisit || completedVisit.createdAt === previousVisit?.createdAt)
     ) {
       void playLiveDartCallout(dart.label, audioMode);
@@ -1437,6 +1441,7 @@ export default function LivePage() {
       setLiveRoomCode("");
       setRoomOwnerId("");
       setLiveState(null);
+      setRestoreTargetCode("");
       setConnectedNames([]);
       saveRoomSnapshot(null);
       if (typeof window !== "undefined") {
@@ -1459,6 +1464,7 @@ export default function LivePage() {
     });
 
     if (result && "closed" in result && result.closed) {
+      setRestoreTargetCode("");
       saveRoomSnapshot(null);
       setMessage("Der Raum wurde geschlossen.");
       await loadOpenRooms();
@@ -1600,7 +1606,7 @@ export default function LivePage() {
               <section className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4 text-sm text-stone-300">
                 Letzter Raum wird wiederhergestellt...
               </section>
-            ) : !liveState ? (
+            ) : !liveState && !hasRoomRestoreTarget ? (
               <section className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
                 <LiveRoomCreatePanel
                   createOpen={createOpen}
@@ -1660,6 +1666,10 @@ export default function LivePage() {
                   onLeaveRoom={() => void leaveRoom()}
                   onCloseRoom={() => void closeRoom()}
                 />
+              </section>
+            ) : !liveState ? (
+              <section className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4 text-sm text-stone-300">
+                Raum wird vorbereitet...
               </section>
             ) : null}
 

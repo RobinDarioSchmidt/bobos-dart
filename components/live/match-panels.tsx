@@ -408,32 +408,32 @@ export function LiveHistoryPanel({
       ) : historyOpen ? (
         <div className="mt-4 space-y-2">
           {history.slice(0, 32).map((visit, index) => (
-              <div key={`${visit.createdAt}-${index}`} className={`rounded-2xl border p-3 text-sm ${resultStyles(visit.result)}`}>
-                <div className="flex items-start justify-between gap-3">
-                  <p className="font-semibold">{visit.playerName}</p>
-                  <p className="text-xs opacity-70">
-                    {new Date(visit.createdAt).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}
-                  </p>
-                </div>
-                <p className="mt-1 text-xs opacity-85">{visit.note} - {visit.darts.join(", ") || "Ohne Dartdaten"}</p>
-                <p className="mt-2 text-xs opacity-90">
-                  {`${visit.total} Punkte - ${visit.scoreBefore} -> ${visit.scoreAfter}`}
-                </p>
-              </div>
-            ))}
-        </div>
-      ) : (
-        <div className="mt-4 space-y-2">
-          {previewHistory.map((visit, index) => (
-            <div key={`${visit.createdAt}-${index}`} className={`rounded-2xl border p-3 text-sm ${resultStyles(visit.result)}`}>
+            <div key={`${visit.createdAt}-${index}`} className={`rounded-2xl border px-3 py-2.5 text-sm ${resultStyles(visit.result)}`}>
               <div className="flex items-start justify-between gap-3">
                 <p className="font-semibold">{visit.playerName}</p>
                 <p className="text-xs opacity-70">
                   {new Date(visit.createdAt).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}
                 </p>
               </div>
-              <p className="mt-1 text-xs opacity-85">{visit.note} - {visit.darts.join(", ") || "Ohne Dartdaten"}</p>
-              <p className="mt-2 text-xs opacity-90">{`${visit.total} Punkte - ${visit.scoreBefore} -> ${visit.scoreAfter}`}</p>
+              <p className="mt-0.5 text-xs opacity-85">{visit.note} - {visit.darts.join(", ") || "Ohne Dartdaten"}</p>
+              <p className="mt-1 text-xs opacity-90">
+                {`${visit.total} Punkte - ${visit.scoreBefore} -> ${visit.scoreAfter}`}
+              </p>
+            </div>
+            ))}
+        </div>
+      ) : (
+        <div className="mt-4 space-y-2">
+          {previewHistory.map((visit, index) => (
+            <div key={`${visit.createdAt}-${index}`} className={`rounded-2xl border px-3 py-2.5 text-sm ${resultStyles(visit.result)}`}>
+              <div className="flex items-start justify-between gap-3">
+                <p className="font-semibold">{visit.playerName}</p>
+                <p className="text-xs opacity-70">
+                  {new Date(visit.createdAt).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}
+                </p>
+              </div>
+              <p className="mt-0.5 text-xs opacity-85">{visit.note} - {visit.darts.join(", ") || "Ohne Dartdaten"}</p>
+              <p className="mt-1 text-xs opacity-90">{`${visit.total} Punkte - ${visit.scoreBefore} -> ${visit.scoreAfter}`}</p>
             </div>
           ))}
         </div>
