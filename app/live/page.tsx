@@ -453,12 +453,20 @@ export default function LivePage() {
       return;
     }
 
+    if (restoreTargetCode) {
+      return;
+    }
+
     window.localStorage.removeItem(LIVE_ROOM_STORAGE_KEY);
-  }, []);
+  }, [liveRoomCode, restoreTargetCode]);
 
   useEffect(() => {
+    if (!liveRoomCode && restoreTargetCode) {
+      return;
+    }
+
     syncRoomCodeInUrl(liveRoomCode || null);
-  }, [liveRoomCode, syncRoomCodeInUrl]);
+  }, [liveRoomCode, restoreTargetCode, syncRoomCodeInUrl]);
 
   async function getAccessToken() {
     if (!supabase) {
