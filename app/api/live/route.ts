@@ -909,6 +909,17 @@ export async function POST(request: Request) {
     );
     currentState = withoutDeviceLock(currentState, authResult.user.id);
 
+    if (currentState.matchWinner !== null) {
+      try {
+        currentState = await persistCompletedLiveMatch(adminClient, currentState);
+      } catch {
+        currentState = normalizeLiveState({
+          ...currentState,
+          statusText: `${currentState.statusText} Cloud-Sync wird beim Verlassen erneut versucht.`,
+        });
+      }
+    }
+
     if (body.action === "close") {
       if (match.owner_id !== authResult.user.id) {
         return NextResponse.json({ error: "only_host_can_close_room" }, { status: 403 });
