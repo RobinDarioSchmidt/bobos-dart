@@ -44,11 +44,18 @@ export function PlayerRivalryDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-end justify-center bg-black/65 p-3 sm:items-center sm:p-6">
-      <div className="w-full max-w-2xl rounded-[1.75rem] border border-white/10 bg-[#0f172a] p-4 shadow-2xl shadow-black/40">
+    <div className="fixed inset-0 z-[120] overflow-y-auto bg-black/65 px-3 pb-6 pt-3 sm:px-6 sm:pb-8 sm:pt-8">
+      <div className="mx-auto w-full max-w-2xl rounded-[1.75rem] border border-white/10 bg-[#0f172a] p-4 shadow-2xl shadow-black/40">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 className="text-2xl font-semibold text-white">{selectedPlayer.displayName}</h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-2xl font-semibold text-white">{selectedPlayer.displayName}</h2>
+              <span
+                className={`h-2.5 w-2.5 shrink-0 rounded-full ${
+                  selectedPlayer.isActive ? "bg-emerald-300 shadow-[0_0_12px_rgba(110,231,183,0.75)]" : "bg-stone-600"
+                }`}
+              />
+            </div>
             <p className="mt-1 text-sm text-stone-400">Spielerprofil und direkte Rivalitaet</p>
           </div>
           <button
@@ -111,10 +118,10 @@ export function PlayerRivalryDialog({
             <p className="text-xs uppercase tracking-[0.24em] text-stone-400">Letztes gemeinsames Match</p>
             <div className="mt-3 space-y-1">
               <p className="text-sm font-semibold text-white">
-                {recentSharedMatch.modeLabel} · {recentSharedMatch.scoreLine}
+                {recentSharedMatch.modeLabel} | {recentSharedMatch.scoreLine}
               </p>
               <p className="text-sm text-stone-300">
-                Sieger: {recentSharedMatch.winner} · Gegner: {recentSharedMatch.opponents}
+                Sieger: {recentSharedMatch.winner} | Gegner: {recentSharedMatch.opponents}
               </p>
               <p className="text-xs text-stone-500">{recentSharedMatch.playedAt}</p>
             </div>
