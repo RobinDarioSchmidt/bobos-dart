@@ -63,6 +63,27 @@ type CloudMatchInsert = {
 
 const LIVE_ROOM_INACTIVITY_MS = 60 * 60 * 1000;
 
+async function resolveLiveDisplayName(
+  adminClient: ReturnType<typeof getSupabaseAdminClients>["adminClient"],
+  userId: string,
+  email: string | undefined,
+  fallbackName: string,
+  adminEmail: string,
+) {
+  const { data } = await adminClient
+    .from("profiles")
+    .select("display_name")
+    .eq("id", userId)
+    .maybeSingle();
+
+  const profileName =
+    data && "display_name" in data && typeof data.display_name === "string"
+      ? data.display_name
+      : "";
+
+  return getPreferredDisplayName(email, profileName || fallbackName, adminEmail);
+}
+
 function bumpLiveRevision(state: LiveMatchState, previousRevision?: number) {
   return normalizeLiveState({
     ...state,
@@ -548,7 +569,13 @@ export async function POST(request: Request) {
   }
 
   if (body.action === "create") {
-    const displayName = getPreferredDisplayName(authResult.user.email, body.displayName, adminEmail);
+    const displayName = await resolveLiveDisplayName(
+      adminClient,
+      authResult.user.id,
+      authResult.user.email,
+      body.displayName,
+      adminEmail,
+    );
     for (let attempt = 0; attempt < 12; attempt += 1) {
       const roomCode = generateRoomCode();
       let state: LiveMatchState = createEmptyLiveState({
@@ -594,7 +621,13 @@ export async function POST(request: Request) {
   }
 
   if (body.action === "join") {
-    const displayName = getPreferredDisplayName(authResult.user.email, body.displayName, adminEmail);
+    const displayName = await resolveLiveDisplayName(
+      adminClient,
+      authResult.user.id,
+      authResult.user.email,
+      body.displayName,
+      adminEmail,
+    );
     const { data, error } = await adminClient
       .from("live_matches")
       .select("id, owner_id, room_code, state")

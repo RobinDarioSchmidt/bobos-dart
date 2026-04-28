@@ -44,8 +44,8 @@ export function PlayerRivalryDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-[120] overflow-y-auto bg-black/65 px-3 pb-6 pt-3 sm:px-6 sm:pb-8 sm:pt-8">
-      <div className="mx-auto w-full max-w-2xl rounded-[1.75rem] border border-white/10 bg-[#0f172a] p-4 shadow-2xl shadow-black/40">
+    <div className="fixed inset-0 z-[120] flex items-start justify-center overflow-y-auto bg-black/65 p-3 sm:p-6">
+      <div className="mt-2 max-h-[calc(100vh-1rem)] w-full max-w-2xl overflow-y-auto rounded-[1.75rem] border border-white/10 bg-[#0f172a] p-4 shadow-2xl shadow-black/40 sm:mt-4 sm:max-h-[calc(100vh-3rem)]">
         <div className="flex items-start justify-between gap-3">
           <div>
             <div className="flex items-center gap-2">

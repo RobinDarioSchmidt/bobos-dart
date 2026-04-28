@@ -63,6 +63,8 @@ type MatchHistoryEntry = {
   mode: GameMode;
   doubleOut: boolean;
   sets: string;
+  participantIds: string[];
+  participantNames: string[];
 };
 
 type TrainingSession = {
@@ -107,6 +109,7 @@ type CloudMatchRow = {
 
 type CloudMatchPlayerRow = {
   match_id: string;
+  profile_id: string | null;
   guest_name: string | null;
   seat_index: number;
   is_winner: boolean;
@@ -720,7 +723,11 @@ function toHistoryEntry(row: CloudMatchRow, players: CloudMatchPlayerRow[]): Mat
     opponents,
     mode: row.mode === "301" ? 301 : 501,
     doubleOut: row.double_out,
-    sets: orderedPlayers.map((player) => `${player.guest_name ?? "Gast"} ${player.sets_won}`).join(" · "),
+    sets: orderedPlayers.map((player) => `${player.guest_name ?? "Gast"} ${player.sets_won}`).join(" | "),
+    participantIds: orderedPlayers
+      .map((player) => player.profile_id)
+      .filter((profileId): profileId is string => Boolean(profileId)),
+    participantNames: orderedPlayers.map((player) => player.guest_name ?? "Gast"),
   };
 }
 
@@ -2413,6 +2420,10 @@ function resetLegBoards(nextPlayers: Player[]) {
             mode,
             doubleOut: finishMode !== "single",
             sets: getMatchScore(nextPlayers),
+            participantIds: nextPlayers
+              .map((entry, index) => (index === 0 && session?.user.id ? session.user.id : ""))
+              .filter(Boolean),
+            participantNames: nextPlayers.map((entry) => entry.name),
           },
           ...nextHistory,
         ].slice(0, 8);

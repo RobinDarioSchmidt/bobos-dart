@@ -30,7 +30,7 @@ export async function GET(request: Request) {
 
   const { data: players, error: playersError } = await adminClient
     .from("match_players")
-    .select("match_id, guest_name, seat_index, is_winner, sets_won")
+    .select("match_id, profile_id, guest_name, seat_index, is_winner, sets_won")
     .in("match_id", matchIds)
     .order("seat_index", { ascending: true });
 

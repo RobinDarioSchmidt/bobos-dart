@@ -47,20 +47,9 @@ type MatchHistoryEntry = {
   mode: 301 | 501;
   doubleOut: boolean;
   sets: string;
+  participantIds: string[];
+  participantNames: string[];
 };
-
-function normalizePlayerName(value: string) {
-  return value.trim().toLowerCase();
-}
-
-function extractPlayersFromScoreLine(scoreLine: string) {
-  return scoreLine
-    .split("·")
-    .map((part) => part.trim())
-    .map((part) => part.replace(/\s+\d+\s*$/, ""))
-    .filter(Boolean)
-    .map(normalizePlayerName);
-}
 
 const milestoneToneClasses: Record<string, string> = {
   amber: "border-amber-300/25 bg-amber-300/10 text-amber-100",
@@ -225,15 +214,8 @@ export function SignedInOverviewSection({
       return null;
     }
 
-    const selectedName = normalizePlayerName(selectedPlayer.displayName);
     const match = cloudMatchHistory.find((entry) => {
-      const winnerMatches = normalizePlayerName(entry.winner) === selectedName;
-      const opponentMatches = entry.opponents
-        .split(",")
-        .map(normalizePlayerName)
-        .includes(selectedName);
-      const scoreLineMatches = extractPlayersFromScoreLine(entry.sets).includes(selectedName);
-      return winnerMatches || opponentMatches || scoreLineMatches;
+      return entry.participantIds.includes(selectedPlayer.id);
     });
 
     if (!match) {
@@ -496,6 +478,11 @@ export function SignedInOverviewSection({
                   className="flex w-full items-center justify-between gap-3 px-4 py-2 text-left transition hover:bg-white/5"
                 >
                   <p className="truncate text-sm font-semibold text-white">{player.displayName}</p>
+                  <span
+                    className={`h-2.5 w-2.5 shrink-0 rounded-full ${
+                      player.isActive ? "bg-emerald-300 shadow-[0_0_12px_rgba(110,231,183,0.75)]" : "bg-stone-600"
+                    }`}
+                  />
                 </button>
               ))
             ) : (
