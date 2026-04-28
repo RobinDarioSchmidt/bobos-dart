@@ -71,6 +71,16 @@ type LiveRoomSnapshot = {
   savedAt: string;
 };
 
+function getInitialLiveRoomTarget() {
+  if (typeof window === "undefined") {
+    return "";
+  }
+
+  const queryRoomCode = new URLSearchParams(window.location.search).get("room")?.toUpperCase() ?? "";
+  const storedRoomCode = window.localStorage.getItem(LIVE_ROOM_STORAGE_KEY) ?? "";
+  return queryRoomCode || storedRoomCode;
+}
+
 function getOpenRoomsRefreshDelay(failureCount: number) {
   if (failureCount <= 0) {
     return 20_000;
@@ -213,10 +223,11 @@ function getDeviceLabel() {
 }
 
 export default function LivePage() {
+  const initialRestoreTarget = getInitialLiveRoomTarget();
   const [session, setSession] = useState<Session | null>(null);
   const [displayName, setDisplayName] = useState("");
-  const [roomCodeInput, setRoomCodeInput] = useState("");
-  const [restoreTargetCode, setRestoreTargetCode] = useState("");
+  const [roomCodeInput, setRoomCodeInput] = useState(initialRestoreTarget);
+  const [restoreTargetCode, setRestoreTargetCode] = useState(initialRestoreTarget);
   const [liveRoomCode, setLiveRoomCode] = useState("");
   const [roomOwnerId, setRoomOwnerId] = useState("");
   const [liveState, setLiveState] = useState<LiveMatchState | null>(null);
@@ -235,7 +246,7 @@ export default function LivePage() {
     activeDeviceLabel: string;
   } | null>(null);
   const [loading, setLoading] = useState(false);
-  const [restoringRoom, setRestoringRoom] = useState(false);
+  const [restoringRoom, setRestoringRoom] = useState(Boolean(initialRestoreTarget));
   const [playerPresence, setPlayerPresence] = useState<PlayerPresenceSummary[]>([]);
   const [selectedPresencePlayer, setSelectedPresencePlayer] = useState<PlayerPresenceSummary | null>(null);
   const [selectedLivePlayerStats, setSelectedLivePlayerStats] = useState<{
@@ -362,9 +373,7 @@ export default function LivePage() {
       return;
     }
 
-    const queryRoomCode = new URLSearchParams(window.location.search).get("room")?.toUpperCase() ?? "";
-    const storedRoomCode = window.localStorage.getItem(LIVE_ROOM_STORAGE_KEY) ?? "";
-    const restoreTarget = queryRoomCode || storedRoomCode;
+    const restoreTarget = getInitialLiveRoomTarget();
     if (restoreTarget && !liveRoomCode) {
       setRestoreTargetCode(restoreTarget);
       setRestoringRoom(true);
