@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdminClients } from "@/lib/supabase-admin";
+import { fetchAccessibleFinishedMatches } from "@/lib/server/cloud-match-access";
 import { authorizeSupabaseRequest } from "@/lib/server/request-auth";
 
 type ProfileRow = {
@@ -89,8 +90,7 @@ export async function GET(request: Request) {
   const [
     { data: profile, error: profileError },
     { data: trainings, error: trainingsError },
-    { data: allMatches, error: allMatchesError },
-    { data: dartEvents, error: dartEventsError },
+    accessibleMatchesResult,
     { data: allProfiles, error: allProfilesError },
     { data: allPlayerResults, error: allPlayerResultsError },
     { data: allSystemMatches, error: allSystemMatchesError },
@@ -104,19 +104,8 @@ export async function GET(request: Request) {
       .from("training_sessions")
       .select("mode, score, darts_thrown, hits, played_at")
       .eq("owner_id", user.id)
-      .order("played_at", { ascending: false })
-      ,
-    adminClient
-      .from("matches")
-      .select("id, owner_id, played_at, mode, double_out, finish_mode, status")
-      .eq("owner_id", user.id)
-      .eq("status", "finished")
-      .order("played_at", { ascending: false })
-      ,
-    adminClient
-      .from("dart_events")
-      .select("match_id, player_name, player_seat_index, visit_index, dart_index, segment_label, base_value, multiplier, ring, score, is_hit, is_checkout_dart, target_label, board_x, board_y, source_type, created_at")
-      .eq("owner_id", user.id),
+      .order("played_at", { ascending: false }),
+    fetchAccessibleFinishedMatches(adminClient, user.id),
     adminClient.from("profiles").select("id, display_name"),
     adminClient
       .from("match_players")
@@ -133,9 +122,6 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: trainingsError.message }, { status: 400 });
   }
 
-  if (allMatchesError) {
-    return NextResponse.json({ error: allMatchesError.message }, { status: 400 });
-  }
   if (allProfilesError) {
     return NextResponse.json({ error: allProfilesError.message }, { status: 400 });
   }
@@ -148,23 +134,35 @@ export async function GET(request: Request) {
 
   const profileRow = profile as ProfileRow;
   const trainingRows = (trainings ?? []) as TrainingRow[];
-  const matchRows = (allMatches ?? []) as MatchRow[];
-  const dartRows = dartEventsError ? [] : ((dartEvents ?? []) as DartEventRow[]);
+  const matchRows = accessibleMatchesResult.matches as MatchRow[];
   const recentMatchRows = matchRows.slice(0, 8);
   const matchIds = matchRows.map((match) => match.id);
-  const { data: allMatchPlayers, error: allMatchPlayersError } = matchIds.length
-    ? await adminClient
-        .from("match_players")
-        .select("match_id, guest_name, seat_index, is_winner, sets_won, legs_won, average, best_visit, profile_id")
-        .in("match_id", matchIds)
-        .order("seat_index", { ascending: true })
-    : { data: [], error: null };
+  const matchDetailRows = accessibleMatchesResult.players as MatchDetailRow[];
+  const [{ data: matchDartEvents, error: matchDartEventsError }, { data: trainingDartEvents, error: trainingDartEventsError }] =
+    await Promise.all([
+      matchIds.length
+        ? adminClient
+            .from("dart_events")
+            .select("match_id, player_name, player_seat_index, visit_index, dart_index, segment_label, base_value, multiplier, ring, score, is_hit, is_checkout_dart, target_label, board_x, board_y, source_type, created_at")
+            .in("match_id", matchIds)
+            .eq("source_type", "match")
+        : Promise.resolve({ data: [], error: null }),
+      adminClient
+        .from("dart_events")
+        .select("match_id, player_name, player_seat_index, visit_index, dart_index, segment_label, base_value, multiplier, ring, score, is_hit, is_checkout_dart, target_label, board_x, board_y, source_type, created_at")
+        .eq("owner_id", user.id)
+        .eq("source_type", "training"),
+    ]);
 
-  if (allMatchPlayersError) {
-    return NextResponse.json({ error: allMatchPlayersError.message }, { status: 400 });
+  if (matchDartEventsError) {
+    return NextResponse.json({ error: matchDartEventsError.message }, { status: 400 });
   }
 
-  const matchDetailRows = (allMatchPlayers ?? []) as MatchDetailRow[];
+  if (trainingDartEventsError) {
+    return NextResponse.json({ error: trainingDartEventsError.message }, { status: 400 });
+  }
+
+  const dartRows = [...((matchDartEvents ?? []) as DartEventRow[]), ...((trainingDartEvents ?? []) as DartEventRow[])];
   const userSeatByMatchId = new Map(
     matchDetailRows
       .filter((row) => row.profile_id === user.id)

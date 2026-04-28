@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdminClients } from "@/lib/supabase-admin";
+import { fetchAccessibleFinishedMatches } from "@/lib/server/cloud-match-access";
 import { authorizeSupabaseRequest } from "@/lib/server/request-auth";
 
 export async function GET(
@@ -15,41 +16,44 @@ export async function GET(
   const { adminClient } = getSupabaseAdminClients();
   const { user } = authResult;
 
-  const { data: match, error: matchError } = await adminClient
-    .from("matches")
-    .select("id, owner_id, played_at, mode, double_out, finish_mode, legs_to_win, sets_to_win, status")
-    .eq("id", matchId)
-    .eq("owner_id", user.id)
-    .eq("status", "finished")
-    .single();
-
-  if (matchError || !match) {
-    return NextResponse.json({ error: matchError?.message ?? "match_not_found" }, { status: 404 });
+  let accessible;
+  try {
+    accessible = await fetchAccessibleFinishedMatches(adminClient, user.id);
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "match_access_failed" }, { status: 400 });
   }
 
-  const [{ data: players, error: playersError }, { data: dartEvents, error: dartEventsError }] = await Promise.all([
-    adminClient
-      .from("match_players")
-      .select("match_id, guest_name, seat_index, is_winner, sets_won, legs_won, average, best_visit, profile_id")
-      .eq("match_id", matchId)
-      .order("seat_index", { ascending: true }),
-    adminClient
-      .from("dart_events")
-      .select("player_name, player_seat_index, visit_index, dart_index, segment_label, ring, score, is_hit, is_checkout_dart, board_x, board_y, created_at")
-      .eq("owner_id", user.id)
-      .eq("source_type", "match")
-      .eq("match_id", matchId),
-  ]);
-
-  if (playersError) {
-    return NextResponse.json({ error: playersError.message }, { status: 400 });
+  const match = accessible.matches.find((entry) => entry.id === matchId) ?? null;
+  if (!match) {
+    return NextResponse.json({ error: "match_not_found" }, { status: 404 });
   }
+
+  const players = accessible.players
+    .filter((player) => player.match_id === matchId)
+    .map((player) => ({
+      match_id: player.match_id,
+      guest_name: player.guest_name,
+      seat_index: player.seat_index,
+      is_winner: player.is_winner,
+      sets_won: player.sets_won,
+      legs_won: player.legs_won ?? 0,
+      average: player.average ?? 0,
+      best_visit: player.best_visit ?? 0,
+      profile_id: player.profile_id,
+    }));
+
+  const { data: dartEvents, error: dartEventsError } = await adminClient
+    .from("dart_events")
+    .select("player_name, player_seat_index, visit_index, dart_index, segment_label, ring, score, is_hit, is_checkout_dart, board_x, board_y, created_at")
+    .eq("owner_id", match.owner_id)
+    .eq("source_type", "match")
+    .eq("match_id", matchId);
 
   if (dartEventsError) {
     return NextResponse.json({ error: dartEventsError.message }, { status: 400 });
   }
 
-  const playerSummaries = (players ?? []).map((player) => {
+  const playerSummaries = players.map((player) => {
     const name = player.guest_name ?? "Gast";
     const playerThrows = (dartEvents ?? []).filter((event) => event.player_seat_index === player.seat_index);
     const playerVisits = Object.values(

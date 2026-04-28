@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdminClients } from "@/lib/supabase-admin";
+import { fetchAccessibleFinishedMatches } from "@/lib/server/cloud-match-access";
 import { authorizeSupabaseRequest } from "@/lib/server/request-auth";
 
 type ProfilePresenceRow = {
@@ -46,6 +47,13 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: pingError.message }, { status: 400 });
   }
 
+  let accessible;
+  try {
+    accessible = await fetchAccessibleFinishedMatches(adminClient, authResult.user.id);
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "match_access_failed" }, { status: 400 });
+  }
+
   const [{ data: profiles, error: profilesError }, { data: matches, error: matchesError }, { data: matchPlayers, error: matchPlayersError }, { data: trainingRows, error: trainingError }] =
     await Promise.all([
       adminClient
@@ -86,9 +94,7 @@ export async function GET(request: Request) {
   const matchPlayerRows = (matchPlayers ?? []) as MatchPlayerRow[];
   const trainingSessionRows = (trainingRows ?? []) as TrainingRow[];
   const matchOwnerById = new Map(matchRows.map((match) => [match.id, match.owner_id]));
-  const currentUserOwnedMatchIds = new Set(
-    matchRows.filter((match) => match.owner_id === authResult.user.id).map((match) => match.id),
-  );
+  const currentUserAccessibleMatchIds = new Set(accessible.matches.map((match) => match.id));
 
   const players = ((profiles ?? []) as ProfilePresenceRow[])
     .map((player) => {
@@ -102,7 +108,7 @@ export async function GET(request: Request) {
       const rivalRows = matchPlayerRows.filter(
         (row) =>
           row.profile_id === player.id &&
-          currentUserOwnedMatchIds.has(row.match_id),
+          currentUserAccessibleMatchIds.has(row.match_id),
       );
       const rivalryMatches = rivalRows.length;
       const rivalryWins = rivalRows.filter((row) => !row.is_winner).length;

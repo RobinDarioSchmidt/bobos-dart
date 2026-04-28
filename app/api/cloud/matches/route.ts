@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdminClients } from "@/lib/supabase-admin";
+import { fetchAccessibleFinishedMatches } from "@/lib/server/cloud-match-access";
 import { authorizeSupabaseRequest } from "@/lib/server/request-auth";
 
 export async function GET(request: Request) {
@@ -11,35 +12,41 @@ export async function GET(request: Request) {
   const { adminClient } = getSupabaseAdminClients();
   const { user } = authResult;
 
-  const { data: matches, error: matchesError } = await adminClient
-    .from("matches")
-    .select("id, played_at, mode, double_out, finish_mode")
-    .eq("owner_id", user.id)
-    .eq("status", "finished")
-    .order("played_at", { ascending: false })
-    .limit(8);
-
-  if (matchesError) {
-    return NextResponse.json({ error: matchesError.message }, { status: 400 });
+  let accessible;
+  try {
+    accessible = await fetchAccessibleFinishedMatches(adminClient, user.id);
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "match_access_failed" }, { status: 400 });
   }
 
-  const matchIds = (matches ?? []).map((match) => match.id);
+  const matches = accessible.matches
+    .slice(0, 8)
+    .map((match) => ({
+      id: match.id,
+      played_at: match.played_at,
+      mode: match.mode,
+      double_out: match.double_out,
+      finish_mode: match.finish_mode ?? null,
+    }));
+
+  const matchIds = matches.map((match) => match.id);
   if (matchIds.length === 0) {
     return NextResponse.json({ matches: [], players: [] });
   }
 
-  const { data: players, error: playersError } = await adminClient
-    .from("match_players")
-    .select("match_id, profile_id, guest_name, seat_index, is_winner, sets_won")
-    .in("match_id", matchIds)
-    .order("seat_index", { ascending: true });
-
-  if (playersError) {
-    return NextResponse.json({ error: playersError.message }, { status: 400 });
-  }
+  const players = accessible.players
+    .filter((player) => matchIds.includes(player.match_id))
+    .map((player) => ({
+      match_id: player.match_id,
+      profile_id: player.profile_id,
+      guest_name: player.guest_name,
+      seat_index: player.seat_index,
+      is_winner: player.is_winner,
+      sets_won: player.sets_won,
+    }));
 
   return NextResponse.json({
-    matches: matches ?? [],
-    players: players ?? [],
+    matches,
+    players,
   });
 }

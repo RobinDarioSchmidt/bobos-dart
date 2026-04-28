@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdminClients } from "@/lib/supabase-admin";
+import { fetchAccessibleFinishedMatches } from "@/lib/server/cloud-match-access";
 import { authorizeSupabaseRequest } from "@/lib/server/request-auth";
 
 function averageOrZero(total: number, count: number, digits = 1) {
@@ -25,35 +26,23 @@ export async function GET(
   const { adminClient } = getSupabaseAdminClients();
   const { user } = authResult;
 
-  const { data: matches, error: matchesError } = await adminClient
-    .from("matches")
-    .select("id, played_at, mode, double_out, finish_mode, status")
-    .eq("owner_id", user.id)
-    .eq("status", "finished")
-    .order("played_at", { ascending: false });
-
-  if (matchesError) {
-    return NextResponse.json({ error: matchesError.message }, { status: 400 });
+  let accessible;
+  try {
+    accessible = await fetchAccessibleFinishedMatches(adminClient, user.id);
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "match_access_failed" }, { status: 400 });
   }
 
-  const matchIds = (matches ?? []).map((match) => match.id);
+  const matches = accessible.matches;
+  const players = accessible.players;
+  const matchIds = matches.map((match) => match.id);
   if (matchIds.length === 0) {
     return NextResponse.json({ opponentName: decodedName, summary: null, matches: [] });
   }
 
-  const { data: players, error: playersError } = await adminClient
-    .from("match_players")
-    .select("match_id, guest_name, seat_index, is_winner, sets_won, legs_won, average, best_visit, profile_id")
-    .in("match_id", matchIds)
-    .order("seat_index", { ascending: true });
-
-  if (playersError) {
-    return NextResponse.json({ error: playersError.message }, { status: 400 });
-  }
-
-  const relevantMatches = (matches ?? [])
+  const relevantMatches = matches
     .map((match) => {
-      const matchPlayers = (players ?? []).filter((player) => player.match_id === match.id);
+      const matchPlayers = players.filter((player) => player.match_id === match.id);
       const mySeat = matchPlayers.find((player) => player.profile_id === user.id) ?? null;
       const opponentSeat = looksLikeProfileId
         ? matchPlayers.find((player) => player.profile_id === decodedName) ?? null
