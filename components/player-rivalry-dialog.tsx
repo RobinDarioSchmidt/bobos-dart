@@ -20,13 +20,23 @@ export type PlayerPresenceSummary = {
   };
 };
 
+export type SharedMatchSummary = {
+  playedAt: string;
+  winner: string;
+  opponents: string;
+  modeLabel: string;
+  scoreLine: string;
+};
+
 export function PlayerRivalryDialog({
   viewerName,
   selectedPlayer,
+  recentSharedMatch,
   onClose,
 }: {
   viewerName: string;
   selectedPlayer: PlayerPresenceSummary | null;
+  recentSharedMatch?: SharedMatchSummary | null;
   onClose: () => void;
 }) {
   if (!selectedPlayer) {
@@ -60,8 +70,9 @@ export function PlayerRivalryDialog({
             </div>
             <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
               <p className="text-xs text-stone-400">Win/Lose</p>
-              <p className="mt-1 text-2xl font-semibold text-white">{selectedPlayer.rivalry.matchesWon}</p>
-              <p className="mt-1 text-sm text-stone-400">/ {selectedPlayer.rivalry.matchesLost}</p>
+              <p className="mt-1 text-2xl font-semibold text-white">
+                {selectedPlayer.rivalry.matchesWon}/{selectedPlayer.rivalry.matchesLost}
+              </p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
               <p className="text-xs text-stone-400">KD</p>
@@ -94,6 +105,21 @@ export function PlayerRivalryDialog({
             <p className="mt-1 text-2xl font-semibold text-white">{selectedPlayer.stats.bestVisit}</p>
           </div>
         </div>
+
+        {recentSharedMatch ? (
+          <div className="mt-4 rounded-[1.5rem] border border-white/10 bg-black/20 p-4">
+            <p className="text-xs uppercase tracking-[0.24em] text-stone-400">Letztes gemeinsames Match</p>
+            <div className="mt-3 space-y-1">
+              <p className="text-sm font-semibold text-white">
+                {recentSharedMatch.modeLabel} · {recentSharedMatch.scoreLine}
+              </p>
+              <p className="text-sm text-stone-300">
+                Sieger: {recentSharedMatch.winner} · Gegner: {recentSharedMatch.opponents}
+              </p>
+              <p className="text-xs text-stone-500">{recentSharedMatch.playedAt}</p>
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   );

@@ -2,8 +2,12 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
-import { PlayerRivalryDialog, type PlayerPresenceSummary } from "@/components/player-rivalry-dialog";
+import { useMemo, useState } from "react";
+import {
+  PlayerRivalryDialog,
+  type PlayerPresenceSummary,
+  type SharedMatchSummary,
+} from "@/components/player-rivalry-dialog";
 
 type CloudStats = {
   matchesPlayed: number;
@@ -33,6 +37,16 @@ type ActiveLiveRoom = {
     name: string;
     is_active: boolean;
   }>;
+};
+
+type MatchHistoryEntry = {
+  id: string;
+  playedAt: string;
+  winner: string;
+  opponents: string;
+  mode: 301 | 501;
+  doubleOut: boolean;
+  sets: string;
 };
 
 const milestoneToneClasses: Record<string, string> = {
@@ -148,6 +162,7 @@ export function SignedInOverviewSection({
   cloudLoading,
   playerPresence,
   activeLiveRooms,
+  cloudMatchHistory,
   recentMilestones,
   onProfileDraftChange,
   onSaveProfile,
@@ -172,6 +187,7 @@ export function SignedInOverviewSection({
   cloudLoading: boolean;
   playerPresence: PlayerPresence[];
   activeLiveRooms: ActiveLiveRoom[];
+  cloudMatchHistory: MatchHistoryEntry[];
   recentMilestones: RecentMilestone[];
   onProfileDraftChange: (value: string) => void;
   onSaveProfile: () => void;
@@ -191,6 +207,34 @@ export function SignedInOverviewSection({
   const [selectedPlayer, setSelectedPlayer] = useState<PlayerPresence | null>(null);
   const [activeStatHint, setActiveStatHint] = useState<null | { title: string; description: string }>(null);
   const displayName = profileName || profileDraft || sessionEmail || "Spieler";
+  const recentSharedMatch = useMemo<SharedMatchSummary | null>(() => {
+    if (!selectedPlayer) {
+      return null;
+    }
+
+    const selectedName = selectedPlayer.displayName.trim().toLowerCase();
+    const match = cloudMatchHistory.find((entry) => {
+      const winnerMatches = entry.winner.trim().toLowerCase() === selectedName;
+      const opponentMatches = entry.opponents
+        .split(",")
+        .map((name) => name.trim().toLowerCase())
+        .includes(selectedName);
+      return winnerMatches || opponentMatches;
+    });
+
+    if (!match) {
+      return null;
+    }
+
+    const finishLabel = match.doubleOut ? "Double Out" : "Straight Out";
+    return {
+      playedAt: match.playedAt,
+      winner: match.winner,
+      opponents: match.opponents,
+      modeLabel: `${match.mode} · ${finishLabel}`,
+      scoreLine: match.sets,
+    };
+  }, [cloudMatchHistory, selectedPlayer]);
   const statCards = cloudStats
     ? [
         {
@@ -261,21 +305,25 @@ export function SignedInOverviewSection({
         </div>
 
         {activeLiveRooms.length > 0 ? (
-          <div className="space-y-2">
+          <div className="space-y-3">
             {activeLiveRooms.map((room) => (
               <button
                 key={`active-room-${room.room_code}`}
                 onClick={() => onOpenLiveRoom(room.room_code)}
-                className={`block rounded-[1.35rem] border p-3 transition ${
+                className={`w-full rounded-[1.5rem] border p-4 text-left transition ${
                   room.is_user_turn
                     ? "border-emerald-300/35 bg-emerald-400/12 shadow-[0_0_24px_rgba(74,222,128,0.16)]"
                     : "border-white/10 bg-black/20 hover:bg-white/5"
                 }`}
               >
-                <p className="truncate text-sm font-semibold text-white">
+                <p className="truncate text-sm font-semibold text-white sm:text-base">
                   {room.room_code} - {room.mode}, {getFinishModeLabel(room.finish_mode)}
                 </p>
-                <div className={`mt-1 flex items-center gap-2 overflow-hidden text-xs ${room.is_user_turn ? "text-emerald-100" : "text-stone-400"}`}>
+                <div
+                  className={`mt-1 flex items-center gap-2 overflow-hidden text-xs ${
+                    room.is_user_turn ? "text-emerald-100" : "text-stone-400"
+                  }`}
+                >
                   <span className="shrink-0">{room.is_user_turn ? "Du bist dran." : `${room.current_player_name} ist am Zug.`}</span>
                   <div className="min-w-0 flex items-center gap-2 overflow-hidden">
                     {room.players.map((player) => (
@@ -433,14 +481,13 @@ export function SignedInOverviewSection({
                   onClick={() => setSelectedPlayer(player)}
                   className="flex w-full items-center justify-between gap-3 px-4 py-2 text-left transition hover:bg-white/5"
                 >
-                  <p className="truncate text-sm font-semibold text-white">{player.displayName}</p>
-                  <div className="flex shrink-0 items-center gap-2 text-xs text-stone-400">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <p className="truncate text-sm font-semibold text-white">{player.displayName}</p>
                     <span
-                      className={`h-2.5 w-2.5 rounded-full ${
+                      className={`h-2.5 w-2.5 shrink-0 rounded-full ${
                         player.isActive ? "bg-emerald-300 shadow-[0_0_12px_rgba(110,231,183,0.75)]" : "bg-stone-600"
                       }`}
                     />
-                    {player.isActive ? "online" : "offline"}
                   </div>
                 </button>
               ))
@@ -490,7 +537,12 @@ export function SignedInOverviewSection({
         ) : null}
       </div>
 
-      <PlayerRivalryDialog viewerName={displayName} selectedPlayer={selectedPlayer} onClose={() => setSelectedPlayer(null)} />
+      <PlayerRivalryDialog
+        viewerName={displayName}
+        selectedPlayer={selectedPlayer}
+        recentSharedMatch={recentSharedMatch}
+        onClose={() => setSelectedPlayer(null)}
+      />
 
     </section>
   );

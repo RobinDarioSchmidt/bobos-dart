@@ -1104,7 +1104,7 @@ export default function Page() {
   const [statusText, setStatusText] = useState("Match bereit. Bobo beginnt.");
   const [stats, setStats] = useState<StoredStats>(emptyStats);
   const [localMatchHistory, setLocalMatchHistory] = useState<MatchHistoryEntry[]>([]);
-  const [, setCloudMatchHistory] = useState<MatchHistoryEntry[]>([]);
+  const [cloudMatchHistory, setCloudMatchHistory] = useState<MatchHistoryEntry[]>([]);
   const [localHistoryOpen, setLocalHistoryOpen] = useState(false);
   const [trainingFeedOpen, setTrainingFeedOpen] = useState(false);
   const [trainingStarted, setTrainingStarted] = useState(false);
@@ -2741,6 +2741,7 @@ function resetLegBoards(nextPlayers: Player[]) {
             cloudLoading={cloudLoading}
             playerPresence={playerPresence}
             activeLiveRooms={activeLiveRooms}
+            cloudMatchHistory={cloudMatchHistory}
             recentMilestones={recentMilestones}
             onProfileDraftChange={setProfileDraft}
             onSaveProfile={() => void saveProfileDraft()}
