@@ -63,6 +63,7 @@ export type LivePlayer = {
   joined: boolean;
   profileId: string | null;
   entered: boolean;
+  ready: boolean;
 };
 
 export type LivePendingVisit = {
@@ -184,6 +185,7 @@ export function createEmptyLiveState(params: {
           joined: true,
           profileId: params.ownerId,
           entered: params.entryMode === "single",
+          ready: true,
         }
       : {
           name: `Spieler ${index + 1}`,
@@ -193,6 +195,7 @@ export function createEmptyLiveState(params: {
           joined: false,
           profileId: null,
           entered: false,
+          ready: false,
         },
   );
 
@@ -326,6 +329,7 @@ export function normalizeLiveState(state: LiveMatchState | (Record<string, unkno
     players: (nextState.players ?? []).map((player) => ({
       ...player,
       entered: player.entered ?? (entryMode === "single" && player.joined),
+      ready: player.ready ?? false,
     })),
     history: nextState.history ?? [],
     events: nextState.events ?? [],
@@ -823,6 +827,7 @@ export function startRematchLiveMatch(previousState: LiveMatchState) {
     legs: 0,
     sets: 0,
     entered: nextState.entryMode === "single",
+    ready: false,
   }));
   nextState.history = [];
   nextState.pendingVisit = null;
@@ -901,6 +906,7 @@ export function startLiveMatch(previousState: LiveMatchState) {
     legs: 0,
     sets: 0,
     entered: player.joined ? nextState.entryMode === "single" : false,
+    ready: false,
   }));
 
   if (nextState.bullOff.enabled && activeSeatIndexes.length > 1) {
@@ -938,6 +944,22 @@ export function startLiveMatch(previousState: LiveMatchState) {
     type: "room",
     text: `Das Match wurde mit ${activeSeatIndexes.length} aktiven Spielern gestartet.`,
   });
+  return nextState;
+}
+
+export function toggleLivePlayerReady(previousState: LiveMatchState, playerIndex: number) {
+  const nextState = normalizeLiveState(previousState);
+  if (nextState.phase !== "lobby" || !nextState.players[playerIndex]?.joined) {
+    return nextState;
+  }
+
+  nextState.players[playerIndex] = {
+    ...nextState.players[playerIndex],
+    ready: !nextState.players[playerIndex].ready,
+  };
+  nextState.statusText = nextState.players[playerIndex].ready
+    ? `${nextState.players[playerIndex].name} ist bereit.`
+    : `${nextState.players[playerIndex].name} wartet noch in der Lobby.`;
   return nextState;
 }
 

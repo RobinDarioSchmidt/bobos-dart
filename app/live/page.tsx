@@ -132,6 +132,10 @@ function formatLiveError(error: string) {
       return "Dieses Match ist noch in der Lobby.";
     case "no_players_in_lobby":
       return "In der Lobby ist noch kein aktiver Spieler.";
+    case "not_everyone_ready":
+      return "Warte noch, bis alle Lobby-Spieler bereit sind.";
+    case "match_already_running":
+      return "Dieses Match laeuft bereits.";
     default:
       if (error.startsWith("device_already_active:")) {
         const activeDeviceLabel = error.slice("device_already_active:".length) || "einem anderen Geraet";
@@ -1046,6 +1050,21 @@ export default function LivePage() {
     }
   }
 
+  async function toggleLobbyReady() {
+    if (!liveRoomCode) {
+      return;
+    }
+
+    const match = await callLiveApi({
+      action: "toggle_ready",
+      roomCode: liveRoomCode,
+    });
+
+    if (match?.room_code) {
+      await broadcastRefresh(match.room_code, "toggle_ready");
+    }
+  }
+
   async function joinRoom(roomCode = roomCodeInput) {
     if (!roomCode) {
       setMessage("Bitte einen Raumcode eingeben.");
@@ -1270,7 +1289,14 @@ export default function LivePage() {
   );
   const isRoomHost = Boolean(session?.user.id && roomOwnerId && session.user.id === roomOwnerId);
   const joinedPlayerCount = liveState?.players.filter((player) => player.joined).length ?? 0;
-  const canStartMatch = Boolean(liveState && liveState.phase === "lobby" && isRoomHost && joinedPlayerCount > 0);
+  const lobbyReadyCount = liveState?.players.filter((player) => player.joined && player.ready).length ?? 0;
+  const canStartMatch = Boolean(
+    liveState &&
+      liveState.phase === "lobby" &&
+      isRoomHost &&
+      joinedPlayerCount > 0 &&
+      joinedPlayerCount === lobbyReadyCount,
+  );
 
   const pendingVisit = liveState?.pendingVisit;
   const pendingLabels = pendingVisit?.darts.map((dart) => dart.label) ?? [];
@@ -1773,16 +1799,42 @@ export default function LivePage() {
                       <p className="mt-2 text-sm text-stone-300">
                         Nur die Spieler, die jetzt in der Lobby sind, werden aktive Spieler. Spaetere Beitritte kommen automatisch als Zuschauer rein.
                       </p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-stone-200">
+                          {joinedPlayerCount} Spieler in der Lobby
+                        </div>
+                        <div className="rounded-full border border-emerald-300/20 bg-emerald-400/10 px-3 py-1 text-xs font-semibold text-emerald-100">
+                          {lobbyReadyCount}/{joinedPlayerCount} bereit
+                        </div>
+                      </div>
                       <div className="mt-4 grid gap-2 sm:grid-cols-2">
                         {liveState.players.filter((player) => player.joined).map((player) => (
                           <div
                             key={`lobby-${player.name}-${player.profileId ?? "guest"}`}
-                            className="rounded-2xl border border-white/10 bg-black/20 px-3 py-3"
+                            className={`rounded-2xl border px-3 py-3 ${
+                              player.ready ? "border-emerald-300/30 bg-emerald-400/10" : "border-white/10 bg-black/20"
+                            }`}
                           >
-                            <p className="text-sm font-semibold text-white">{player.name}</p>
-                            <p className="mt-1 text-xs text-stone-400">
-                              {player.profileId === session.user.id ? "Du bist bereit" : "In der Lobby"}
-                            </p>
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <p className="text-sm font-semibold text-white">{player.name}</p>
+                                <p className={`mt-1 text-xs ${player.ready ? "text-emerald-100" : "text-stone-400"}`}>
+                                  {player.ready ? "Bereit" : "Wartet noch"}
+                                </p>
+                              </div>
+                              {player.profileId === session.user.id ? (
+                                <button
+                                  onClick={() => void toggleLobbyReady()}
+                                  className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                                    player.ready
+                                      ? "border border-emerald-300/30 bg-emerald-400/15 text-emerald-50"
+                                      : "border border-white/10 bg-white/5 text-white"
+                                  }`}
+                                >
+                                  {player.ready ? "Doch nicht" : "Bereit"}
+                                </button>
+                              ) : null}
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -1860,6 +1912,7 @@ export default function LivePage() {
                     deviceLockLabel={deviceLockLabel}
                     cloudSyncPending={cloudSyncPending}
                     canStartMatch={canStartMatch}
+                    lobbyReadyCount={lobbyReadyCount}
                     audioMode={audioMode}
                     events={liveState.events ?? []}
                     onStartMatch={() => void startMatchFromLobby()}
@@ -1883,7 +1936,7 @@ export default function LivePage() {
           <div className="w-full max-w-lg rounded-[1.75rem] border border-white/10 bg-[#0f172a] p-4 shadow-2xl shadow-black/40">
             <h2 className="text-2xl font-semibold text-white">Nur Zuschauen?</h2>
             <p className="mt-3 text-sm text-stone-300">
-              Dieser Account steuert den Raum bereits ueber {spectatorPrompt.activeDeviceLabel}. Du kannst den Raum auf diesem Geraet trotzdem im Zuschauer-Modus oeffnen.
+              Dieser Account steuert den Raum bereits ueber {spectatorPrompt.activeDeviceLabel}. Auf diesem Geraet kannst du deshalb nicht mitwerfen, aber du kannst den laufenden Raum im Zuschauer-Modus verfolgen.
             </p>
             <div className="mt-4 grid grid-cols-2 gap-3">
               <button

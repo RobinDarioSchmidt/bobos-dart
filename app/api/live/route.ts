@@ -14,6 +14,7 @@ import {
   startNextLiveLeg,
   startLiveMatch,
   startRematchLiveMatch,
+  toggleLivePlayerReady,
   type LiveDeviceLock,
   type LiveDart,
   type LiveEntryMode,
@@ -539,6 +540,10 @@ export async function POST(request: Request) {
         deviceId?: string;
       }
     | {
+        action: "toggle_ready";
+        roomCode: string;
+      }
+    | {
         action: "claim_device";
         roomCode: string;
         deviceId: string;
@@ -778,6 +783,9 @@ export async function POST(request: Request) {
     if (joinedSeatIndexes.length === 0) {
       return NextResponse.json({ error: "no_players_in_lobby" }, { status: 409 });
     }
+    if (joinedSeatIndexes.some((index) => !state.players[index]?.ready)) {
+      return NextResponse.json({ error: "not_everyone_ready" }, { status: 409 });
+    }
 
     if (body.deviceId) {
       state = withUpdatedDeviceLock(state, {
@@ -797,6 +805,48 @@ export async function POST(request: Request) {
     } catch (storeError) {
       return NextResponse.json(
         { error: storeError instanceof Error ? storeError.message : "start_match_failed" },
+        { status: 400 },
+      );
+    }
+  }
+
+  if (body.action === "toggle_ready") {
+    const { data, error } = await adminClient
+      .from("live_matches")
+      .select("id, owner_id, room_code, state")
+      .eq("room_code", body.roomCode.toUpperCase())
+      .maybeSingle();
+
+    if (error || !data) {
+      return NextResponse.json({ error: error?.message ?? "match_not_found" }, { status: 404 });
+    }
+
+    const match = data as LiveMatchRow;
+    const currentState = normalizeLiveState(match.state);
+    if (currentState.phase !== "lobby") {
+      return NextResponse.json({ error: "match_already_running" }, { status: 409 });
+    }
+
+    const playerIndex = currentState.players.findIndex(
+      (player) => player.joined && player.profileId === authResult.user.id,
+    );
+    if (playerIndex < 0) {
+      return NextResponse.json({ error: "not_a_participant" }, { status: 403 });
+    }
+
+    let nextState = toggleLivePlayerReady(currentState, playerIndex);
+    appendLiveEvent(nextState, {
+      type: "room",
+      text: `${nextState.players[playerIndex].name} ist ${nextState.players[playerIndex].ready ? "bereit" : "wieder nicht bereit"}.`,
+    });
+    nextState = bumpLiveRevision(nextState, currentState.revision);
+
+    try {
+      const updated = await storeLiveMatchState(adminClient, match, nextState);
+      return NextResponse.json({ match: updated });
+    } catch (storeError) {
+      return NextResponse.json(
+        { error: storeError instanceof Error ? storeError.message : "toggle_ready_failed" },
         { status: 400 },
       );
     }
@@ -1029,6 +1079,7 @@ export async function POST(request: Request) {
       legs: 0,
       sets: 0,
       entered: false,
+      ready: false,
       name: `Spieler ${participantIndex + 1}`,
     };
     currentState.activeSeatIndexes = currentState.activeSeatIndexes.filter((index) => index !== participantIndex);

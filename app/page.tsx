@@ -1446,6 +1446,7 @@ export default function Page() {
         joined: true,
         profileId: session?.user.id && index === 0 ? session.user.id : null,
         entered: player.entered,
+        ready: false,
       })),
       history: localLiveHistory,
       events: [],
