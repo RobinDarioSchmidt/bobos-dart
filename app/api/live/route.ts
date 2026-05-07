@@ -14,11 +14,13 @@ import {
   startNextLiveLeg,
   startLiveMatch,
   startRematchLiveMatch,
+  submitVisitTotal,
   toggleLivePlayerReady,
   type LiveDeviceLock,
   type LiveDart,
   type LiveEntryMode,
   type LiveFinishMode,
+  type LiveInputMode,
   type LiveMatchState,
 } from "@/lib/live-match";
 import { authorizeSupabaseRequest } from "@/lib/server/request-auth";
@@ -44,6 +46,7 @@ type LiveRoomListEntry = {
   phase: "lobby" | "running";
   mode: 301 | 501;
   finish_mode: LiveFinishMode;
+  input_mode: LiveInputMode;
   joined_players: number;
   max_players: number;
   status_text: string;
@@ -195,6 +198,7 @@ function toLiveRoomListEntry(entry: LiveMatchRow, userId?: string) {
     phase: state.phase,
     mode: state.mode,
     finish_mode: state.finishMode,
+    input_mode: state.inputMode,
     joined_players: visiblePlayers.length,
     max_players: state.maxPlayers,
     status_text: state.statusText,
@@ -309,7 +313,7 @@ async function persistCompletedLiveMatch(adminClient: ReturnType<typeof getSupab
         const totalScored = playerVisits
           .filter((entry) => !entry.bust)
           .reduce((sum, entry) => sum + (entry.scoreBefore - entry.scoreAfter), 0);
-        const dartsThrown = playerVisits.reduce((sum, entry) => sum + entry.darts.length, 0);
+        const dartsThrown = playerVisits.reduce((sum, entry) => sum + (entry.dartsUsed ?? entry.darts.length), 0);
         const bestVisit = playerVisits.reduce((best, entry) => Math.max(best, entry.total), 0);
         const average = dartsThrown > 0 ? Number((((totalScored / dartsThrown) * 3)).toFixed(2)) : 0;
         const legWins = state.history.filter((entry) => entry.result === "leg-win" && entry.playerIndex === seatIndex).length;
@@ -519,6 +523,7 @@ export async function POST(request: Request) {
         mode: 301 | 501;
         entryMode: LiveEntryMode;
         finishMode: LiveFinishMode;
+        inputMode: LiveInputMode;
         legsToWin: number;
         setsToWin: number;
         maxPlayers: number;
@@ -567,6 +572,15 @@ export async function POST(request: Request) {
         deviceId?: string;
       }
     | {
+        action: "submit_visit_total";
+        roomCode: string;
+        total: number;
+        dartsUsed: number;
+        entryMultiplier?: 0 | 1 | 2 | 3;
+        finishMultiplier?: 0 | 1 | 2 | 3;
+        deviceId?: string;
+      }
+    | {
         action: "next_leg";
         roomCode: string;
         deviceId?: string;
@@ -611,6 +625,7 @@ export async function POST(request: Request) {
         mode: body.mode,
         entryMode: body.entryMode,
         finishMode: body.finishMode,
+        inputMode: body.inputMode,
         legsToWin: body.legsToWin,
         setsToWin: body.setsToWin,
         maxPlayers: body.maxPlayers,
@@ -912,6 +927,7 @@ export async function POST(request: Request) {
     body.action === "add_dart" ||
     body.action === "remove_dart" ||
     body.action === "finalize_visit" ||
+    body.action === "submit_visit_total" ||
     body.action === "next_leg" ||
     body.action === "rematch"
   ) {
@@ -954,7 +970,12 @@ export async function POST(request: Request) {
     const controllingSeat = getControllingSeatIndex(nextState);
     const isHost = match.owner_id === authResult.user.id;
 
-    if (body.action === "add_dart" || body.action === "remove_dart" || body.action === "finalize_visit") {
+    if (
+      body.action === "add_dart" ||
+      body.action === "remove_dart" ||
+      body.action === "finalize_visit" ||
+      body.action === "submit_visit_total"
+    ) {
       if (nextState.phase !== "running") {
         return NextResponse.json({ error: "match_not_started" }, { status: 409 });
       }
@@ -991,6 +1012,14 @@ export async function POST(request: Request) {
         break;
       case "finalize_visit":
         nextState = finalizePendingVisit(nextState);
+        break;
+      case "submit_visit_total":
+        nextState = submitVisitTotal(nextState, {
+          total: body.total,
+          dartsUsed: body.dartsUsed,
+          entryMultiplier: body.entryMultiplier,
+          finishMultiplier: body.finishMultiplier,
+        });
         break;
       case "next_leg":
         nextState = startNextLiveLeg(nextState);

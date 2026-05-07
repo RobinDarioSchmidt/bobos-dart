@@ -1033,3 +1033,368 @@ export function LiveBoardPanel({
     </section>
   );
 }
+
+const QUICK_VISIT_TOTAL_GROUPS = [
+  {
+    label: "Schnell",
+    values: [0, 26, 45, 60, 100, 140, 180],
+  },
+  {
+    label: "Checkout-Nähe",
+    values: [32, 36, 40, 50, 56, 64, 72],
+  },
+] as const;
+const VISIT_KEYPAD_ROWS = [
+  ["1", "2", "3"],
+  ["4", "5", "6"],
+  ["7", "8", "9"],
+  ["00", "0", "←"],
+] as const;
+
+export function LiveVisitTotalPanel({
+  liveState,
+  currentPlayerIndex,
+  currentUserId,
+  currentPlayerName,
+  canPlayFromThisDevice,
+  loading,
+  statusText,
+  connectedNames = [],
+  onPlayerSelect,
+  onSubmitVisit,
+  compactMode = false,
+}: {
+  liveState: LiveMatchState;
+  currentPlayerIndex: number;
+  currentUserId: string;
+  currentPlayerName: string | null;
+  canPlayFromThisDevice: boolean;
+  loading: boolean;
+  statusText: string | null;
+  connectedNames?: string[];
+  onPlayerSelect?: (playerName: string, profileId: string | null) => void;
+  onSubmitVisit: (payload: {
+    total: number;
+    dartsUsed: number;
+    entryMultiplier?: 0 | 1 | 2 | 3;
+    finishMultiplier?: 0 | 1 | 2 | 3;
+  }) => void;
+  compactMode?: boolean;
+}) {
+  const [visitTotal, setVisitTotal] = useState("");
+  const [dartsUsed, setDartsUsed] = useState<1 | 2 | 3>(3);
+  const [entryMultiplier, setEntryMultiplier] = useState<0 | 2 | 3>(0);
+  const [finishMultiplier, setFinishMultiplier] = useState<1 | 2 | 3>(liveState.finishMode === "double" ? 2 : liveState.finishMode === "master" ? 3 : 1);
+  const visiblePlayers = liveState.players
+    .map((player, index) => ({ player, index }))
+    .filter(({ player, index }) =>
+      liveState.phase === "running" ? liveState.activeSeatIndexes.includes(index) : player.joined,
+    );
+  const playerGridClass = visiblePlayers.length === 3 ? "grid-cols-3" : "grid-cols-2";
+  const currentPlayer = currentPlayerIndex >= 0 ? liveState.players[currentPlayerIndex] : null;
+  const numericVisitTotal = Number(visitTotal || 0);
+  const projectedRemaining = currentPlayer ? currentPlayer.score - numericVisitTotal : null;
+  const needsEntryChoice = Boolean(currentPlayer && !currentPlayer.entered && liveState.entryMode !== "single");
+  const couldCheckout = Boolean(currentPlayer && currentPlayer.entered && projectedRemaining === 0);
+  const projectedBust = Boolean(currentPlayer && numericVisitTotal > 0 && projectedRemaining !== null && projectedRemaining < 0);
+  const projectedBadOne = Boolean(
+    currentPlayer &&
+      numericVisitTotal > 0 &&
+      projectedRemaining === 1 &&
+      liveState.finishMode !== "single",
+  );
+
+  function submit(total: number) {
+    const normalized = Math.max(0, Math.min(180, Math.round(total)));
+    onSubmitVisit({
+      total: normalized,
+      dartsUsed,
+      entryMultiplier: needsEntryChoice ? entryMultiplier : undefined,
+      finishMultiplier: couldCheckout ? finishMultiplier : undefined,
+    });
+    setVisitTotal("");
+    setDartsUsed(3);
+    setEntryMultiplier(0);
+    setFinishMultiplier(liveState.finishMode === "double" ? 2 : liveState.finishMode === "master" ? 3 : 1);
+  }
+
+  function appendDigit(value: string) {
+    setVisitTotal((current) => {
+      const next = `${current}${value}`.slice(0, 3);
+      const numeric = Math.min(180, Number(next || 0));
+      return String(numeric);
+    });
+  }
+
+  function backspaceDigit() {
+    setVisitTotal((current) => current.slice(0, -1));
+  }
+
+  function clearVisitInput() {
+    setVisitTotal("");
+  }
+
+  function quickSubmit(total: number) {
+    const normalized = Math.max(0, Math.min(180, Math.round(total)));
+    setVisitTotal(String(normalized));
+    const wouldCheckout = Boolean(currentPlayer && currentPlayer.entered && currentPlayer.score - normalized === 0);
+    if (needsEntryChoice || (normalized > 0 && wouldCheckout && liveState.finishMode !== "single")) {
+      return;
+    }
+    submit(normalized);
+  }
+
+  return (
+    <section className="rounded-none border-0 bg-transparent p-0 backdrop-blur-none sm:rounded-[1.5rem] sm:border sm:border-white/10 sm:bg-white/5 sm:p-4 sm:backdrop-blur">
+      <div className="px-2 sm:px-0 flex items-start justify-between gap-3">
+        <div>
+          {statusText ? <p className="text-sm font-semibold text-emerald-100">{statusText}</p> : null}
+          <p className={`${statusText ? "mt-1" : ""} text-sm text-stone-400`}>
+            {compactMode
+              ? "Schnellmodus ohne Scheibe."
+              : "Gib den gesamten Visit direkt ein. Wenn ein In erst spaeter faellt, zaehlen nur die Punkte ab dem gueltigen In."}
+          </p>
+        </div>
+      </div>
+
+      {visiblePlayers.length > 0 ? (
+        <div className={`mt-4 grid ${playerGridClass} gap-2 px-2 sm:px-0`}>
+          {visiblePlayers.map(({ player, index: originalIndex }) => {
+            const isActive = currentPlayerIndex === originalIndex && liveState.matchWinner === null;
+            const isMe = player.profileId === currentUserId;
+            const isOnline = connectedNames.some(
+              (name) => name.trim().toLowerCase() === player.name.trim().toLowerCase(),
+            );
+
+            return (
+              <div
+                key={`${player.name}-${originalIndex}`}
+                onClick={() => onPlayerSelect?.(player.name, player.profileId)}
+                className={`rounded-[1.1rem] border px-2 py-1.5 ${
+                  isActive ? "border-emerald-300/40 bg-emerald-300/10" : "border-white/10 bg-black/20"
+                } ${onPlayerSelect ? "cursor-pointer transition hover:bg-white/10" : ""}`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`h-2.5 w-2.5 shrink-0 rounded-full ${
+                          isOnline ? "bg-emerald-300 shadow-[0_0_12px_rgba(110,231,183,0.75)]" : "bg-stone-600"
+                        }`}
+                      />
+                      <p className="truncate text-xs font-semibold text-white sm:text-sm">{player.name}</p>
+                    </div>
+                  </div>
+                  {isMe ? (
+                    <span className="rounded-full border border-white/10 bg-white/5 px-1.5 py-0.5 text-[9px] uppercase tracking-[0.14em] text-stone-300">
+                      Du
+                    </span>
+                  ) : null}
+                </div>
+                <div className="mt-1.5 flex items-end justify-between gap-2">
+                  <p className="text-xl font-semibold leading-none text-white sm:text-2xl">{player.score}</p>
+                  <div className="grid grid-cols-2 gap-1 text-[10px] text-stone-300">
+                    <div className="rounded-xl bg-white/5 px-2 py-0.5 text-center">
+                      <p className="text-stone-400">S</p>
+                      <p className="text-sm font-semibold text-white">{player.sets}</p>
+                    </div>
+                    <div className="rounded-xl bg-white/5 px-2 py-0.5 text-center">
+                      <p className="text-stone-400">L</p>
+                      <p className="text-sm font-semibold text-white">{player.legs}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
+
+      <div className="mt-4 rounded-[1.5rem] border border-white/10 bg-black/20 p-4 mx-2 sm:mx-0">
+        <div className="grid gap-3 lg:grid-cols-[0.95fr_1.05fr]">
+          <div>
+            <label className="text-[11px] uppercase tracking-[0.2em] text-stone-400">Visit-Punkte</label>
+            <div className="mt-2 rounded-[1.5rem] border border-white/10 bg-white/5 p-4">
+              <div className="flex items-end justify-between gap-3">
+                <div>
+                  <p className="text-4xl font-semibold leading-none text-white">{visitTotal || "0"}</p>
+                  <p className="mt-2 text-xs text-stone-400">0 bis 180 Punkte</p>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <button
+                    onClick={backspaceDigit}
+                    disabled={!canPlayFromThisDevice || loading || visitTotal.length === 0}
+                    className="rounded-2xl border border-white/10 bg-black/20 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                  >
+                    Korr.
+                  </button>
+                  <button
+                    onClick={clearVisitInput}
+                    disabled={!canPlayFromThisDevice || loading || visitTotal.length === 0}
+                    className="rounded-2xl border border-white/10 bg-black/20 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                  >
+                    C
+                  </button>
+                </div>
+              </div>
+
+              <div className="mt-4 grid grid-cols-3 gap-2">
+                {VISIT_KEYPAD_ROWS.flat().map((key) => (
+                  <button
+                    key={`visit-key-${key}`}
+                    onClick={() => {
+                      if (key === "←") {
+                        backspaceDigit();
+                        return;
+                      }
+                      appendDigit(key);
+                    }}
+                    disabled={!canPlayFromThisDevice || loading}
+                    className="rounded-2xl border border-white/10 bg-black/20 px-3 py-3 text-lg font-semibold text-white disabled:opacity-50"
+                  >
+                    {key}
+                  </button>
+                ))}
+              </div>
+
+              <button
+                onClick={() => submit(numericVisitTotal)}
+                disabled={!canPlayFromThisDevice || loading || visitTotal === ""}
+                className="mt-4 h-12 w-full rounded-2xl bg-emerald-400 px-5 text-sm font-semibold text-black disabled:opacity-50"
+              >
+                Visit loggen
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            {(compactMode ? QUICK_VISIT_TOTAL_GROUPS.slice(0, 1) : QUICK_VISIT_TOTAL_GROUPS).map((group) => (
+              <div key={group.label}>
+                <p className="text-[10px] uppercase tracking-[0.18em] text-stone-400">{group.label}</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {group.values.map((value) => (
+                    <button
+                      key={`quick-visit-${group.label}-${value}`}
+                      onClick={() => {
+                        setVisitTotal(String(value));
+                        if (value === 0) {
+                          submit(0);
+                          return;
+                        }
+                        if (compactMode) {
+                          quickSubmit(value);
+                        }
+                      }}
+                      disabled={!canPlayFromThisDevice || loading}
+                      className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+                    >
+                      {value}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+
+            <div className={`grid gap-3 ${compactMode ? "sm:grid-cols-2" : "sm:grid-cols-3"}`}>
+              <div>
+            <p className="text-[10px] uppercase tracking-[0.18em] text-stone-400">Darts genutzt</p>
+                <div className="mt-2 grid grid-cols-3 gap-2">
+                  {[1, 2, 3].map((value) => (
+                    <button
+                      key={`darts-used-${value}`}
+                      onClick={() => setDartsUsed(value as 1 | 2 | 3)}
+                      className={`rounded-2xl px-3 py-2 text-xs font-semibold ${
+                        dartsUsed === value ? "bg-emerald-400 text-black" : "border border-white/10 bg-white/5 text-white"
+                      }`}
+                    >
+                      {value}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {needsEntryChoice ? (
+                <div>
+                  <p className="text-[10px] uppercase tracking-[0.18em] text-stone-400">
+                    {liveState.entryMode === "double" ? "Gueltiges In" : "Gueltiges Masters In"}
+                  </p>
+                  <div className="mt-2 grid grid-cols-3 gap-2">
+                    <button
+                      onClick={() => setEntryMultiplier(0)}
+                      className={`rounded-2xl px-3 py-2 text-xs font-semibold ${
+                        entryMultiplier === 0 ? "bg-emerald-400 text-black" : "border border-white/10 bg-white/5 text-white"
+                      }`}
+                    >
+                      Kein In
+                    </button>
+                    <button
+                      onClick={() => setEntryMultiplier(2)}
+                      className={`rounded-2xl px-3 py-2 text-xs font-semibold ${
+                        entryMultiplier === 2 ? "bg-emerald-400 text-black" : "border border-white/10 bg-white/5 text-white"
+                      }`}
+                    >
+                      Double
+                    </button>
+                    {liveState.entryMode === "master" ? (
+                      <button
+                        onClick={() => setEntryMultiplier(3)}
+                        className={`rounded-2xl px-3 py-2 text-xs font-semibold ${
+                          entryMultiplier === 3 ? "bg-emerald-400 text-black" : "border border-white/10 bg-white/5 text-white"
+                        }`}
+                      >
+                        Master
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              ) : compactMode ? null : (
+                <div />
+              )}
+
+              {couldCheckout && liveState.finishMode !== "single" ? (
+                <div>
+                  <p className="text-[10px] uppercase tracking-[0.18em] text-stone-400">
+                    {liveState.finishMode === "double" ? "Checkout-Dart" : "Checkout-Art"}
+                  </p>
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => setFinishMultiplier(2)}
+                      className={`rounded-2xl px-3 py-2 text-xs font-semibold ${
+                        finishMultiplier === 2 ? "bg-emerald-400 text-black" : "border border-white/10 bg-white/5 text-white"
+                      }`}
+                    >
+                      Double
+                    </button>
+                    {liveState.finishMode === "master" ? (
+                      <button
+                        onClick={() => setFinishMultiplier(3)}
+                        className={`rounded-2xl px-3 py-2 text-xs font-semibold ${
+                          finishMultiplier === 3 ? "bg-emerald-400 text-black" : "border border-white/10 bg-white/5 text-white"
+                        }`}
+                      >
+                        Master
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              ) : compactMode ? null : (
+                <div />
+              )}
+            </div>
+
+            <div className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-stone-300">
+              {currentPlayerName ? `${currentPlayerName} loggt den gesamten Visit direkt. ` : ""}
+              {projectedBust
+                ? "Dieser Visit waere eine Miss."
+                : projectedBadOne
+                  ? "Dieser Visit wuerde auf 1 Rest fallen und waere ebenfalls eine Miss."
+                  : projectedRemaining !== null && visitTotal !== ""
+                    ? `Rest danach: ${projectedRemaining}.`
+                    : "Schneller Modus ohne Dartscheibe."}
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}

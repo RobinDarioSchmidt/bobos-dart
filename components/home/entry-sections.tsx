@@ -29,8 +29,10 @@ type RecentMilestone = {
 
 type ActiveLiveRoom = {
   room_code: string;
+  phase: "lobby" | "running";
   mode: 301 | 501;
   finish_mode: "single" | "double" | "master";
+  input_mode: "board" | "visit-total" | "visit-quick";
   current_player_name: string;
   is_user_turn?: boolean;
   players: Array<{
@@ -268,6 +270,18 @@ export function SignedInOverviewSection({
     return "Double Out";
   }
 
+  function getInputModeLabel(value: ActiveLiveRoom["input_mode"]) {
+    if (value === "visit-total") {
+      return "Visit";
+    }
+
+    if (value === "visit-quick") {
+      return "Schnell";
+    }
+
+    return "Scheibe";
+  }
+
   return (
     <section className="overflow-hidden border-y border-white/10 bg-white/5 shadow-2xl shadow-black/30 backdrop-blur sm:rounded-[2rem] sm:border">
       <div className="space-y-5 px-3 py-4 sm:p-6 lg:p-8">
@@ -312,9 +326,25 @@ export function SignedInOverviewSection({
                     : "border-white/10 bg-black/20 hover:bg-white/5"
                 }`}
               >
-                <p className="truncate text-sm font-semibold text-white sm:text-base">
-                  {room.room_code} - {room.mode}, {getFinishModeLabel(room.finish_mode)}
-                </p>
+                <div className="flex items-start justify-between gap-3">
+                  <p className="truncate text-sm font-semibold text-white sm:text-base">
+                    {room.room_code} - {room.mode}, {getFinishModeLabel(room.finish_mode)}
+                  </p>
+                  <div className="flex shrink-0 flex-col items-end gap-1">
+                    <div className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-200">
+                      {getInputModeLabel(room.input_mode)}
+                    </div>
+                    <div
+                      className={`rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${
+                        room.phase === "lobby"
+                          ? "border border-sky-300/25 bg-sky-400/10 text-sky-100"
+                          : "border border-emerald-300/25 bg-emerald-400/10 text-emerald-100"
+                      }`}
+                    >
+                      {room.phase === "lobby" ? "Lobby offen" : "Spiel laeuft"}
+                    </div>
+                  </div>
+                </div>
                 <div
                   className={`mt-1 flex items-center gap-2 overflow-hidden text-xs ${
                     room.is_user_turn ? "text-emerald-100" : "text-stone-400"

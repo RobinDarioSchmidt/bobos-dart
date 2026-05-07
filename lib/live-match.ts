@@ -1,6 +1,7 @@
 export type LiveGameMode = 301 | 501;
 export type LiveEntryMode = "single" | "double" | "master";
 export type LiveFinishMode = "single" | "double" | "master";
+export type LiveInputMode = "board" | "visit-total" | "visit-quick";
 export type LiveSegmentRing =
   | "single-inner"
   | "single-outer"
@@ -36,6 +37,7 @@ export type LiveVisit = {
   checkout: boolean;
   result: "ok" | "bust" | "checkout" | "leg-win";
   darts: string[];
+  dartsUsed?: number;
   dartDetails?: LiveDart[];
   note: string;
   createdAt: string;
@@ -102,6 +104,7 @@ export type LiveMatchState = {
   mode: LiveGameMode;
   entryMode: LiveEntryMode;
   finishMode: LiveFinishMode;
+  inputMode: LiveInputMode;
   legsToWin: number;
   setsToWin: number;
   maxPlayers: number;
@@ -168,6 +171,7 @@ export function createEmptyLiveState(params: {
   mode: LiveGameMode;
   entryMode: LiveEntryMode;
   finishMode: LiveFinishMode;
+  inputMode: LiveInputMode;
   legsToWin: number;
   setsToWin: number;
   maxPlayers: number;
@@ -207,6 +211,7 @@ export function createEmptyLiveState(params: {
     mode: params.mode,
     entryMode: params.entryMode,
     finishMode: params.finishMode,
+    inputMode: params.inputMode,
     legsToWin: params.legsToWin,
     setsToWin: params.setsToWin,
     maxPlayers: params.maxPlayers,
@@ -281,6 +286,30 @@ export function canStartWithDart(dart: LiveDart, entryMode: LiveEntryMode) {
   return dart.multiplier === 2 || dart.multiplier === 3;
 }
 
+function canStartWithMultiplier(multiplier: 0 | 1 | 2 | 3, entryMode: LiveEntryMode) {
+  if (entryMode === "single") {
+    return multiplier > 0;
+  }
+
+  if (entryMode === "double") {
+    return multiplier === 2;
+  }
+
+  return multiplier === 2 || multiplier === 3;
+}
+
+function canFinishWithMultiplier(multiplier: 0 | 1 | 2 | 3, finishMode: LiveFinishMode) {
+  if (finishMode === "single") {
+    return multiplier > 0;
+  }
+
+  if (finishMode === "double") {
+    return multiplier === 2;
+  }
+
+  return multiplier === 2 || multiplier === 3;
+}
+
 export function normalizeLiveState(state: LiveMatchState | (Record<string, unknown> & Partial<LiveMatchState>)) {
   const nextState = cloneState(state) as Partial<LiveMatchState> & {
     doubleOut?: boolean;
@@ -289,6 +318,12 @@ export function normalizeLiveState(state: LiveMatchState | (Record<string, unkno
   const finishMode =
     nextState.finishMode ??
     (nextState.doubleOut === true ? "double" : "single");
+  const inputMode =
+    nextState.inputMode === "visit-total"
+      ? "visit-total"
+      : nextState.inputMode === "visit-quick"
+        ? "visit-quick"
+        : "board";
   const bullOffEnabled = nextState.bullOffEnabled ?? false;
   const joinedIndexes = (nextState.players ?? [])
     .map((player, index) => (player?.joined ? index : -1))
@@ -309,6 +344,7 @@ export function normalizeLiveState(state: LiveMatchState | (Record<string, unkno
     mode: nextState.mode ?? 501,
     entryMode,
     finishMode,
+    inputMode,
     legsToWin: nextState.legsToWin ?? 3,
     setsToWin: nextState.setsToWin ?? 1,
     maxPlayers: nextState.maxPlayers ?? Math.max((nextState.players ?? []).length, 2),
@@ -777,6 +813,142 @@ export function finalizePendingVisit(previousState: LiveMatchState) {
 
   nextState.activePlayer = getNextJoinedPlayerIndex(nextState, nextState.activePlayer);
   nextState.statusText = `${player.name} stellt ${evaluation.scoreAfter}. ${nextState.players[nextState.activePlayer].name} ist dran.`;
+  return nextState;
+}
+
+export function submitVisitTotal(
+  previousState: LiveMatchState,
+  params: {
+    total: number;
+    dartsUsed: number;
+    entryMultiplier?: 0 | 1 | 2 | 3;
+    finishMultiplier?: 0 | 1 | 2 | 3;
+  },
+) {
+  const nextState = normalizeLiveState(previousState);
+  if (nextState.phase !== "running") {
+    return nextState;
+  }
+  if (nextState.matchWinner !== null || nextState.legWinner !== null) {
+    return nextState;
+  }
+  if (nextState.bullOff.enabled && !nextState.bullOff.completed) {
+    return nextState;
+  }
+
+  const player = nextState.players[nextState.activePlayer];
+  if (!player?.joined) {
+    return nextState;
+  }
+
+  const scoreBefore = player.score;
+  const normalizedTotal = Math.max(0, Math.min(180, Math.round(params.total)));
+  const dartsUsed = Math.max(1, Math.min(3, Math.round(params.dartsUsed || 3)));
+  const entryMultiplier = params.entryMultiplier ?? (normalizedTotal > 0 ? 1 : 0);
+  const finishMultiplier = params.finishMultiplier ?? (normalizedTotal > 0 ? 1 : 0);
+  const enteredBefore = player.entered;
+
+  let enteredAfter = enteredBefore;
+  let countedTotal = normalizedTotal;
+  if (!enteredAfter) {
+    enteredAfter = canStartWithMultiplier(entryMultiplier, nextState.entryMode);
+    if (!enteredAfter) {
+      countedTotal = 0;
+    }
+  }
+
+  const remaining = scoreBefore - countedTotal;
+  const bust =
+    remaining < 0 ||
+    (nextState.finishMode !== "single" && remaining === 1) ||
+    (remaining === 0 && !canFinishWithMultiplier(finishMultiplier, nextState.finishMode));
+  const checkout = !bust && remaining === 0 && enteredAfter && countedTotal > 0;
+  const scoreAfter = bust ? scoreBefore : Math.max(0, remaining);
+
+  appendHistoryEntry(nextState, {
+    playerIndex: nextState.activePlayer,
+    playerName: player.name,
+    total: countedTotal,
+    scoreBefore,
+    scoreAfter,
+    bust,
+    checkout,
+    result: bust ? "bust" : checkout ? "checkout" : "ok",
+    darts: [`Visit ${normalizedTotal}`],
+    dartsUsed,
+    note: bust
+      ? "Miss"
+      : checkout
+        ? "Checkout"
+        : !enteredAfter
+          ? "Nicht drin"
+          : !enteredBefore && enteredAfter
+            ? "In"
+            : "Visit",
+    createdAt: new Date().toISOString(),
+  });
+
+  if (bust) {
+    nextState.activePlayer = getNextJoinedPlayerIndex(nextState, nextState.activePlayer);
+    nextState.statusText = `${player.name} macht Miss. ${nextState.players[nextState.activePlayer].name} ist dran.`;
+    return nextState;
+  }
+
+  player.entered = enteredAfter;
+  player.score = scoreAfter;
+
+  if (!player.entered) {
+    nextState.activePlayer = getNextJoinedPlayerIndex(nextState, nextState.activePlayer);
+    nextState.statusText = `${player.name} kommt noch nicht rein. ${nextState.players[nextState.activePlayer].name} ist dran.`;
+    return nextState;
+  }
+
+  if (checkout) {
+    player.legs += 1;
+    nextState.legWinner = nextState.activePlayer;
+    nextState.statusText = `${player.name} gewinnt das Leg.`;
+
+    appendHistoryEntry(nextState, {
+      playerIndex: nextState.activePlayer,
+      playerName: player.name,
+      total: countedTotal,
+      scoreBefore,
+      scoreAfter: 0,
+      bust: false,
+      checkout: true,
+      result: "leg-win",
+      darts: [`Visit ${normalizedTotal}`],
+      dartsUsed,
+      note: `${player.name} gewinnt das Leg`,
+      createdAt: new Date().toISOString(),
+    });
+    appendLiveEvent(nextState, {
+      type: "leg",
+      text: `${player.name} gewinnt das Leg.`,
+    });
+
+    if (player.legs >= nextState.legsToWin) {
+      player.sets += 1;
+      nextState.statusText = `${player.name} gewinnt den Satz.`;
+      nextState.players.forEach((entry) => {
+        entry.legs = 0;
+      });
+    }
+
+    if (player.sets >= nextState.setsToWin) {
+      nextState.matchWinner = nextState.activePlayer;
+      appendLiveEvent(nextState, {
+        type: "match",
+        text: `${player.name} gewinnt das Match.`,
+      });
+      nextState.statusText = `${player.name} gewinnt das Match.`;
+    }
+
+    return nextState;
+  }
+
+  nextState.activePlayer = getNextJoinedPlayerIndex(nextState, nextState.activePlayer);
+  nextState.statusText = `${player.name} stellt ${scoreAfter}. ${nextState.players[nextState.activePlayer].name} ist dran.`;
   return nextState;
 }
 

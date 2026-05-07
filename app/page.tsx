@@ -175,8 +175,10 @@ type ActiveLiveRoom = {
   room_code: string;
   owner_id: string;
   host_name: string;
+  phase: "lobby" | "running";
   mode: 301 | 501;
   finish_mode: FinishMode;
+  input_mode: "board" | "visit-total" | "visit-quick";
   joined_players: number;
   max_players: number;
   status_text: string;
@@ -1427,6 +1429,7 @@ export default function Page() {
       mode,
       entryMode,
       finishMode,
+      inputMode: "board",
       legsToWin,
       setsToWin,
       maxPlayers: players.length,

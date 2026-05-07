@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
-import { LiveBoardPanel, type LiveBoardSegment } from "@/components/live/board-panel";
+import { LiveBoardPanel, LiveVisitTotalPanel, type LiveBoardSegment } from "@/components/live/board-panel";
 import {
   LiveCelebrationPanel,
   LiveHistoryPanel,
@@ -20,6 +20,7 @@ import {
   type LiveDart,
   type LiveEntryMode,
   type LiveFinishMode,
+  type LiveInputMode,
   type LiveMatchState,
 } from "@/lib/live-match";
 import {
@@ -47,6 +48,7 @@ type OpenLiveRoom = {
   phase: "lobby" | "running";
   mode: 301 | 501;
   finish_mode: LiveFinishMode;
+  input_mode: LiveInputMode;
   joined_players: number;
   max_players: number;
   status_text: string;
@@ -130,6 +132,8 @@ function formatLiveError(error: string) {
       return "Nur der Host kann das Match aus der Lobby starten.";
     case "match_not_started":
       return "Dieses Match ist noch in der Lobby.";
+    case "invalid_visit_total":
+      return "Bitte gib eine gueltige Visit-Punktzahl ein.";
     case "no_players_in_lobby":
       return "In der Lobby ist noch kein aktiver Spieler.";
     case "not_everyone_ready":
@@ -153,7 +157,7 @@ function formatLiveError(error: string) {
 function getLivePlayerStats(state: LiveMatchState) {
   return state.players.filter((player) => player.joined).map((player) => {
     const visits = state.history.filter((entry) => entry.playerName === player.name && entry.result !== "leg-win");
-    const dartsThrown = visits.reduce((sum, entry) => sum + entry.darts.length, 0);
+    const dartsThrown = visits.reduce((sum, entry) => sum + (entry.dartsUsed ?? entry.darts.length), 0);
     const scoredPoints = visits.reduce((sum, entry) => sum + entry.total, 0);
     const bestVisit = visits.reduce((best, entry) => Math.max(best, entry.total), 0);
     const average = dartsThrown > 0 ? Number(((scoredPoints / dartsThrown) * 3).toFixed(1)) : 0;
@@ -247,6 +251,7 @@ export default function LivePage() {
   const [mode, setMode] = useState<301 | 501>(501);
   const [entryMode, setEntryMode] = useState<LiveEntryMode>("single");
   const [finishMode, setFinishMode] = useState<LiveFinishMode>("double");
+  const [inputMode, setInputMode] = useState<LiveInputMode>("board");
   const [bullOffEnabled, setBullOffEnabled] = useState(true);
   const [legsToWin, setLegsToWin] = useState(3);
   const [setsToWin, setSetsToWin] = useState(1);
@@ -985,6 +990,13 @@ export default function LivePage() {
       | { action: "add_dart"; dart: LiveDart }
       | { action: "remove_dart" }
       | { action: "finalize_visit" }
+      | {
+          action: "submit_visit_total";
+          total: number;
+          dartsUsed: number;
+          entryMultiplier?: 0 | 1 | 2 | 3;
+          finishMultiplier?: 0 | 1 | 2 | 3;
+        }
       | { action: "next_leg" }
       | { action: "rematch" },
     reason: string,
@@ -1014,6 +1026,7 @@ export default function LivePage() {
       mode,
       entryMode,
       finishMode,
+      inputMode,
       legsToWin,
       setsToWin,
       maxPlayers,
@@ -1485,6 +1498,46 @@ export default function LivePage() {
     queueVisitAudio(liveState, nextState);
   }
 
+  async function handleVisitTotalSubmit(payload: {
+    total: number;
+    dartsUsed: number;
+    entryMultiplier?: 0 | 1 | 2 | 3;
+    finishMultiplier?: 0 | 1 | 2 | 3;
+  }) {
+    if (!liveState) {
+      return;
+    }
+
+    if (loading) {
+      return;
+    }
+
+    if (!canPlayFromThisDevice) {
+      setMessage(hasDeviceControl ? "Du kannst diesen Visit gerade nicht loggen." : "Dieses Geraet darf den Account gerade nicht steuern.");
+      return;
+    }
+
+    if (!Number.isFinite(payload.total) || payload.total < 0 || payload.total > 180) {
+      setMessage(formatLiveError("invalid_visit_total"));
+      return;
+    }
+
+    const nextState = await performServerLiveAction(
+      {
+        action: "submit_visit_total",
+        total: payload.total,
+        dartsUsed: payload.dartsUsed,
+        entryMultiplier: payload.entryMultiplier,
+        finishMultiplier: payload.finishMultiplier,
+      },
+      "submit_visit_total",
+    );
+    if (!nextState) {
+      return;
+    }
+    queueVisitAudio(liveState, nextState);
+  }
+
   async function handleNextLeg() {
     if (!liveState) {
       return;
@@ -1721,6 +1774,7 @@ export default function LivePage() {
                   mode={mode}
                   entryMode={entryMode}
                   finishMode={finishMode}
+                  inputMode={inputMode}
                   bullOffEnabled={bullOffEnabled}
                   legsToWin={legsToWin}
                   setsToWin={setsToWin}
@@ -1737,6 +1791,7 @@ export default function LivePage() {
                   onModeChange={setMode}
                   onEntryModeChange={setEntryMode}
                   onFinishModeChange={setFinishMode}
+                  onInputModeChange={setInputMode}
                   onBullOffToggle={() => setBullOffEnabled((prev) => !prev)}
                   onLegsToWinChange={setLegsToWin}
                   onSetsToWinChange={setSetsToWin}
@@ -1841,31 +1896,60 @@ export default function LivePage() {
                     </section>
                   ) : (
                     <>
-                      <LiveBoardPanel
-                        liveState={liveState}
-                        currentPlayerIndex={currentPlayerIndex}
-                        currentUserId={session.user.id}
-                        boardHeading={boardHeading}
-                        currentVisitTotal={currentVisitTotal}
-                        compactVisitText={compactVisitText}
-                        calloutText={boardStatusText}
-                        canPlayFromThisDevice={canPlayFromThisDevice}
-                        canSelectBoardInput={canSelectBoardInput}
-                        boardDisabledReason={boardDisabledReason}
-                        loading={loading}
-                        boardMarkers={boardMarkers}
-                        pendingLabels={pendingLabels}
-                        connectedNames={connectedNames}
-                        canControlLegTransition={canControlLegTransition}
-                        checkoutHints={checkoutHints}
-                        currentPlayerName={currentPlayer?.name ?? null}
-                        onPlayerSelect={openPresencePlayer}
-                        onSegmentSelect={handleBoardSegment}
-                        onMiss={() => void handleMiss()}
-                        onRemoveLast={() => void handleRemoveLast()}
-                        onFinishVisit={() => void handleFinishVisit()}
-                        onNextLeg={() => void handleNextLeg()}
-                      />
+                      {liveState.inputMode === "visit-total" ? (
+                        <LiveVisitTotalPanel
+                          liveState={liveState}
+                          currentPlayerIndex={currentPlayerIndex}
+                          currentUserId={session.user.id}
+                          currentPlayerName={currentPlayer?.name ?? null}
+                          canPlayFromThisDevice={canPlayFromThisDevice}
+                          loading={loading}
+                          statusText={boardStatusText}
+                          connectedNames={connectedNames}
+                          onPlayerSelect={openPresencePlayer}
+                          onSubmitVisit={(payload) => void handleVisitTotalSubmit(payload)}
+                        />
+                      ) : liveState.inputMode === "visit-quick" ? (
+                        <LiveVisitTotalPanel
+                          liveState={liveState}
+                          currentPlayerIndex={currentPlayerIndex}
+                          currentUserId={session.user.id}
+                          currentPlayerName={currentPlayer?.name ?? null}
+                          canPlayFromThisDevice={canPlayFromThisDevice}
+                          loading={loading}
+                          statusText={boardStatusText}
+                          connectedNames={connectedNames}
+                          onPlayerSelect={openPresencePlayer}
+                          onSubmitVisit={(payload) => void handleVisitTotalSubmit(payload)}
+                          compactMode
+                        />
+                      ) : (
+                        <LiveBoardPanel
+                          liveState={liveState}
+                          currentPlayerIndex={currentPlayerIndex}
+                          currentUserId={session.user.id}
+                          boardHeading={boardHeading}
+                          currentVisitTotal={currentVisitTotal}
+                          compactVisitText={compactVisitText}
+                          calloutText={boardStatusText}
+                          canPlayFromThisDevice={canPlayFromThisDevice}
+                          canSelectBoardInput={canSelectBoardInput}
+                          boardDisabledReason={boardDisabledReason}
+                          loading={loading}
+                          boardMarkers={boardMarkers}
+                          pendingLabels={pendingLabels}
+                          connectedNames={connectedNames}
+                          canControlLegTransition={canControlLegTransition}
+                          checkoutHints={checkoutHints}
+                          currentPlayerName={currentPlayer?.name ?? null}
+                          onPlayerSelect={openPresencePlayer}
+                          onSegmentSelect={handleBoardSegment}
+                          onMiss={() => void handleMiss()}
+                          onRemoveLast={() => void handleRemoveLast()}
+                          onFinishVisit={() => void handleFinishVisit()}
+                          onNextLeg={() => void handleNextLeg()}
+                        />
+                      )}
                       {liveCelebration ? (
                         <LiveCelebrationPanel
                           kind={liveCelebration.kind}

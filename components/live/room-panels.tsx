@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { LiveAudioMode } from "@/lib/live-audio";
-import type { LiveEntryMode, LiveFinishMode, LiveMatchState } from "@/lib/live-match";
+import type { LiveEntryMode, LiveFinishMode, LiveInputMode, LiveMatchState } from "@/lib/live-match";
 
 const finishOptions: Array<{ value: LiveFinishMode; label: string }> = [
   { value: "single", label: "Straight Out" },
@@ -18,11 +18,24 @@ function getNextValue<T>(options: readonly T[], currentValue: T) {
   return options[(currentIndex + 1) % options.length] ?? options[0];
 }
 
+function getInputModeLabel(value: LiveInputMode) {
+  if (value === "visit-total") {
+    return "Visit";
+  }
+
+  if (value === "visit-quick") {
+    return "Schnell";
+  }
+
+  return "Scheibe";
+}
+
 export function LiveRoomCreatePanel({
   createOpen,
   mode,
   entryMode,
   finishMode,
+  inputMode,
   bullOffEnabled,
   legsToWin,
   setsToWin,
@@ -31,6 +44,7 @@ export function LiveRoomCreatePanel({
   onModeChange,
   onEntryModeChange,
   onFinishModeChange,
+  onInputModeChange,
   onBullOffToggle,
   onLegsToWinChange,
   onSetsToWinChange,
@@ -40,6 +54,7 @@ export function LiveRoomCreatePanel({
   mode: 301 | 501;
   entryMode: LiveEntryMode;
   finishMode: LiveFinishMode;
+  inputMode: LiveInputMode;
   bullOffEnabled: boolean;
   legsToWin: number;
   setsToWin: number;
@@ -48,6 +63,7 @@ export function LiveRoomCreatePanel({
   onModeChange: (value: 301 | 501) => void;
   onEntryModeChange: (value: LiveEntryMode) => void;
   onFinishModeChange: (value: LiveFinishMode) => void;
+  onInputModeChange: (value: LiveInputMode) => void;
   onBullOffToggle: () => void;
   onLegsToWinChange: (value: number) => void;
   onSetsToWinChange: (value: number) => void;
@@ -109,6 +125,27 @@ export function LiveRoomCreatePanel({
             </button>
           </div>
 
+          <div className="grid grid-cols-3 gap-2">
+            <button
+              onClick={() => onInputModeChange("board")}
+              className={`${optionButton} ${inputMode === "board" ? "border-emerald-400 bg-emerald-400 text-black hover:bg-emerald-400" : ""}`}
+            >
+              Scheibe
+            </button>
+            <button
+              onClick={() => onInputModeChange("visit-total")}
+              className={`${optionButton} ${inputMode === "visit-total" ? "border-emerald-400 bg-emerald-400 text-black hover:bg-emerald-400" : ""}`}
+            >
+              Visit
+            </button>
+            <button
+              onClick={() => onInputModeChange("visit-quick")}
+              className={`${optionButton} ${inputMode === "visit-quick" ? "border-emerald-400 bg-emerald-400 text-black hover:bg-emerald-400" : ""}`}
+            >
+              Schnell
+            </button>
+          </div>
+
           <div className="grid grid-cols-2 gap-2">
             <button
               onClick={() => onLegsToWinChange(getNextValue(legOptions, legsToWin as (typeof legOptions)[number]))}
@@ -165,9 +202,11 @@ export function LiveRoomJoinPanel({
   maxPlayers: number;
   openRooms: Array<{
     room_code: string;
+    phase: "lobby" | "running";
     host_name: string;
     mode: 301 | 501;
     finish_mode: LiveFinishMode;
+    input_mode: LiveInputMode;
     joined_players: number;
     max_players: number;
     status_text: string;
@@ -254,8 +293,22 @@ export function LiveRoomJoinPanel({
                     <p className="min-w-0 truncate font-semibold text-white">
                       {room.room_code} - {room.mode}, {getFinishModeLabel(room.finish_mode)}
                     </p>
-                    <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-stone-200">
-                      {room.joined_players}/{room.max_players}
+                    <div className="flex flex-col items-end gap-1">
+                      <div className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-stone-200">
+                        {getInputModeLabel(room.input_mode)}
+                      </div>
+                      <div
+                        className={`rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${
+                          room.phase === "lobby"
+                            ? "border border-sky-300/25 bg-sky-400/10 text-sky-100"
+                            : "border border-emerald-300/25 bg-emerald-400/10 text-emerald-100"
+                        }`}
+                      >
+                        {room.phase === "lobby" ? "Lobby offen" : "Spiel laeuft"}
+                      </div>
+                      <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-stone-200">
+                        {room.joined_players}/{room.max_players}
+                      </div>
                     </div>
                   </div>
                   <p className="mt-1 truncate text-sm text-stone-300">
