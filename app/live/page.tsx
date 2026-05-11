@@ -1896,7 +1896,7 @@ export default function LivePage() {
                     </section>
                   ) : (
                     <>
-                      {liveState.inputMode === "visit-total" ? (
+                      {liveState.inputMode === "visit" ? (
                         <LiveVisitTotalPanel
                           liveState={liveState}
                           currentPlayerIndex={currentPlayerIndex}
@@ -1908,20 +1908,6 @@ export default function LivePage() {
                           connectedNames={connectedNames}
                           onPlayerSelect={openPresencePlayer}
                           onSubmitVisit={(payload) => void handleVisitTotalSubmit(payload)}
-                        />
-                      ) : liveState.inputMode === "visit-quick" ? (
-                        <LiveVisitTotalPanel
-                          liveState={liveState}
-                          currentPlayerIndex={currentPlayerIndex}
-                          currentUserId={session.user.id}
-                          currentPlayerName={currentPlayer?.name ?? null}
-                          canPlayFromThisDevice={canPlayFromThisDevice}
-                          loading={loading}
-                          statusText={boardStatusText}
-                          connectedNames={connectedNames}
-                          onPlayerSelect={openPresencePlayer}
-                          onSubmitVisit={(payload) => void handleVisitTotalSubmit(payload)}
-                          compactMode
                         />
                       ) : (
                         <LiveBoardPanel

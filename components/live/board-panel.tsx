@@ -1036,7 +1036,7 @@ export function LiveBoardPanel({
 
 const QUICK_VISIT_TOTAL_GROUPS = [
   {
-    label: "Schnell",
+    label: "Schnellwerte",
     values: [0, 26, 45, 60, 100, 140, 180],
   },
   {
@@ -1062,7 +1062,6 @@ export function LiveVisitTotalPanel({
   connectedNames = [],
   onPlayerSelect,
   onSubmitVisit,
-  compactMode = false,
 }: {
   liveState: LiveMatchState;
   currentPlayerIndex: number;
@@ -1079,7 +1078,6 @@ export function LiveVisitTotalPanel({
     entryMultiplier?: 0 | 1 | 2 | 3;
     finishMultiplier?: 0 | 1 | 2 | 3;
   }) => void;
-  compactMode?: boolean;
 }) {
   const [visitTotal, setVisitTotal] = useState("");
   const [dartsUsed, setDartsUsed] = useState<1 | 2 | 3>(3);
@@ -1150,9 +1148,7 @@ export function LiveVisitTotalPanel({
         <div>
           {statusText ? <p className="text-sm font-semibold text-emerald-100">{statusText}</p> : null}
           <p className={`${statusText ? "mt-1" : ""} text-sm text-stone-400`}>
-            {compactMode
-              ? "Schnellmodus ohne Scheibe."
-              : "Gib den gesamten Visit direkt ein. Wenn ein In erst spaeter faellt, zaehlen nur die Punkte ab dem gueltigen In."}
+            Schnell - Visit loggen ohne Dartscheibe. Wenn ein In erst spaeter faellt, zaehlen nur die Punkte ab dem gueltigen In.
           </p>
         </div>
       </div>
@@ -1268,7 +1264,7 @@ export function LiveVisitTotalPanel({
           </div>
 
           <div className="space-y-3">
-            {(compactMode ? QUICK_VISIT_TOTAL_GROUPS.slice(0, 1) : QUICK_VISIT_TOTAL_GROUPS).map((group) => (
+            {QUICK_VISIT_TOTAL_GROUPS.map((group) => (
               <div key={group.label}>
                 <p className="text-[10px] uppercase tracking-[0.18em] text-stone-400">{group.label}</p>
                 <div className="mt-2 flex flex-wrap gap-2">
@@ -1281,9 +1277,7 @@ export function LiveVisitTotalPanel({
                           submit(0);
                           return;
                         }
-                        if (compactMode) {
-                          quickSubmit(value);
-                        }
+                        quickSubmit(value);
                       }}
                       disabled={!canPlayFromThisDevice || loading}
                       className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
@@ -1295,7 +1289,7 @@ export function LiveVisitTotalPanel({
               </div>
             ))}
 
-            <div className={`grid gap-3 ${compactMode ? "sm:grid-cols-2" : "sm:grid-cols-3"}`}>
+            <div className="grid gap-3 sm:grid-cols-3">
               <div>
             <p className="text-[10px] uppercase tracking-[0.18em] text-stone-400">Darts genutzt</p>
                 <div className="mt-2 grid grid-cols-3 gap-2">
@@ -1347,7 +1341,7 @@ export function LiveVisitTotalPanel({
                     ) : null}
                   </div>
                 </div>
-              ) : compactMode ? null : (
+              ) : (
                 <div />
               )}
 
@@ -1377,7 +1371,7 @@ export function LiveVisitTotalPanel({
                     ) : null}
                   </div>
                 </div>
-              ) : compactMode ? null : (
+              ) : (
                 <div />
               )}
             </div>
@@ -1390,7 +1384,7 @@ export function LiveVisitTotalPanel({
                   ? "Dieser Visit wuerde auf 1 Rest fallen und waere ebenfalls eine Miss."
                   : projectedRemaining !== null && visitTotal !== ""
                     ? `Rest danach: ${projectedRemaining}.`
-                    : "Schneller Modus ohne Dartscheibe."}
+                    : "Schnell - Visit loggen ohne Dartscheibe."}
             </div>
           </div>
         </div>

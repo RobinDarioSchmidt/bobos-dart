@@ -1,7 +1,7 @@
 export type LiveGameMode = 301 | 501;
 export type LiveEntryMode = "single" | "double" | "master";
 export type LiveFinishMode = "single" | "double" | "master";
-export type LiveInputMode = "board" | "visit-total" | "visit-quick";
+export type LiveInputMode = "board" | "visit";
 export type LiveSegmentRing =
   | "single-inner"
   | "single-outer"
@@ -318,12 +318,10 @@ export function normalizeLiveState(state: LiveMatchState | (Record<string, unkno
   const finishMode =
     nextState.finishMode ??
     (nextState.doubleOut === true ? "double" : "single");
-  const inputMode =
-    nextState.inputMode === "visit-total"
-      ? "visit-total"
-      : nextState.inputMode === "visit-quick"
-        ? "visit-quick"
-        : "board";
+  const legacyInputMode = nextState.inputMode as string | undefined;
+  const inputMode = legacyInputMode === "visit-total" || legacyInputMode === "visit-quick" || legacyInputMode === "visit"
+    ? "visit"
+    : "board";
   const bullOffEnabled = nextState.bullOffEnabled ?? false;
   const joinedIndexes = (nextState.players ?? [])
     .map((player, index) => (player?.joined ? index : -1))

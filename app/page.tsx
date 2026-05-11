@@ -178,7 +178,7 @@ type ActiveLiveRoom = {
   phase: "lobby" | "running";
   mode: 301 | 501;
   finish_mode: FinishMode;
-  input_mode: "board" | "visit-total" | "visit-quick";
+  input_mode: "board" | "visit";
   joined_players: number;
   max_players: number;
   status_text: string;

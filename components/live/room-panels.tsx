@@ -19,15 +19,11 @@ function getNextValue<T>(options: readonly T[], currentValue: T) {
 }
 
 function getInputModeLabel(value: LiveInputMode) {
-  if (value === "visit-total") {
-    return "Visit";
+  if (value === "visit") {
+    return "Schnell - Visit loggen";
   }
 
-  if (value === "visit-quick") {
-    return "Schnell";
-  }
-
-  return "Scheibe";
+  return "Dartscheibe - Praezision";
 }
 
 export function LiveRoomCreatePanel({
@@ -125,24 +121,18 @@ export function LiveRoomCreatePanel({
             </button>
           </div>
 
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2">
             <button
               onClick={() => onInputModeChange("board")}
               className={`${optionButton} ${inputMode === "board" ? "border-emerald-400 bg-emerald-400 text-black hover:bg-emerald-400" : ""}`}
             >
-              Scheibe
+              Dartscheibe - Praezision
             </button>
             <button
-              onClick={() => onInputModeChange("visit-total")}
-              className={`${optionButton} ${inputMode === "visit-total" ? "border-emerald-400 bg-emerald-400 text-black hover:bg-emerald-400" : ""}`}
+              onClick={() => onInputModeChange("visit")}
+              className={`${optionButton} ${inputMode === "visit" ? "border-emerald-400 bg-emerald-400 text-black hover:bg-emerald-400" : ""}`}
             >
-              Visit
-            </button>
-            <button
-              onClick={() => onInputModeChange("visit-quick")}
-              className={`${optionButton} ${inputMode === "visit-quick" ? "border-emerald-400 bg-emerald-400 text-black hover:bg-emerald-400" : ""}`}
-            >
-              Schnell
+              Schnell - Visit loggen
             </button>
           </div>
 

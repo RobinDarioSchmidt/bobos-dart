@@ -32,7 +32,7 @@ type ActiveLiveRoom = {
   phase: "lobby" | "running";
   mode: 301 | 501;
   finish_mode: "single" | "double" | "master";
-  input_mode: "board" | "visit-total" | "visit-quick";
+  input_mode: "board" | "visit";
   current_player_name: string;
   is_user_turn?: boolean;
   players: Array<{
@@ -271,15 +271,11 @@ export function SignedInOverviewSection({
   }
 
   function getInputModeLabel(value: ActiveLiveRoom["input_mode"]) {
-    if (value === "visit-total") {
-      return "Visit";
+    if (value === "visit") {
+      return "Schnell - Visit loggen";
     }
 
-    if (value === "visit-quick") {
-      return "Schnell";
-    }
-
-    return "Scheibe";
+    return "Dartscheibe - Praezision";
   }
 
   return (
